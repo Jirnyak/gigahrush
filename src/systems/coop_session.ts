@@ -93,10 +93,6 @@ export function coopActivity(id: string): CoopActivityDef | undefined {
   return activities.get(id);
 }
 
-export function coopActivityIds(): readonly string[] {
-  return [...activities.keys()];
-}
-
 /** An invite waiting for its answer. Held by the host for the pair, and
  *  mirrored on the invited client so it can draw the prompt. */
 export interface CoopInvite {
@@ -145,15 +141,6 @@ export function coopSeatOf(entityId: number): CoopSeat | null {
   if (session.playerId === entityId) return 'player';
   if (session.npcId === entityId) return 'npc';
   return null;
-}
-
-export function coopSeatEntityId(seat: CoopSeat): number {
-  if (!session) return -1;
-  return seat === 'player' ? session.playerId : session.npcId;
-}
-
-export function otherCoopSeat(seat: CoopSeat): CoopSeat {
-  return seat === 'player' ? 'npc' : 'player';
 }
 
 /** The stake both seats can actually cover: an activity prices each actor the

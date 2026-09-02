@@ -1139,8 +1139,6 @@ export function executeRecipe(id: ProceduralRecipeId, ctx: RecipeContext): Recip
   return RECIPE_REGISTRY[id](ctx);
 }
 
-export const ALL_RECIPE_IDS: readonly ProceduralRecipeId[] = Object.keys(RECIPE_REGISTRY) as ProceduralRecipeId[];
-
 /* ═══════════════════════════════════════════════════════════════ */
 /*  Sector division strategies                                    */
 /* ═══════════════════════════════════════════════════════════════ */

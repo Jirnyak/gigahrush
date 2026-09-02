@@ -125,10 +125,6 @@ export function getGamblingMachineAt(world: World, x: number, y: number): Gambli
   return gamblingRegistry.get(world.idx(Math.floor(x), Math.floor(y)));
 }
 
-export function isGamblingMachineTarget(world: World, x: number, y: number): boolean {
-  return !!getGamblingMachineAt(world, x, y);
-}
-
 export function placeGamblingMachine(world: World, x: number, y: number, defId: GamblingDefId): GamblingMachine | null {
   const def = getGamblingMachineDef(defId);
   if (!def) return null;

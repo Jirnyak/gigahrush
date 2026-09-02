@@ -307,12 +307,6 @@ function genPriest(): Uint32Array {
   return t;
 }
 
-/** Priest sprite: Батюшка (black robe + golden cross) */
-export function generatePriestSprite(): Uint32Array { return genPriest(); }
-
-/** Performer sprite: Перформер (scene/service worker) */
-export function generatePerformerSprite(): Uint32Array { return genPerformer(); }
-
 /**
  * Спрайты занятий, ИНДЕКС РАВЕН ЗНАЧЕНИЮ `Occupation`. Таблица обязана покрывать
  * перечисление целиком: за её концом начинаются авторские личности, и занятие без
@@ -702,4 +696,3 @@ export const AUTHORED_NPC_SPRITE_GENERATORS = [
   { id: 'pahom_bratishka', generate: generatePakhomSprite },
 ] as const;
 
-export type AuthoredNpcSpriteId = typeof AUTHORED_NPC_SPRITE_GENERATORS[number]['id'];

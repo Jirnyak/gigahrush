@@ -170,8 +170,3 @@ export function hand(
   }
 }
 
-/** Оттенок кожи, выведенный из зерна ствола, чтобы руки не были у всех одни. */
-export function skinTone(rand: () => number): readonly [number, number, number] {
-  const t = rand();
-  return [clamp(150 + t * 58), clamp(112 + t * 46), clamp(94 + t * 38)] as const;
-}

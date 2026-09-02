@@ -56,18 +56,6 @@ export function createBankFloorState(): BankFloorState {
   };
 }
 
-export function summarizeBankFloorState(bank: BankFloorState): string[] {
-  return [
-    `route=${bank.routeId} z=${bank.anchorZ}`,
-    `legalRooms=${bank.legalRooms.length} riskRooms=${bank.riskRooms.length}`,
-    `debtCircuit=${bank.debtCircuitRooms.join(' -> ')}`,
-    `vaultRiskRadius=${bank.vaultRiskRadius}`,
-    `vaultContainers=${bank.vaultContainerIds.join(',') || 'none'}`,
-    `depositContainers=${bank.depositContainerIds.join(',') || 'none'}`,
-    bank.debugEntry.summary,
-  ];
-}
-
 export function publishBankFloorEvent(
   state: GameState,
   kind: BankActionKind,

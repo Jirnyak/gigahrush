@@ -49,7 +49,3 @@ export function viewmodelDefsForSlot(slot: ViewmodelSlot): ViewmodelDef[] {
   return [...DEFS.values()].filter((d) => d.slot === slot);
 }
 
-/** Только для тестов: снести реестр между прогонами. */
-export function _resetViewmodelRegistry(): void {
-  DEFS.clear();
-}

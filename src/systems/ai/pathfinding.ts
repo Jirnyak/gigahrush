@@ -78,7 +78,6 @@ const SW = W * PATH_BLOCKER_SUBDIV;
 const SW2 = SW * SW;
 const MACRO_W2 = W * W;
 
-
 /* ── Region-Portal HPA* constants ─────────────────────────────── */
 const CLUSTER_SIZE = 16;
 const CLUSTERS_PER_SIDE = (W / CLUSTER_SIZE) | 0;
@@ -346,14 +345,6 @@ interface FlowPathAssignment {
   sourceProvider: BehaviorFlowFieldSourceProvider;
 }
 
-export interface PathSteering {
-  x: number;
-  y: number;
-  distance: number;
-  nextCell: number;
-  targetCell: number;
-}
-
 interface SteeringPathAssignment {
   world: World;
   cellVersion: number;
@@ -362,8 +353,6 @@ interface SteeringPathAssignment {
   path: number[];
   pi: number;
 }
-
-
 
 export interface PathfindingStats {
   routineUsed: number;
@@ -392,14 +381,6 @@ const _behaviorFlowFields = new Map<string, BehaviorFlowField>();
 const _flowPathAssignments = new WeakMap<Entity, FlowPathAssignment>();
 const _steeringPathAssignments = new WeakMap<Entity, SteeringPathAssignment>();
 const _roomTypeSourceProviders = new Map<string, BehaviorFlowFieldSourceProvider>();
-
-/** Diagnostic: live count of resident behavior flow fields. Each is a full
- *  Int32Array(SW²) (~64 MiB), so this × 64 MiB is the cache's mobile RAM. The
- *  call graph only ever requests 3 keys (OFFICE / LIVING / {LIVING,HQ,COMMON}),
- *  so this should read ≤3 — surface it on-device to confirm the working set. */
-export function behaviorFlowFieldCount(): number {
-  return _behaviorFlowFields.size;
-}
 
 function beginPathFrame(time: number): void {
   void time;
@@ -599,7 +580,6 @@ function getSubcellNavCost(world: World, cx: number, cy: number): number {
   return 1;
 }
 
-
 function checkFlowPassable(world: World, next: Int32Array, cell: number): boolean {
   const n = next[cell];
   if (n !== FLOW_UNREACHED) return n !== FLOW_BLOCKED;
@@ -607,7 +587,6 @@ function checkFlowPassable(world: World, next: Int32Array, cell: number): boolea
   if (!pass) next[cell] = FLOW_BLOCKED;
   return pass;
 }
-
 
 /* ── Связность ВНУТРИ клетки ──────────────────────────────────────
  *
@@ -1263,7 +1242,6 @@ export async function bakeNavigationTreeAsync(
   bakeNavigationTree(world, cacheCellVersion, cachePathBlockerVersion);
 }
 
-
 /**
  * Flatten the current region-adjacency graph into transferable typed arrays
  * (portal region-pairs + CSR region→portal lists). This is the ONLY payload a
@@ -1521,7 +1499,6 @@ function trimBehaviorFlowFieldCache(): void {
     _behaviorFlowFields.delete(oldestKey);
   }
 }
-
 
 /** Пройти по колонке следующих шагов от rS к rT. Возвращает цепочку регионов
  *  [rS, …, rT] или null, если недостижимо. O(числа переходов), без аллокаций
@@ -1961,7 +1938,6 @@ function hasLineOfSight(world: World, x0: number, y0: number, x1: number, y1: nu
   }
   return true;
 }
-
 
 /**
  * Цель пути нормализуется одинаково при назначении и при сравнении: обёртка по

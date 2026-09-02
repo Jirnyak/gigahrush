@@ -1985,10 +1985,6 @@ export function rankMonsterEcology(query: MonsterEcologyQuery, limit = MONSTER_E
   return ranked.slice(0, Math.max(0, limit));
 }
 
-export function likelyMonsterKinds(query: MonsterEcologyQuery, limit = 5): MonsterKind[] {
-  return rankMonsterEcology(query, limit).map(entry => entry.kind);
-}
-
 export function chooseFloorMonsterKind(query: MonsterEcologyQuery): MonsterKind {
   const rand = query.rng ?? rng;
   let total = 0;

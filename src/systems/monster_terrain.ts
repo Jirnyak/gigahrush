@@ -33,11 +33,6 @@ export function drainLineCell(world: World, x: number, y: number): boolean {
     wetWaterCell(world, x, y + 1);
 }
 
-export function dryConcreteCell(world: World, x: number, y: number): boolean {
-  const ci = world.idx(x, y);
-  return world.cells[ci] === Cell.FLOOR && !wetTerrainCell(world, x, y);
-}
-
 export function wetTerrainAtEntity(world: World, e: Entity): boolean {
   return wetTerrainCell(world, Math.floor(e.x), Math.floor(e.y));
 }

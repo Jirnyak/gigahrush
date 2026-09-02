@@ -231,10 +231,6 @@ export function applyGoMove(
   return { board: next, captured, koIndex: ko };
 }
 
-export function goMoveIsLegal(board: readonly number[], idx: number, stone: number, koIndex = GO_PASS): boolean {
-  return applyGoMove(board, idx, stone, koIndex) !== null;
-}
-
 interface GoRegion {
   stones: number[];
   /** Цвет, окруживший область целиком, иначе GO_EMPTY. */

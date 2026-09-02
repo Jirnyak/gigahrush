@@ -19,7 +19,7 @@
  * который заворачивает координаты по тору.
  */
 
-import { Cell, DoorState, EntityType, AIGoal, Faction, MonsterKind, type Entity, type GameState } from './core/types';
+import { Cell, DoorState, AIGoal, Faction, MonsterKind, type Entity, type GameState } from './core/types';
 import { W } from './core/types';
 import { World } from './core/world';
 import { seedGlobalRng, seededRandom } from './core/rand';
@@ -505,8 +505,3 @@ export function isWalkableCell(cell: number): boolean {
   return cell === Cell.FLOOR || cell === Cell.WATER || cell === Cell.DOOR || cell === Cell.LIFT;
 }
 
-export function actorKindLabel(e: Entity): string {
-  if (e.type === EntityType.MONSTER) return 'M';
-  if (e.type === EntityType.NPC) return 'N';
-  return '?';
-}

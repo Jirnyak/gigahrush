@@ -5,7 +5,6 @@ import { rng } from '../core/rand';
 
 export type MazeEdgeTag = 'backbone' | 'chord' | 'locked_optional' | 'reward_leaf';
 export type MazeSeamAxis = 'x' | 'y';
-export type MazeSelectionKind = 'newest' | 'oldest' | 'random';
 
 export interface MazeSelectionWeights {
   newest?: number;

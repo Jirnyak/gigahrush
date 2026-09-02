@@ -12,4 +12,3 @@ export const GAME_MENU_ITEMS = [
   { id: 'feedback', label: 'Обратная связь' },
 ] as const;
 
-export type GameMenuItemId = typeof GAME_MENU_ITEMS[number]['id'];

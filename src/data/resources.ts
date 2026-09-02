@@ -1,5 +1,5 @@
 import { ItemType, RoomType } from '../core/types';
-import { ITEMS, SILVER_SLIME_OPENED_ID, SILVER_SLIME_SEALED_ID } from './items';
+import { SILVER_SLIME_OPENED_ID, SILVER_SLIME_SEALED_ID } from './items';
 import { ECONOMY_PSI_WEAPON_IDS, ECONOMY_RARE_ENERGY_WEAPON_IDS } from './economics';
 import {
   DOCUMENT_ACCESS_AMMO_RESOURCE_ITEM_IDS,
@@ -151,10 +151,3 @@ export function resourceForItemType(type: ItemType): ResourceDef | undefined {
   return undefined;
 }
 
-export function validateResourceItems(): string[] {
-  const missing: string[] = [];
-  for (const r of RESOURCES) {
-    for (const id of r.itemIds) if (!ITEMS[id]) missing.push(`${r.id}:${id}`);
-  }
-  return missing;
-}

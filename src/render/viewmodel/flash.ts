@@ -40,7 +40,3 @@ export function muzzleFlashSprite(): Uint32Array {
   return buf;
 }
 
-/** Только для тестов. */
-export function _resetMuzzleFlashSprite(): void {
-  cached = undefined;
-}

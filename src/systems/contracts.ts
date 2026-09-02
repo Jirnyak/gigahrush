@@ -282,22 +282,8 @@ function routeLabelFromTarget(route: QuestRouteTarget | undefined, state?: GameS
   return parts.length > 0 ? parts.join(' ') : '';
 }
 
-function routeShortLabelFromTarget(route: QuestRouteTarget | undefined): string {
-  if (!route) return '';
-  const z = routeZ(route.z) ?? (route.designFloorId ? designFloorById(route.designFloorId)?.z : undefined);
-  if (z !== undefined) return `Z${formatFloorZ(z)}`;
-  if (route.designFloorId) return 'ROUTE';
-  if (route.anomalyId) return 'ANOM';
-  if (route.tags?.length) return 'TAG';
-  return '';
-}
-
 export function questRouteTargetLabel(q: Quest, state?: GameState): string {
   return routeLabelFromTarget(questTargetRoute(q), state);
-}
-
-export function questRouteTargetShortLabel(q: Quest): string {
-  return routeShortLabelFromTarget(questTargetRoute(q));
 }
 
 function entryMatchesRouteTarget(entry: FloorRunEntry, route: QuestRouteTarget, state: GameState): boolean {
@@ -522,11 +508,6 @@ export function isQuestTargetOnCurrentFloor(q: Quest, state: GameState): boolean
   const floor = questRouteFloor(q);
   if (floor === undefined) return true;
   return isCurrentStoryFloor(state, floor);
-}
-
-export function questRequiresRouteTravel(q: Quest, state: GameState): boolean {
-  if (questRouteFloor(q) === undefined && !questTargetRoute(q)) return false;
-  return !isQuestTargetOnCurrentFloor(q, state);
 }
 
 export function questTargetLiftDirection(q: Quest, state: GameState): LiftDirection | undefined {

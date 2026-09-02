@@ -55,4 +55,3 @@ export const ROUTE_GATE_DEFS: readonly RouteGateDef[] = [
   },
 ];
 
-export const ROUTE_GATES = ROUTE_GATE_DEFS;

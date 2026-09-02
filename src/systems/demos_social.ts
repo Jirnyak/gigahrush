@@ -142,7 +142,6 @@ interface DemosSocialBuckets {
   floorFactionAdults: Map<string, number[]>;
 }
 
-
 function clampInt(value: unknown, fallback: number, min: number, max: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
   return Math.max(min, Math.min(max, Math.trunc(value)));
@@ -1033,22 +1032,6 @@ export function clearDemosNpcSocialEdges(state: GameState, alifeId: number): voi
     graph.roles[offset] = 0;
   }
   recordOverride(graph, `${alifeId}->clear`);
-}
-
-export function demosNpcRelationBand(scoreInput: number): DemosRelationBand {
-  const score = clampRelation(scoreInput);
-  // Полосы зеркальны, и обе стороны меряются одним шагом — половиной порога.
-  // Шагами по САМОМУ порогу верх не размечается: при пороге 64 «друг» начинался
-  // бы со 128, то есть за краем шкалы, и две верхние полосы были бы пусты.
-  const step = RELATION_FRIENDLY_THRESHOLD / 2;
-  if (score < RELATION_HOSTILE_THRESHOLD - step) return { label: 'ненавидит', color: '#ff3b4f' };
-  if (score <= RELATION_HOSTILE_THRESHOLD) return { label: 'враг', color: '#ff6a3b' };
-  if (score < -step) return { label: 'недруг', color: '#f09a38' };
-  if (score < 0) return { label: 'холодное', color: '#d7b86a' };
-  if (score < step) return { label: 'нейтрально', color: '#b8c0a0' };
-  if (score < RELATION_FRIENDLY_THRESHOLD) return { label: 'приятель', color: '#8fd47a' };
-  if (score < RELATION_FRIENDLY_THRESHOLD + step) return { label: 'друг', color: '#51e08e' };
-  return { label: 'любовь', color: '#ff7ad9' };
 }
 
 export function getDemosSocialGraphStats(state: GameState): DemosSocialGraphStats {

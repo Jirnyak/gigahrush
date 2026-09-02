@@ -73,8 +73,6 @@ export interface ResolvedVisualGeometryProfile {
   modulationIds?: readonly string[];
 }
 
-export type VisualGeometryProfile = Omit<ResolvedVisualGeometryProfile, 'key' | 'seed' | 'modulationIds'>;
-
 // `decor` is per-floor, not per-quality-mode, so the mode budgets do not carry it;
 // resolveVisualGeometryProfile attaches it from the floor's theme tags.
 const MODE_PROFILES: Readonly<Record<VisualGeometryMode, Omit<ResolvedVisualGeometryProfile, 'key' | 'seed' | 'mode' | 'decor'>>> = {

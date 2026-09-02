@@ -16,7 +16,7 @@
  * пометкой `gated by key`, то есть замок виден как замок, а не как стена.
  */
 
-import { Cell, DoorState, Feature, LiftDirection, RoomType, Tex, W, type Room } from '../../core/types';
+import { Cell, DoorState, Feature, LiftDirection, RoomType, Tex, W } from '../../core/types';
 import { World, classifyReachabilityCell } from '../../core/world';
 import { stampRoom } from '../shared';
 import { applyNamedRoom } from '../named_rooms';
@@ -353,6 +353,3 @@ export function encloseDownLiftsInPerevalkaBases(world: World, spawnX: number, s
 /** Отчёт последнего обноса на этот мир: нужен тестам и отладке. */
 export const perevalkaGatesByWorld = new WeakMap<World, PerevalkaLiftGateReport>();
 
-export function perevalkaLiftGateRooms(world: World): Room[] {
-  return world.rooms.filter(room => room?.defId?.startsWith('perevalka_lift_gate_'));
-}

@@ -166,13 +166,6 @@ export interface InteractableOverlayInput {
   rightNav: boolean;
 }
 
-export type InteractableOverlayKind = 'none' | 'gambling' | 'computer' | 'net_hack' | 'net_terminal' | 'fast_elevator' | 'arena';
-
-export interface InteractableOverlaySnapshot {
-  open: boolean;
-  kind: InteractableOverlayKind;
-}
-
 const INTERACTABLE_ROOM_ATTEMPTS = 384;
 const INTERACTABLE_RANDOM_ATTEMPTS = 1024;
 const NPC_INTERACTION_RANGE = 2.25;
@@ -437,7 +430,6 @@ export function findInteractionTarget(ctx: InteractionContext): InteractionTarge
   const farHigh = findHighPriorityTargetForLook(ctx);
   if (farHigh) return farHigh;
 
-
   const gnilushka = findGnilushkaInteractionTarget(ctx.world, ctx.player, ctx.entities);
   if (gnilushka) return target('instant', gnilushka.id + 645000, 'gnilushka', gnilushka.x, gnilushka.y, 54, ' разговор');
 
@@ -662,7 +654,6 @@ export function isInteractableOverlayOpen(): boolean {
     || isFastElevatorOverlayOpen();
 }
 
-
 export function closeInteractableOverlay(): void {
   closeGamblingMachine();
   closeComputer();
@@ -677,7 +668,6 @@ export function handleInteractableOverlayInput(input: InteractableOverlayInput, 
     closeInteractableOverlay();
     return { handled: true };
   }
-
 
   if (isArenaOverlayOpen()) {
     if (input.upNav || input.leftNav) moveArenaSelection(-1);

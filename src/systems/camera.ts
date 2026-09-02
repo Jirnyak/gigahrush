@@ -260,10 +260,6 @@ export function resetRuntimeCamera(camera: RuntimeCamera): void {
   deathCameraStates.delete(camera);
 }
 
-export function followPlayerCamera(camera: RuntimeCamera): void {
-  resetRuntimeCamera(camera);
-}
-
 export function setFreeCamera(camera: RuntimeCamera, pose: Partial<CameraPose> & Pick<CameraPose, 'x' | 'y'>): void {
   camera.mode = 'free';
   resetCameraBob(camera.bob);
@@ -700,11 +696,6 @@ function cameraBlocked(world: World, x: number, y: number): boolean {
  */
 function forceRouteEnd(ts: CinematicCameraState): void {
   if (ts.path.length) ts.forced = true;
-}
-
-/** Идёт ли сейчас вынужденный ход. Для сцены он неотличим от обычного пролёта. */
-export function cinematicCameraForced(camera: RuntimeCamera): boolean {
-  return camera.cinematic?.forced === true;
 }
 
 /**

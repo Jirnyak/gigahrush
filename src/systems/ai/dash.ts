@@ -94,10 +94,6 @@ export function peekDashStats(): ReadonlyMap<number, DashStat> {
   return _dashStats;
 }
 
-export function resetDashStats(): void {
-  _dashStats.clear();
-}
-
 /* ── Один шаг рывка ───────────────────────────────────────────── */
 
 function dashPathClear(world: World, e: Entity, x: number, y: number, dist: number, dash: MonsterDashDef): boolean {
@@ -238,11 +234,6 @@ export function endDashRun(e: Entity): void {
 /** Идёт ли разгон сейчас: отладка, тесты и читаемость позы. */
 export function dashRunSpeed(e: Entity): number {
   return _dashRun.peek(e)?.speed ?? 0;
-}
-
-/** Остаток разгона в секундах, `Infinity` — до столкновения. */
-export function dashRunTimer(e: Entity): number {
-  return _dashRun.peek(e)?.timer ?? 0;
 }
 
 function dashTopSpeed(e: Entity, dash: MonsterDashDef): number {

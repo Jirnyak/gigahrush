@@ -85,15 +85,6 @@ export function registerNpcSpeechPackage(pack: NpcSpeechPackageView): void {
   if (plotNpcId) registryByPlotId.set(plotNpcId, defId);
 }
 
-export function registerNpcSpeechPackages(packs: readonly NpcSpeechPackageView[]): void {
-  for (const pack of packs) registerNpcSpeechPackage(pack);
-}
-
-export function clearNpcSpeechPackages(): void {
-  registry.clear();
-  registryByPlotId.clear();
-}
-
 export function resolveNpcPackageForEntity(entity: Entity): NpcSpeechPackageView | undefined {
   const entityRecord = entity as unknown as Record<string, unknown>;
   const direct = packageIdFromUnknown(entityRecord.npcPackageId)

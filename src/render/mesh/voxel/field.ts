@@ -8,7 +8,6 @@ import {
   VOXEL_FIELD_MAX_HEIGHT,
   VOXEL_FIELD_MAX_WIDTH,
   VoxelMaterial,
-  emptyVoxelMesh,
   voxelAt,
   voxelCellIndex,
   voxelOffset,
@@ -220,15 +219,3 @@ export function fieldHasVoxel(field: VoxelField, x: number, y: number, z: number
   return voxelAt(field, x, y, z) !== VoxelMaterial.EMPTY;
 }
 
-export function emptyVoxelChunkMesh(chunkX: number, chunkY: number): VoxelChunkMesh {
-  return {
-    ...emptyVoxelMesh('empty_voxel_chunk'),
-    chunkX,
-    chunkY,
-    originX: 0,
-    originY: 0,
-    fieldWidth: 0,
-    fieldHeight: 0,
-    fieldDepth: 0,
-  };
-}

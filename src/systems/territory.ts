@@ -1380,13 +1380,3 @@ export function updateTerritoryCapture(world: World, entities: Entity[], state: 
   return changedCells;
 }
 
-export interface TerritoryFrontStats {
-  builds: number;
-  builtAt: number;
-  /** Бакеты, которые для кого-то являются фронтом: чужая земля в досягаемости. */
-  frontBuckets: number;
-  byOwner: number[];
-  hqBuckets: number;
-  cellBudgetLeft: number;
-}
-

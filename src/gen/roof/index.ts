@@ -294,17 +294,6 @@ export function createRoofSkyTextureProvider(seed = 0, timeOfDay = 0.42): RoofSk
   return provider;
 }
 
-export function paintRoofSkyToCanvas(provider: RoofSkyTextureProvider, canvas: HTMLCanvasElement): void {
-  canvas.width = provider.width;
-  canvas.height = provider.height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const image = ctx.createImageData(provider.width, provider.height);
-  new Uint32Array(image.data.buffer).set(provider.pixels);
-  ctx.putImageData(image, 0, 0);
-  provider.dirty = false;
-}
-
 export function expandRoofArchipelago(world: World, rng: () => number): void {
   const keep = buildRoofKeepMask(world);
   clearRoofVoid(world, keep);
@@ -480,8 +469,6 @@ export function applyRoofLosShelterPockets(world: World, rng: () => number): Roo
   }
   return summarizeRoofLosExposure(world, heat);
 }
-
-
 
 export function generateRoofDesignFloor(seed = 0): RoofGeneration {
   const world = new World();

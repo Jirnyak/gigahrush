@@ -66,7 +66,6 @@ export interface DesignFloorRouteDef {
   hasOpenSky?: boolean;
 }
 
-
 export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'roof', z: 50, displayName: 'Крыша', color: '#9cf', role: 'воздух, антенны, видимость', danger: 2, hasOpenSky: true },
   { id: 'outer_district', z: 48, displayName: 'Наружний микрорайон', color: '#aef', role: 'улицы, домики, тишина', danger: 2, hasOpenSky: true },
@@ -120,8 +119,6 @@ export const DESIGN_FLOOR_ROUTES: readonly DesignFloorRouteDef[] = [
   { id: 'hell', z: -36, displayName: 'Мясной низ', color: '#f44', role: 'опасная зона, мясо, слизь', danger: 5 },
   { id: 'void', z: -50, displayName: 'Пустота', color: '#0f8', role: 'конец', danger: 5 },
 ];
-
-export const DESIGN_FLOOR_ZS: readonly number[] = DESIGN_FLOOR_ROUTES.map(def => def.z);
 
 export function designFloorById(id: string): DesignFloorRouteDef | undefined {
   return DESIGN_FLOOR_ROUTES.find(def => def.id === id);

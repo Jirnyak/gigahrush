@@ -36,8 +36,6 @@ const possessions = new Map<number, { targetId: number; timer: number }>();
 
 // ── Queries ──────────────────────────────────────────────────────
 export function isPsiShieldActive(): boolean { return shieldTimer > 0; }
-export function getPsiShieldTimer(): number { return shieldTimer; }
-export function getPsiMark(): { x: number; y: number } | null { return markPos; }
 
 // ── Reset (on new game / floor switch) ───────────────────────────
 export function resetPsiState(): void {
@@ -461,11 +459,6 @@ export function getPsiPossessionTarget(entities: readonly Entity[], host: Entity
   const target = byId.get(live.targetId);
   if (!target?.alive || !host.alive) return null;
   return target;
-}
-
-/** Сколько секунд этому актору осталось в чужом теле. */
-export function getPsiPossessionTimer(host: Entity | undefined): number {
-  return host ? (possessions.get(host.id)?.timer ?? 0) : 0;
 }
 
 /**

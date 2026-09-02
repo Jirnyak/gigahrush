@@ -1,26 +1,23 @@
 import {
   Cell,
   DoorState,
-  EntityType,
   Feature,
   LiftDirection,
   RoomType,
   Tex,
   W,
   ZoneFaction,
-  type Entity,
   type Room,
   type TerritoryOwner,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { Spr } from '../../entities/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { registerRouteCue } from '../../systems/route_cues';
 import {
   placeDoorAt,
   stampRoom,
 } from '../shared';
-import { HARMONIC_BATHHOUSE_ROUTE_ID, HARMONIC_BATHHOUSE_Z, BathhouseDecisionId, BathhouseRouteNode, BathhouseRooms, Point, NextId, SEED, CX, CY, FIELD_W, SERVICE_GRID_X, SERVICE_GRID_Y, BATHHOUSE_HQ_SPECS, BATHHOUSE_OWNER_SEQUENCE } from "./meta";
+import { HARMONIC_BATHHOUSE_ROUTE_ID, HARMONIC_BATHHOUSE_Z, BathhouseDecisionId, BathhouseRouteNode, BathhouseRooms, Point, SEED, CX, CY, FIELD_W, SERVICE_GRID_X, SERVICE_GRID_Y, BATHHOUSE_HQ_SPECS, BATHHOUSE_OWNER_SEQUENCE } from "./meta";
 
 export function idxField(x: number, y: number): number {
   return y * FIELD_W + x;
@@ -729,22 +726,5 @@ export function decisionNode(id: BathhouseDecisionId, room: Room, tags: readonly
     y: room.y + room.h / 2,
     tags,
   };
-}
-
-export function dropBathhouseDebugItem(world: World, entities: Entity[], nextId: NextId, x: number, y: number, defId: string, count: number): void {
-  const ci = world.idx(x, y);
-  if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) return;
-  entities.push({
-    id: nextId.v++,
-    type: EntityType.ITEM_DROP,
-    x: x + 0.5,
-    y: y + 0.5,
-    angle: 0,
-    pitch: 0,
-    alive: true,
-    speed: 0,
-    sprite: Spr.ITEM_DROP,
-    inventory: [{ defId, count }],
-  });
 }
 

@@ -380,10 +380,6 @@ function clampByte(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
 
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
-}
 
 // Same contract as the surface-profile tagger: identify the floor by its route id
 // instead of a z→route lookup fed a `themeClass` field FloorThemeProfile never had.
@@ -457,10 +453,6 @@ function resolvedSeed(theme: FloorThemeProfile, rule: VisualDetailRule, seed: nu
   return hashSeed(`${theme.floorKey}:${theme.routeZ ?? 0}:${rule.id}:${rule.seedSalt}`, seed) & 0xffff;
 }
 
-export function visualDetailRuleById(id: VisualDetailId): VisualDetailRule | undefined {
-  return RULES_BY_ID.get(id);
-}
-
 export function resolveVisualDetailProfile(
   theme: FloorThemeProfile,
   options: { seed?: number } = {},
@@ -524,7 +516,3 @@ export function resolveVisualDetailProfile(
   };
 }
 
-export function visualDetailDensity01(row: ResolvedVisualDetailFamily | undefined): number {
-  if (!row) return 0;
-  return clamp01(row.density / 255);
-}

@@ -251,8 +251,6 @@ export function restoreFactionRelations(input: unknown): void {
   }
 }
 
-
-
 /* ── Faction names ────────────────────────────────────────────── */
 export const FACTION_NAMES: Record<Faction, string> = {
   [Faction.CITIZEN]: 'Гражданин',
@@ -267,16 +265,6 @@ export const FACTION_NAMES: Record<Faction, string> = {
 export const OCCUPATION_NAMES: Record<Occupation, string> = {
   ...Object.fromEntries(Object.values(OCCUPATION_PROFILES).map(profile => [profile.occupation, profile.label])),
 } as Record<Occupation, string>;
-
-/* ── Weighted faction/occupation assignment ────────────────────── */
-export function randomFaction(): Faction {
-  const r = rng();
-  if (r < 0.40) return Faction.CITIZEN;
-  if (r < 0.60) return Faction.LIQUIDATOR;
-  if (r < 0.75) return Faction.CULTIST;
-  if (r < 0.90) return Faction.SCIENTIST;
-  return Faction.WILD;
-}
 
 /* ── Weighted occupation distribution (faction-independent) ───── */
 // домохозяйка 10%, слесарь 10%, секретарь 10%, электрик 10%, повар 5%,

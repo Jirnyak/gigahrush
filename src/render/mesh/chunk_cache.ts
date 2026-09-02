@@ -11,9 +11,6 @@ import {
   type ResolvedMeshSceneProfile,
 } from './scene_collect';
 
-export const CHUNK_SIZE = 8;
-export const MAX_CHUNKS_PER_FRAME = 8;
-
 export interface MeshChunkCacheStats {
   enabled: boolean;
   chunksConsidered: number;

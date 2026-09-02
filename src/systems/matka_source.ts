@@ -27,7 +27,6 @@ function sourceDef(e: Entity): MonsterSourceDef | undefined {
 }
 
 export const MATKA_CHILD_CAP = MONSTERS[MonsterKind.MATKA].source!.cap;
-export const MATKA_SPAWN_COOLDOWN_SEC = MONSTERS[MonsterKind.MATKA].source!.cooldownSec;
 
 const MATKA_SPAWN_ATTEMPTS = 32;
 const MATKA_SPAWN_RADIUS = 3.2;

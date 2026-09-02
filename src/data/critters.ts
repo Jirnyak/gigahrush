@@ -169,8 +169,6 @@ export const CRITTER_SPECIES: readonly CritterSpecies[] = [
   },
 ];
 
-export type CritterSpeciesId = (typeof CRITTER_SPECIES)[number]['id'];
-
 /** Живность, которую несёт этаж, если он не объявил свою. */
 export const DEFAULT_FAUNA: readonly string[] = ['rat', 'roach', 'fly', 'moth', 'woodlouse', 'spider'];
 

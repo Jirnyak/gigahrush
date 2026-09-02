@@ -66,25 +66,6 @@ export function queryFloorCatalog(query: FloorCatalogQuery = {}): FloorCatalogDe
   return out;
 }
 
-export function eligibleFloorPockets(
-  depth: number,
-  query: Omit<FloorCatalogQuery, 'minDepth'> = {},
-): FloorCatalogDef[] {
-  return queryFloorCatalog({ ...query, minDepth: depth });
-}
-
-export function eligibleFloorPocketsByTag(
-  tag: string,
-  depth: number,
-  rarity?: FloorCatalogRarity | readonly FloorCatalogRarity[],
-): FloorCatalogDef[] {
-  return eligibleFloorPockets(depth, { tag, rarity });
-}
-
-export function searchFloorCatalog(search: string, query: Omit<FloorCatalogQuery, 'search'> = {}): FloorCatalogDef[] {
-  return queryFloorCatalog({ ...query, search });
-}
-
 export function formatFloorCatalogLine(def: FloorCatalogDef): string {
   return `${def.id} | ${def.displayName} | ${def.rarity} d${def.minDepth} | ${def.contentStatus}`;
 }

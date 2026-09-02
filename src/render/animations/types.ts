@@ -18,7 +18,6 @@ export const RENDER_ANIMATION_PRIORITY = {
 } as const;
 
 export type RenderAnimationChannel = 'entity_sprite' | 'surface_material' | 'screen_fx';
-export type RenderAnimationTriggerKind = 'moving' | 'damaged' | 'state' | 'always' | 'manual_event';
 
 export type RenderAnimationMatchValue<T extends string | number> = T | readonly T[];
 

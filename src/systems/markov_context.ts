@@ -5,10 +5,8 @@ import {
   QuestType,
   RoomType,
   ZoneFaction,
-  type Quest,
   type WorldEvent,
 } from '../core/types';
-import type { ContractDef, QuestRouteTarget } from '../data/contracts';
 import type { ContextSnapshot } from './context';
 import {
   RELATION_FRIENDLY_THRESHOLD,
@@ -140,13 +138,6 @@ const ZONE_FACTION_TAGS: Record<ZoneFaction, string> = {
   [ZoneFaction.SAMOSBOR]: 'samosbor',
   [ZoneFaction.WILD]: 'wild',
   [ZoneFaction.SCIENTIST]: 'scientist',
-};
-
-const QUEST_TYPE_TAGS: Record<QuestType, string> = {
-  [QuestType.FETCH]: 'fetch',
-  [QuestType.VISIT]: 'visit',
-  [QuestType.KILL]: 'kill',
-  [QuestType.TALK]: 'talk',
 };
 
 const DANGER_RANK: Record<MarkovDangerBand, number> = {
@@ -291,110 +282,6 @@ export function lowerWorldEventContext(
     monsterKind: event.monsterKind,
     eventType: event.type,
     eventId: event.id,
-    tags: tags.values(),
-  });
-}
-
-export function lowerQuestContext(
-  quest: Quest,
-  options: MarkovContextLoweringOptions = {},
-): MarkovTextContext {
-  const tags = new MarkovTagBuilder(options.extraTags);
-  addQuestTags(tags, quest.type);
-  if (quest.contractId) tags.add('quest.contract').addId('contract', quest.contractId);
-  if (quest.sideQuestId) tags.add('quest.side').addId('quest.side', quest.sideQuestId);
-  if (quest.plotStepIndex !== undefined) tags.add('quest.plot');
-  if (quest.done) tags.add('quest.done');
-  if (quest.failed) tags.add('quest.failed');
-  if (quest.targetItem) tags.addId('item', quest.targetItem);
-  if (quest.targetMonsterKind !== undefined) tags.add(`monster.${quest.targetMonsterKind}`);
-  addRouteTags(tags, quest.targetRoute ?? quest.targetMarker);
-
-  const relationBand = options.relationBand ?? relationBandForScore(options.relationToPlayer);
-  if (relationBand) tags.add(`relation.${relationBand}`);
-
-  const routeZ = quest.targetRoute?.z ?? quest.targetMarker?.routeZ ?? options.routeZ;
-  const risk = quest.targetRoute?.risk ?? quest.targetMarker?.risk ?? quest.difficulty;
-
-  return finalizeMarkovContext({
-    actorId: options.actorId ?? quest.giverId,
-    actorAlifeId: options.actorAlifeId,
-    actorName: options.actorName,
-    targetId: options.targetId ?? quest.targetNpcId,
-    targetAlifeId: options.targetAlifeId,
-    targetName: options.targetName,
-    floorKey: options.floorKey,
-    z: quest.targetFloorZ ?? quest.targetMarker?.z ?? quest.visitFloorZ ?? options.z,
-    routeZBand: options.routeZBand ?? routeZBandForZ(routeZ),
-    roomId: options.roomId ?? quest.targetRoom,
-    roomType: quest.targetRoomType ?? quest.targetMarker?.roomType,
-    roomDefId: quest.targetRoomDefId ?? quest.targetMarker?.roomDefId,
-    zoneId: undefined,
-    faction: quest.contractFaction,
-    relationBand,
-    socialEdgeFlags: options.socialEdgeFlags,
-    dangerBand: dangerBandForRisk(risk),
-    wealthBand: options.wealthBand ?? wealthBandForValue(options.wealth ?? quest.moneyReward),
-    timeBand: options.timeBand ?? timeBandForMinutes(options.timeMinutes),
-    dangerLevel: options.dangerLevel,
-    thirst: options.thirst,
-    hunger: options.hunger,
-    foundItemValue: options.foundItemValue,
-    recentTrauma: options.recentTrauma,
-    isSamosborActive: options.isSamosborActive,
-    itemId: quest.targetItem,
-    monsterKind: quest.targetMonsterKind,
-    questId: quest.id,
-    questType: quest.type,
-    contractId: quest.contractId,
-    tags: tags.values(),
-  });
-}
-
-export function lowerContractContext(
-  contract: ContractDef,
-  options: MarkovContextLoweringOptions = {},
-): MarkovTextContext {
-  const tags = new MarkovTagBuilder(options.extraTags);
-  addQuestTags(tags, contract.type);
-  tags.add('quest.contract').addId('contract', contract.id);
-  tags.add(`faction.${FACTION_TAGS[contract.faction]}`);
-  for (const tag of contract.tags) tags.add(`quest.${tag}`);
-  if (contract.targetItem) tags.addId('item', contract.targetItem);
-  if (contract.targetMonsterKind !== undefined) tags.add(`monster.${contract.targetMonsterKind}`);
-  addRouteTags(tags, contract.target.route);
-
-  const relationBand = options.relationBand ?? relationBandForScore(options.relationToPlayer);
-  if (relationBand) tags.add(`relation.${relationBand}`);
-
-  return finalizeMarkovContext({
-    actorId: options.actorId,
-    actorAlifeId: options.actorAlifeId,
-    actorName: options.actorName,
-    targetId: options.targetId,
-    targetAlifeId: options.targetAlifeId,
-    targetName: options.targetName,
-    floorKey: options.floorKey,
-    z: contract.target.z ?? options.z,
-    routeZBand: options.routeZBand ?? routeZBandForZ(contract.target.route?.z ?? options.routeZ),
-    roomType: contract.target.roomType,
-    roomDefId: contract.target.roomDefId,
-    faction: contract.faction,
-    relationBand,
-    socialEdgeFlags: options.socialEdgeFlags,
-    dangerBand: dangerBandForRisk(contract.target.route?.risk ?? contract.rank),
-    wealthBand: options.wealthBand ?? wealthBandForValue(options.wealth ?? contract.moneyReward),
-    timeBand: options.timeBand ?? timeBandForMinutes(options.timeMinutes),
-    dangerLevel: options.dangerLevel,
-    thirst: options.thirst,
-    hunger: options.hunger,
-    foundItemValue: options.foundItemValue,
-    recentTrauma: options.recentTrauma,
-    isSamosborActive: options.isSamosborActive,
-    itemId: contract.targetItem,
-    monsterKind: contract.targetMonsterKind,
-    questType: contract.type,
-    contractId: contract.id,
     tags: tags.values(),
   });
 }
@@ -636,14 +523,6 @@ function dangerBandFromEvent(event: WorldEvent): MarkovDangerBand {
   return band;
 }
 
-function dangerBandForRisk(risk: number | undefined): MarkovDangerBand | undefined {
-  if (risk === undefined || !Number.isFinite(risk)) return undefined;
-  if (risk >= 5) return 'panic';
-  if (risk >= 4) return 'threat';
-  if (risk >= 2) return 'uneasy';
-  return 'quiet';
-}
-
 function maxDangerBand(a: MarkovDangerBand, b: MarkovDangerBand): MarkovDangerBand {
   return DANGER_RANK[b] > DANGER_RANK[a] ? b : a;
 }
@@ -665,23 +544,6 @@ function addEventSemanticTags(tags: MarkovTagBuilder, event: WorldEvent): void {
   if (event.type === 'faction_event' || event.type === 'faction_patrol_clash' || event.type === 'faction_relation_changed') {
     tags.add('event.faction_clash');
   }
-}
-
-function addQuestTags(tags: MarkovTagBuilder, type: QuestType): void {
-  const questTag = QUEST_TYPE_TAGS[type];
-  tags.add('quest.active');
-  if (questTag) tags.add(`quest.${questTag}`);
-}
-
-function addRouteTags(tags: MarkovTagBuilder, route: QuestRouteTarget | Quest['targetMarker'] | undefined): void {
-  if (!route) return;
-  if ('designFloorId' in route && route.designFloorId) tags.addId('route.design', route.designFloorId);
-  if ('proceduralTag' in route && route.proceduralTag) tags.addId('route.procedural', route.proceduralTag);
-  if ('anomalyId' in route && route.anomalyId) tags.addId('route.anomaly', route.anomalyId);
-  if ('tags' in route && route.tags) for (const tag of route.tags) tags.add(`route.${tag}`);
-  const z = 'z' in route ? route.z : 'routeZ' in route ? route.routeZ : undefined;
-  const zBand = routeZBandForZ(z);
-  if (zBand) tags.add(`route.${zBand}`);
 }
 
 function addHashPart(parts: string[], key: string, value: unknown): void {

@@ -148,8 +148,6 @@ function makeRecipeRegistry(): CraftRecipeRegistry {
 
 export const CRAFT_RECIPES: CraftRecipeRegistry = makeRecipeRegistry();
 
-export const CRAFT_RECIPE_LIST: readonly CraftRecipeDef[] = Object.freeze(Object.values(CRAFT_RECIPES));
-
 export function craftRecipeById(recipeId: string): CraftRecipeDef | undefined {
   return CRAFT_RECIPES[recipeId];
 }

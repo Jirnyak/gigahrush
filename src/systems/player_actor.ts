@@ -1,4 +1,4 @@
-import { EntityType, type Entity } from '../core/types';
+import type { Entity } from '../core/types';
 
 let currentPlayerId: number | undefined;
 
@@ -29,10 +29,3 @@ export function getCurrentPlayerEntity(entities: readonly Entity[], fallback?: E
   return entities.find(entity => entity.alive && isNativePlayerBodyEntity(entity));
 }
 
-export function isActorEntity(entity: Entity | null | undefined): entity is Entity {
-  return entity?.alive === true && (entity.type === EntityType.NPC || entity.type === EntityType.MONSTER);
-}
-
-export function isNonPlayerNpcEntity(entity: Entity | null | undefined): entity is Entity {
-  return entity?.alive === true && entity.type === EntityType.NPC && !isPlayerEntity(entity);
-}

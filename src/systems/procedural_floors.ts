@@ -70,10 +70,6 @@ export interface FloorRunEntrySnapshot {
 type FloorRunHost = GameState & { floorRun?: FloorRunState };
 const normalizedFloorRuns = new WeakSet<FloorRunState>();
 
-
-
-
-
 const MAX_RUN_SEED = 0x7fffffff;
 const MAX_SAVED_TITLE = 96;
 const MAX_SAVED_ID = 64;
@@ -499,10 +495,6 @@ export function commitFloorRunEntrySnapshot(state: GameState, input: unknown): F
 export function forceFloorRunStory(state: GameState, z: number): void {
   const run = ensureFloorRunState(state, z);
   run.currentZ = z;
-}
-
-export function isCurrentProceduralFloor(state: GameState): boolean {
-  return currentFloorRunEntry(state).procedural;
 }
 
 export function currentProceduralFloorSpec(state: GameState): ProceduralFloorSpec | undefined {

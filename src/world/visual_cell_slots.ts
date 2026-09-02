@@ -3,7 +3,6 @@ import {
   EMPTY_VISUAL_CELL_CODE,
   VISUAL_SLOTS_PER_CELL,
   World,
-  clearVisualSlots,
   getVisualSlot,
   setVisualSlot,
   visualSlotOffset,
@@ -80,8 +79,6 @@ const FEATURE_VISUAL_IDS: Partial<Record<Feature, readonly string[]>> = {
   [Feature.TREE]: ['organic_tree'],
 };
 
-
-
 function hash32(seed: number, a: number, b = 0, c = 0): number {
   let h = (seed ^ 0x9e3779b9) >>> 0;
   h = Math.imul(h ^ (a + 0x85ebca6b), 0xc2b2ae35) >>> 0;
@@ -122,22 +119,6 @@ function isWallVisualSource(world: World, idx: number): boolean {
 
 function visualPriorityScore(def: VisualCellDef, seed: number, cellIdx: number, slot: number): number {
   return def.priority * 1_000_000 + (hash32(seed, cellIdx, def.code, slot) & 0xffff);
-}
-
-export function visualSlotStableHash(seed: number, cellIdx: number, slot: number, code = 0): number {
-  return hash32(seed, cellIdx, slot, code);
-}
-
-export function clearVisualSlotRegion(world: World, x: number, y: number, w: number, h: number): number {
-  let changed = 0;
-  const width = Math.max(0, Math.floor(w));
-  const height = Math.max(0, Math.floor(h));
-  for (let dy = 0; dy < height; dy++) {
-    for (let dx = 0; dx < width; dx++) {
-      if (clearVisualSlots(world, world.idx(x + dx, y + dy))) changed++;
-    }
-  }
-  return changed;
 }
 
 export function removeVisualSlotCode(world: World, cellIdx: number, code: number): number {

@@ -309,16 +309,8 @@ export function getPermitDef(itemId: string): PermitDef | undefined {
   return PERMIT_BY_ITEM.get(itemId);
 }
 
-export function isPermitItem(itemId: string): boolean {
-  return PERMIT_BY_ITEM.has(itemId);
-}
-
 export function getPermitForgeryRecipe(outputItemId: string): PermitForgeryRecipe | undefined {
   return FORGERY_RECIPE_BY_OUTPUT.get(outputItemId);
-}
-
-export function permitDefsForAccessTag(tag: PermitAccessTag): readonly PermitDef[] {
-  return PERMIT_DEFS.filter(def => def.accessTags.includes(tag));
 }
 
 function permitScore(def: PermitDef): number {

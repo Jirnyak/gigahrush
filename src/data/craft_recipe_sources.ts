@@ -27,13 +27,6 @@ export interface CraftRecipeSourceNoteData {
   recipeSourceId?: string;
 }
 
-export interface CraftRecipeSourceApplyResult {
-  source: CraftRecipeSourceDef;
-  learnedRecipeIds: string[];
-  alreadyKnownRecipeIds: string[];
-  failedRecipeIds: string[];
-}
-
 export const CRAFT_ITEM_RECIPE_PREFIX = 'craft_item_';
 
 export function craftRecipeIdForItem(itemId: string): string {
@@ -245,10 +238,6 @@ for (const source of CRAFT_RECIPE_SOURCES) {
   if (source.recipeIds.length === 0) throw new Error(`[CRAFT_RECIPE_SOURCE] ${source.id} has no recipes`);
 }
 
-export function allCraftRecipeSources(): readonly CraftRecipeSourceDef[] {
-  return CRAFT_RECIPE_SOURCES;
-}
-
 export function getCraftRecipeSource(id: string | undefined): CraftRecipeSourceDef | undefined {
   return id ? SOURCES_BY_ID.get(id) : undefined;
 }
@@ -264,10 +253,6 @@ export function craftRecipeSourcesForItem(itemId: string): CraftRecipeSourceDef[
 export function craftRecipeSourcesForQuest(questId: string | undefined): CraftRecipeSourceDef[] {
   if (!questId) return [];
   return CRAFT_RECIPE_SOURCES.filter(source => source.kind === 'quest' && source.questId === questId);
-}
-
-export function craftRecipeSourcesForTerminal(terminalId: string): CraftRecipeSourceDef[] {
-  return CRAFT_RECIPE_SOURCES.filter(source => source.kind === 'terminal' && source.terminalId === terminalId);
 }
 
 export function craftRecipeSourcesForFloor(floorId: string): CraftRecipeSourceDef[] {
@@ -315,39 +300,6 @@ export function craftRecipeNoteText(data: unknown): string | undefined {
 
 export function craftRecipeItemId(recipeId: string): string | undefined {
   return recipeId.startsWith(CRAFT_ITEM_RECIPE_PREFIX) ? recipeId.slice(CRAFT_ITEM_RECIPE_PREFIX.length) : undefined;
-}
-
-export function craftRecipeSourceHasUnknownRecipe(
-  source: CraftRecipeSourceDef,
-  known: (recipeId: string) => boolean,
-): boolean {
-  return source.recipeIds.some(recipeId => !known(recipeId));
-}
-
-export function applyCraftRecipeSource(
-  source: CraftRecipeSourceDef,
-  learn: (recipeId: string, sourceId: string) => boolean,
-  known?: (recipeId: string) => boolean,
-): CraftRecipeSourceApplyResult {
-  const learnedRecipeIds: string[] = [];
-  const alreadyKnownRecipeIds: string[] = [];
-  const failedRecipeIds: string[] = [];
-
-  for (const recipeId of source.recipeIds) {
-    if (known?.(recipeId)) {
-      alreadyKnownRecipeIds.push(recipeId);
-      continue;
-    }
-    if (learn(recipeId, source.id)) {
-      learnedRecipeIds.push(recipeId);
-    } else if (known?.(recipeId)) {
-      alreadyKnownRecipeIds.push(recipeId);
-    } else {
-      failedRecipeIds.push(recipeId);
-    }
-  }
-
-  return { source, learnedRecipeIds, alreadyKnownRecipeIds, failedRecipeIds };
 }
 
 export function craftRecipeSourceCountsByKind(): Record<CraftRecipeSourceKind, number> {

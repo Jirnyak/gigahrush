@@ -27,7 +27,6 @@ export const DEMOS_PLAYER_SOCIAL_SLOT = DEMOS_SOCIAL_PLAYER_SLOT;
 export const DEMOS_SOCIAL_NPC_SLOTS = 7;
 export const DEMOS_SOCIAL_INITIAL_NPC_SLOTS = 4;
 export const DEMOS_SOCIAL_PUBLIC_SLOTS = 8;
-export const DEMOS_SOCIAL_SLOTS = DEMOS_SOCIAL_PUBLIC_SLOTS;
 export const DEMOS_SOCIAL_CANDIDATE_TRIES = 24;
 export const DEMOS_SOCIAL_OVERRIDE_CAP = 8192;
 
@@ -46,8 +45,6 @@ export {
   RELATION_MIN,
   RELATION_UNSET,
 };
-
-export type DemosRelationBandId = 'enemy' | 'cold' | 'neutral' | 'warm' | 'friend';
 
 export enum DemosSocialRoleId {
   ACQUAINTANCE = 0,

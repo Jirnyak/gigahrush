@@ -55,14 +55,6 @@ export interface FloorLiftAnchor {
   liftY: number;
 }
 
-export interface FloorRouteLiftMirror {
-  direction: LiftDirection;
-  /** `anchors[0]` is authored priority: the lift the player actually rode. It is
-   * placed before the rest (which are shuffled) so the return lift always lands
-   * at the player's own departure coordinates. */
-  anchors: readonly FloorLiftAnchor[];
-}
-
 export interface FloorRouteLiftLayoutResult {
   down: number;
   up: number;
@@ -1202,11 +1194,6 @@ function trimFloorMemory(): void {
   }
 }
 
-
-
-
-
-
 export function collectFloorLiftAnchors(
   world: World,
   direction: LiftDirection,
@@ -1225,32 +1212,6 @@ export function collectFloorLiftAnchors(
   }
   return out;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /**
  * Маршрутные лифты этажа в рантайме — та же постановка, что в генерации.
@@ -1346,12 +1307,6 @@ export function captureFloorMemory(
   floorMemoryBytes += estimatedBytes;
   trimFloorMemory();
   return true;
-}
-
-export function hasFloorMemory(keyInput: string): boolean {
-  const key = cleanFloorKey(keyInput);
-  if (!key) return false;
-  return floorMemory.has(key) || packedFloorMemory.has(key);
 }
 
 export function takeFloorMemory(keyInput: string, getBase?: () => World | null): FloorMemoryLoad | null {

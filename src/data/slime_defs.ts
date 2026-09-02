@@ -159,7 +159,6 @@ export const SLIME_DEFS: readonly SlimeDef[] = [
 export const SLIME_IDS: readonly SlimeId[] = SLIME_DEFS.map(def => def.id);
 export const SLIME_SAMPLE_IDS: readonly string[] = SLIME_DEFS.map(def => def.sampleId);
 export const SLIME_DEF_BY_ID = Object.fromEntries(SLIME_DEFS.map(def => [def.id, def])) as Record<SlimeId, SlimeDef>;
-export const SLIME_DEF_BY_SAMPLE_ID: Record<string, SlimeDef> = Object.fromEntries(SLIME_DEFS.map(def => [def.sampleId, def]));
 
 const SLIME_ROOM_CORE_TOKENS = ['слиз', 'остат', 'проб'] as const;
 const SLIME_ROOM_FEED_TOKENS = ['гриб', 'самосбор'] as const;
@@ -212,14 +211,6 @@ function duplicateStrings(values: readonly string[]): string[] {
     }
   }
   return [...duplicates].sort();
-}
-
-export function getSlimeDef(id: string): SlimeDef | undefined {
-  return SLIME_DEF_BY_ID[id as SlimeId];
-}
-
-export function getSlimeDefBySampleId(sampleId: string): SlimeDef | undefined {
-  return SLIME_DEF_BY_SAMPLE_ID[sampleId];
 }
 
 export function validateSlimeDefs(): string[] {

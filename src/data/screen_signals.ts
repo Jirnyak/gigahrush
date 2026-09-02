@@ -130,12 +130,6 @@ export function screenSignalForTexture(tex: number): ScreenSignalDef | undefined
   return screenSignalForVariant(Math.floor((tex - first) / SCREEN_SIGNAL_FRAMES));
 }
 
-export function screenSignalById(id: ScreenSignalId): ScreenSignalDef {
-  const def = SCREEN_SIGNAL_DEFS.find(s => s.id === id);
-  if (!def) throw new Error(`Unknown screen signal: ${id}`);
-  return def;
-}
-
 export function screenSignalEligible(
   def: ScreenSignalDef,
   z: number,

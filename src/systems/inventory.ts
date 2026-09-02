@@ -232,14 +232,6 @@ export interface WeaponReadiness {
 export type InventoryPrepTone = 'ok' | 'warn' | 'bad' | 'muted';
 export type InventoryItemCategory = 'weapon' | 'tool' | 'ammo' | 'medicine' | 'water' | 'food' | 'documents' | 'psi' | 'trade' | 'other';
 
-export interface InventoryPrepLine {
-  id: 'weapon' | 'tool' | 'ammo' | 'medicine' | 'water' | 'food' | 'documents' | 'psi';
-  label: string;
-  value: string;
-  detail: string;
-  tone: InventoryPrepTone;
-}
-
 export interface InventorySlotActionInfo {
   defId: string;
   name: string;
@@ -293,7 +285,6 @@ function getInventoryUseHandlers(): InventoryUseHandler[] {
   if (!inventoryUseHandlers) inventoryUseHandlers = [];
   return inventoryUseHandlers;
 }
-
 
 export function transferMoney(from: import('../core/types').Entity | null, to: import('../core/types').Entity | null, amount: number): boolean {
   if (amount <= 0) return false;
@@ -1160,96 +1151,6 @@ export function getInventorySlotActionInfo(e: Entity, slotIdx: number): Inventor
     isEquippedWeapon,
     isEquippedTool,
   };
-}
-
-export function getInventoryPrepSummary(e: Entity): InventoryPrepLine[] {
-  const inv = e.inventory ?? [];
-  let ammo = 0;
-  let medicine = 0;
-  let water = 0;
-  let food = 0;
-  let documents = 0;
-  let psiReserve = 0;
-
-  for (const slot of inv) {
-    const category = inventoryItemCategory(slot.defId);
-    if (category === 'ammo' || WEAPON_STATS[slot.defId]?.ammoType === slot.defId) ammo += slot.count;
-    else if (category === 'medicine') medicine += slot.count;
-    else if (category === 'water') water += slot.count;
-    else if (category === 'food') food += slot.count;
-    else if (category === 'documents') documents += slot.count;
-    if (itemHasTag(slot.defId, 'psi_restore') || category === 'psi') psiReserve += slot.count;
-  }
-
-  const weapon = getWeaponReadiness(e);
-  const toolDur = getEquippedToolDurability(e);
-  const toolName = e.tool ? (ITEMS[e.tool]?.name ?? e.tool) : 'нет';
-  const toolDetail = toolDur ? `${Math.max(0, Math.ceil(toolDur.cur))}/${toolDur.max}` : e.tool ? 'готов' : 'пусто';
-  const needs = e.needs;
-  const waterNeed = needs ? Math.round(needs.water) : 0;
-  const foodNeed = needs ? Math.round(needs.food) : 0;
-  const psi = e.rpg ? `${Math.floor(e.rpg.psi)}/${e.rpg.maxPsi}` : '--';
-
-  return [
-    {
-      id: 'weapon',
-      label: 'Оруж',
-      value: weapon.name,
-      detail: weapon.cannotFireReason || weapon.resourceLabel,
-      tone: weapon.cannotFireReason ? 'bad' : weapon.lowResource || !weapon.id ? 'warn' : 'ok',
-    },
-    {
-      id: 'tool',
-      label: 'Инстр',
-      value: toolName,
-      detail: toolDetail,
-      tone: e.tool ? 'ok' : 'muted',
-    },
-    {
-      id: 'ammo',
-      label: 'Патр',
-      value: String(ammo),
-      detail: weapon.resourceKind === 'ammo' ? weapon.resourceLabel : 'всего',
-      tone: weapon.resourceKind === 'ammo'
-        ? weapon.cannotFireReason ? 'bad' : weapon.lowResource ? 'warn' : 'ok'
-        : ammo > 0 ? 'ok' : 'muted',
-    },
-    {
-      id: 'medicine',
-      label: 'Мед',
-      value: String(medicine),
-      detail: e.hp !== undefined && e.maxHp !== undefined ? `HP ${Math.round(e.hp)}/${Math.round(e.maxHp)}` : 'аптечка',
-      tone: medicine > 0 ? 'ok' : (e.hp ?? 100) < (e.maxHp ?? 100) ? 'bad' : 'warn',
-    },
-    {
-      id: 'water',
-      label: 'Вода',
-      value: String(water),
-      detail: needs ? `жажда ${waterNeed}` : 'запас',
-      tone: water > 0 ? 'ok' : needs && needs.water < 35 ? 'bad' : 'warn',
-    },
-    {
-      id: 'food',
-      label: 'Еда',
-      value: String(food),
-      detail: needs ? `сытость ${foodNeed}` : 'запас',
-      tone: food > 0 ? 'ok' : needs && needs.food < 35 ? 'bad' : 'warn',
-    },
-    {
-      id: 'documents',
-      label: 'Док',
-      value: String(documents),
-      detail: documents > 0 ? 'доступ' : 'нет бумаг',
-      tone: documents > 0 ? 'ok' : 'muted',
-    },
-    {
-      id: 'psi',
-      label: 'ПСИ',
-      value: psi,
-      detail: psiReserve > 0 ? `резерв ${psiReserve}` : 'резерв 0',
-      tone: e.rpg ? (e.rpg.psi < Math.max(4, e.rpg.maxPsi * 0.25) && psiReserve <= 0 ? 'warn' : 'ok') : 'muted',
-    },
-  ];
 }
 
 /** Room for `outputCount` units of `outputId` once `consumedIds` leave the bag.

@@ -135,10 +135,6 @@ export function renderProceduralQuestSpeech(options: ProceduralQuestSpeechOption
   return result(fallback, 'curated_pool', true, phase, facts, ['quest', 'procedural_quest', 'fallback']);
 }
 
-export function renderProceduralQuestSpeechText(options: ProceduralQuestSpeechOptions): string {
-  return renderProceduralQuestSpeech(options).text;
-}
-
 export function summarizeQuestFacts(q: Quest, contractDef?: ContractDef): ProceduralQuestFactSummary {
   const questClass = inferQuestClass(q, contractDef);
   return {

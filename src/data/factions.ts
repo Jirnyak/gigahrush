@@ -86,10 +86,6 @@ export function territoryOwnerName(owner: TerritoryOwner): string {
   return territoryOwnerDef(owner).name;
 }
 
-export function territoryOwnerColor(owner: TerritoryOwner): string {
-  return territoryOwnerDef(owner).color;
-}
-
 export function territoryOwnerHqName(owner: TerritoryOwner): string {
   return territoryOwnerDef(owner).hqName;
 }

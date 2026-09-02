@@ -78,13 +78,6 @@ export interface NoiseQuery {
   sinceId?: number;
 }
 
-export interface NoiseHudCue {
-  label: string;
-  detail: string;
-  color: string;
-  intensity: number;
-}
-
 interface ActorNoiseMemory {
   nextScanAt: number;
   hotUntil: number;
@@ -206,10 +199,6 @@ export function resetNoiseRecords(): void {
   actorNoiseMemory = new WeakMap<Entity, ActorNoiseMemory>();
   actorJammerUntil = new WeakMap<Entity, number>();
   actorQuietDoorUntil = new WeakMap<Entity, number>();
-}
-
-export function expireNoiseRecords(now: number): void {
-  pruneNoiseRecords(now);
 }
 
 export function publishNoise(state: GameState, draft: NoiseDraft): NoiseRecord | undefined {
@@ -395,10 +384,6 @@ export function publishExplosionNoise(
   }, false);
 }
 
-export function isNoiseJammerActive(actor: Entity, time: number): boolean {
-  return (actorJammerUntil.get(actor) ?? -Infinity) > time;
-}
-
 export function prepareQuietDoorCharge(actor: Entity, time: number): void {
   actorQuietDoorUntil.set(actor, time + QUIET_DOOR_DURATION);
 }
@@ -477,10 +462,6 @@ export function findNoiseForActor(
   return best;
 }
 
-export function isActorNoiseHot(world: World, state: GameState | undefined, actor: Entity, time: number): boolean {
-  return findNoiseForActor(world, state, actor, time, { minSeverity: 2, scanInterval: 0.75 }) !== undefined;
-}
-
 export function findNoiseInvestigationTarget(
   world: World,
   state: GameState | undefined,
@@ -488,50 +469,6 @@ export function findNoiseInvestigationTarget(
   time: number,
 ): NoiseRecord | undefined {
   return findNoiseForActor(world, state, actor, time, { minSeverity: 2, scanInterval: 1.0, hearingMult: 1.12 });
-}
-
-function sourceDetail(record: NoiseRecord): string {
-  switch (record.source) {
-    case 'weapon_fire': return record.itemId ? (ITEMS[record.itemId]?.name ?? record.itemId) : 'выстрел';
-    case 'melee': return 'металл';
-    case 'footstep': return 'шаги';
-    case 'door': return record.tags.includes('quiet') ? 'дверь тихо' : 'дверь';
-    case 'siren': return 'сирена';
-    case 'explosion': return 'взрыв';
-    case 'hack_fail': return 'пост';
-    case 'decoy': return 'отвлечение';
-  }
-}
-
-export function getNoiseHudCue(world: World, state: GameState, player: Entity, time: number): NoiseHudCue | null {
-  pruneNoiseRecords(time);
-  let best: NoiseRecord | undefined;
-  let bestScore = -Infinity;
-  for (let i = noiseRecords.length - 1; i >= 0; i--) {
-    const record = noiseRecords[i];
-    if (record.z !== state.currentZ || record.severity < 2) continue;
-    const own = record.actorId === player.id;
-    // Свой шум слышен всегда, чужой — та же точная отсечка, что и в слухе NPC.
-    if (!own) {
-      if (world.dist2(player.x, player.y, record.x, record.y) > record.radiusSq) continue;
-      if (getAcousticDistance(world, player.x, player.y, record.x, record.y) > record.radius) continue;
-    }
-    const age = Math.max(0, time - record.time);
-    if (age > 2.2 && !own) continue;
-    const score = record.severity * 12 + (own ? 8 : 0) - age * 3;
-    if (score > bestScore) {
-      bestScore = score;
-      best = record;
-    }
-  }
-  if (!best) return null;
-  const age = Math.max(0, time - best.time);
-  const intensity = Math.max(0, Math.min(1, (best.expiresAt - time) / Math.max(0.5, best.ttl)));
-  if (intensity <= 0) return null;
-  const label = best.suppressed ? 'ГЛУШИТСЯ' : best.severity >= 4 ? 'СЛЫШАТ' : 'СЛЫШНО';
-  const detail = `${sourceDetail(best)} ${Math.max(1, Math.round(best.radius))}м`;
-  const color = best.suppressed ? '#8cf' : best.severity >= 4 ? '#fa4' : '#fc8';
-  return { label, detail: age < 0.25 ? detail : detail.toLowerCase(), color, intensity };
 }
 
 function publishNoiseItemEvent(

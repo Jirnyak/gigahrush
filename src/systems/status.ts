@@ -184,10 +184,6 @@ export function hasAirborneHazardProtection(entity: Entity): boolean {
   return false;
 }
 
-export function hasSporeHazeProtection(entity: Entity): boolean {
-  return hasAirborneHazardProtection(entity);
-}
-
 export function applySporeHaze(
   entity: Entity,
   time: number,
@@ -344,10 +340,6 @@ export function paupsinaWebMoveMult(entity: Entity, time: number): number {
   const status = activePaupsinaWeb(entity, time);
   if (!status) return 1;
   return time - status.startedAt < PAUPSINA_WEB_ROOT_SEC ? PAUPSINA_WEB_ROOT_MULT : PAUPSINA_WEB_MOVE_MULT;
-}
-
-export function isZhelemishSkinItem(itemId: string): boolean {
-  return itemId === ZHELEMISH_RAW_ITEM || ZHELEMISH_TREATED_ITEMS.has(itemId);
 }
 
 export function zhelemishSourceForItem(itemId: string): PlayerStatusSource | null {

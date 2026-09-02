@@ -41,10 +41,6 @@ export function characterSexLabelRu(sex: CharacterSex): string {
   return sex === 'female' ? 'женский' : 'мужской';
 }
 
-export function characterSexLabelEn(sex: CharacterSex): string {
-  return sex === 'female' ? 'female' : 'male';
-}
-
 export function characterAgeBand(ageInput: unknown): CharacterAgeBand {
   const age = clampCharacterAge(ageInput);
   if (age < 13) return 'child';

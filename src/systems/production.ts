@@ -55,22 +55,6 @@ export interface ProductionState {
   blockedReason?: 'no_inputs' | 'container_full' | 'no_container';
 }
 
-export interface ProductionRewardTargetQuery {
-  factoryId?: string;
-  recipeId?: string;
-  itemId?: string;
-  resourceId?: string;
-  preferBlocked?: boolean;
-}
-
-export interface ProductionRewardTarget {
-  production: ProductionState;
-  container: WorldContainer;
-  factory: FactoryDef;
-  recipe: FactoryRecipeDef;
-  score: number;
-}
-
 type ProductionGameState = GameState & { production?: ProductionState[] };
 const MAX_PRODUCTION_ROOMS = 64;
 const MAX_PRODUCTION_STATES = 128;

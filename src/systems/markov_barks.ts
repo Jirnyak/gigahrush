@@ -237,10 +237,6 @@ export function generateAmbientBark(request: Omit<MarkovBarkRequest, 'signal'>):
   return generateMarkovBark({ ...request, signal: 'ambient' });
 }
 
-export function generateLeadBark(request: Omit<MarkovBarkRequest, 'signal'>): MarkovSpeechAdapterResult | undefined {
-  return generateMarkovBark({ ...request, signal: 'lead' });
-}
-
 export function generateWitnessBark(request: Omit<MarkovBarkRequest, 'signal'>): MarkovSpeechAdapterResult | undefined {
   return generateMarkovBark({ ...request, signal: 'witness' });
 }

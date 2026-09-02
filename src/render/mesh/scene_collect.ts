@@ -75,10 +75,6 @@ export interface MeshInstance {
   flags: number;
 }
 
-export interface MeshSourceAdapter {
-  collect(context: MeshPassContext, out: MeshInstance[]): void;
-}
-
 export interface MeshSceneProfile {
   enabled?: boolean;
   radius?: number;
@@ -248,10 +244,6 @@ for (const def of Object.values(FEATURE_MESH_DEFS)) {
     MODEL_PRIORITY_CACHE.set(def.modelId, def.priority);
   }
 }
-
-export const MESH_FEATURE_MODEL_IDS: Readonly<Partial<Record<Feature, string>>> = Object.freeze(
-  Object.fromEntries(Object.entries(FEATURE_MESH_DEFS).map(([feature, def]) => [feature, def?.modelId])),
-);
 
 const MAX_MERGE_RUN = 16;
 const MAX_CLUSTER_CELLS = 16;
@@ -1233,8 +1225,6 @@ function collectContainersAtCell(context: MeshPassContext, idx: number, x: numbe
     });
   }
 }
-
-
 
 function corridorCovering(context: MeshPassContext, profile?: ResolvedMeshSceneProfile): VisualCorridorCoveringDef {
   const explicit = profile?.corridorCoveringId ?? context.profile?.corridorCoveringId;
@@ -2541,30 +2531,6 @@ export function capMeshInstances(
   }
   return out;
 }
-
-export const visualSlotSourceAdapter: MeshSourceAdapter = {
-  collect(context, out) {
-    const profile = resolveMeshSceneProfile(context);
-    if (!profile.enabled || !profile.includeVisualSlots) return;
-    scanLocalRadiusCells(context, { ...profile, includeFeatures: false, includeContainers: false, includeCorridorVolumes: false }, out);
-  },
-};
-
-export const featureSourceAdapter: MeshSourceAdapter = {
-  collect(context, out) {
-    const profile = resolveMeshSceneProfile(context);
-    if (!profile.enabled || !profile.includeFeatures) return;
-    scanLocalRadiusCells(context, { ...profile, includeVisualSlots: false, includeContainers: false, includeCorridorVolumes: false }, out);
-  },
-};
-
-export const containerSourceAdapter: MeshSourceAdapter = {
-  collect(context, out) {
-    const profile = resolveMeshSceneProfile(context);
-    if (!profile.enabled || !profile.includeContainers) return;
-    scanLocalRadiusCells(context, { ...profile, includeVisualSlots: false, includeFeatures: false, includeCorridorVolumes: false }, out);
-  },
-};
 
 const _rawCollectScratch: MeshInstance[] = [];
 

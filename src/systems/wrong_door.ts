@@ -429,24 +429,6 @@ export function tryUseWrongDoorRemap(world: World, state: GameState, player: Ent
   return true;
 }
 
-export function getWrongDoorMapCues(world: World, state: GameState | undefined): WrongDoorMapCue[] {
-  if (!state) return [];
-  const store = stores.get(world);
-  if (!store || store.remaps.length === 0) return [];
-  const out: WrongDoorMapCue[] = [];
-  for (const remap of store.remaps) {
-    if (state.time >= remap.expiresAt) continue;
-    out.push({
-      id: remap.id,
-      sourceX: remap.sourceIdx % W,
-      sourceY: (remap.sourceIdx / W) | 0,
-      targetX: remap.targetIdx % W,
-      targetY: (remap.targetIdx / W) | 0,
-      expiresAt: remap.expiresAt });
-  }
-  return out;
-}
-
 /* ── Отладка ──────────────────────────────────────────────────
  * Команда живёт рядом со своей системой: меню собирает реестр, а не список в
  * debug.ts. Чтобы добавить ещё одну, допишите ещё один registerDebugCommand. */

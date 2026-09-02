@@ -1,4 +1,4 @@
-import { EntityType, Faction, W, ZoneFaction, type Entity, type TerritoryOwner } from '../core/types';
+import { EntityType, Faction, W, type Entity, type TerritoryOwner } from '../core/types';
 import type { World } from '../core/world';
 import { TERRITORY_OWNER_SLOTS, factionToTerritoryOwner } from '../data/factions';
 
@@ -164,17 +164,6 @@ export function crowdBucketAt(x: number, y: number): number {
   return bucketOf(x, y);
 }
 
-export function crowdBucketCount(): number {
-  return BUCKET_COUNT;
-}
-
-/** Центр бакета в клетках мира — точка, к которой ведёт маршрут. */
-export function crowdBucketCenter(bucket: number, out: { x: number; y: number }): void {
-  const half = 1 << (BUCKET_SHIFT - 1);
-  out.x = ((bucket % BUCKETS_PER_AXIS) << BUCKET_SHIFT) + half;
-  out.y = (((bucket / BUCKETS_PER_AXIS) | 0) << BUCKET_SHIFT) + half;
-}
-
 /** Людей этого хозяина в бакете под точкой. */
 export function crowdAt(world: World, x: number, y: number, owner: TerritoryOwner): number {
   return indexOf(world).people[bucketOf(x, y) * TERRITORY_OWNER_SLOTS + owner] ?? 0;
@@ -197,31 +186,6 @@ export function crowdTotalInBucket(world: World, bucket: number): number {
 /** Люди чужих хозяев в бакете: свои минус все. */
 export function crowdRivalsInBucket(world: World, bucket: number, owner: TerritoryOwner): number {
   return crowdTotalInBucket(world, bucket) - crowdInBucket(world, bucket, owner);
-}
-
-/** Звери в бакете под точкой. Экология стороны не имеет — одно число. */
-export function beastsAt(world: World, x: number, y: number): number {
-  return indexOf(world).beasts[bucketOf(x, y)] ?? 0;
-}
-
-export function beastsInBucket(world: World, bucket: number): number {
-  return indexOf(world).beasts[bucket] ?? 0;
-}
-
-/** Кого в бакете больше всех. Ничья решается порядком хозяев — детерминированно. */
-export function dominantCrowdOwnerInBucket(world: World, bucket: number): TerritoryOwner {
-  const people = indexOf(world).people;
-  const base = bucket * TERRITORY_OWNER_SLOTS;
-  let best: TerritoryOwner = ZoneFaction.CITIZEN;
-  let bestCount = 0;
-  for (let owner = 0; owner < TERRITORY_OWNER_SLOTS; owner++) {
-    const count = people[base + owner];
-    if (count > bestCount) {
-      bestCount = count;
-      best = owner as TerritoryOwner;
-    }
-  }
-  return best;
 }
 
 /** Перепись комнаты по хозяину. Пустая комната отдаёт общий нулевой срез. */

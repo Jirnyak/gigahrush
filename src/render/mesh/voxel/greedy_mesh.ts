@@ -257,28 +257,3 @@ function pushGreedyFace(
     : pushQuad(acc, a, e, c, b, normal, material);
 }
 
-export function countExposedVoxelTriangles(field: VoxelField, triangleCap = Number.POSITIVE_INFINITY): number {
-  let triangles = 0;
-  const dirs = [
-    [1, 0, 0],
-    [-1, 0, 0],
-    [0, 1, 0],
-    [0, -1, 0],
-    [0, 0, 1],
-    [0, 0, -1],
-  ] as const;
-  for (let z = 0; z < field.depth; z++) {
-    for (let y = 0; y < field.height; y++) {
-      for (let x = 0; x < field.width; x++) {
-        if (voxelAt(field, x, y, z) === VoxelMaterial.EMPTY) continue;
-        for (const [dx, dy, dz] of dirs) {
-          if (voxelAt(field, x + dx, y + dy, z + dz) === VoxelMaterial.EMPTY) {
-            triangles += 2;
-            if (triangles >= triangleCap) return Math.floor(triangleCap);
-          }
-        }
-      }
-    }
-  }
-  return triangles;
-}

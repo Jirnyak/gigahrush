@@ -205,29 +205,6 @@ export function stampProxyCell(
   return stampProxyCells(world, grid, [proxyIndex(grid, x, y)], patch, options);
 }
 
-export function stampProxyRect(
-  world: World,
-  grid: ProxyGrid,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  patch: ProxyRasterPatch,
-  options: ProxyRasterOptions = {},
-): ProxyRasterResult {
-  const width = Math.max(0, Math.min(grid.size, Math.floor(w)));
-  const height = Math.max(0, Math.min(grid.size, Math.floor(h)));
-  if (width === 0 || height === 0) return emptyRasterResult();
-
-  const cells: number[] = [];
-  for (let dy = 0; dy < height; dy++) {
-    for (let dx = 0; dx < width; dx++) {
-      cells.push(proxyIndex(grid, x + dx, y + dy));
-    }
-  }
-  return stampProxyCells(world, grid, cells, patch, options);
-}
-
 export function stampProxyCells(
   world: World,
   grid: ProxyGrid,

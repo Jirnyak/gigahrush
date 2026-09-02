@@ -588,18 +588,6 @@ export function spawnExplosionParticles(world: World, x: number, y: number, radi
   }
 }
 
-export function clearCorpseChunks(world: World, ex: number, ey: number): void {
-  const cx = Math.floor(ex);
-  const cy = Math.floor(ey);
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const idx = world.idx(world.wrap(cx + dx), world.wrap(cy + dy));
-      removeVisualSlotCode(world, idx, 34); // corpse_meat_chunk
-      removeVisualSlotCode(world, idx, 35); // corpse_bone_chunk
-    }
-  }
-}
-
 /* ── Update particle physics ─────────────────────────────────── */
 export function updateParticles(world: World, dt: number): void {
   if (!bindParticleWorld(world)) return;

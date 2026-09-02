@@ -156,11 +156,6 @@ function addMsg(msgs: Msg[], text: string, time: number, color: string) {
   msgs.push(msg(text, time, color));
 }
 
-export function getNeedsCohortDebugSummary(): NeedsCohortDebugSummary {
-  return { ...needsDebug };
-}
-
-
 export function resetNeedsCohortStateForTests(): void {
   hotNeedIds.clear();
   lastNeedsAt.clear();

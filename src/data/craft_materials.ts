@@ -27,8 +27,6 @@ export interface CraftMaterialDef {
   economyHints?: readonly string[];
 }
 
-export const EMPTY_CRAFT_VECTOR: CraftVector = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-
 export function isCraftMaterialId(value: unknown): value is CraftMaterialId {
   return typeof value === 'string' && (CRAFT_MATERIAL_IDS as readonly string[]).includes(value);
 }
@@ -86,28 +84,6 @@ export const CRAFT_MATERIALS: Record<CraftMaterialId, CraftMaterialDef> = Object
     },
   ]),
 ) as Record<CraftMaterialId, CraftMaterialDef>;
-
-export const CRAFT_MATERIAL_INDEX: Record<CraftMaterialId, number> = Object.fromEntries(
-  CRAFT_MATERIAL_IDS.map((id, index) => [id, index]),
-) as Record<CraftMaterialId, number>;
-
-export function mutableCraftVector(input: readonly unknown[] | undefined): MutableCraftVector {
-  const out = emptyCraftVector();
-  if (!input) return out;
-  for (let i = 0; i < out.length; i++) {
-    const value = Number(input[i]);
-    out[i] = Number.isFinite(value) ? Math.max(0, Math.min(999_999, Math.floor(value))) : 0;
-  }
-  return out;
-}
-
-export function sumCraftVectors(vectors: readonly CraftVector[]): MutableCraftVector {
-  const out = emptyCraftVector();
-  for (const vector of vectors) {
-    for (let i = 0; i < CRAFT_MATERIAL_COUNT; i++) out[i] += vector[i];
-  }
-  return out;
-}
 
 export function validateCraftVector(vector: readonly number[]): string[] {
   const errors: string[] = [];

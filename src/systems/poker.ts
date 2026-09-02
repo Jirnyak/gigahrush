@@ -198,10 +198,6 @@ export function formatPokerCard(card: PokerCard): string {
   return `${RANK_LABELS[card.rank]}${SUIT_LABELS[card.suit]}`;
 }
 
-export function formatPokerStreet(street: PokerStreet): string {
-  return STREET_LABELS[street];
-}
-
 export function pokerStakeFromNpc(npc: Entity): number {
   const money = cleanMoney(npc);
   return money > 0 ? Math.max(1, Math.floor(money * 0.1)) : 0;

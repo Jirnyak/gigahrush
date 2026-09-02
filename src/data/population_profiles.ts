@@ -7,28 +7,6 @@ import {
   MIN_ACTIVE_ACTOR_SOFT_LIMIT,
 } from './entity_limits';
 
-export interface NpcPopulationProfile {
-  /** Relative share inside this floor's universal population budget. */
-  share?: number;
-  noiseScale: number;
-  noiseStrength: number;
-  openWeight: number;
-  roomWeights: Partial<Record<RoomType, number>>;
-  zoneWeights: Partial<Record<ZoneFaction, number>>;
-  preferredTerritory?: ZoneFaction;
-  preferredTerritoryShare?: number;
-}
-
-export interface MonsterPopulationProfile {
-  /** Relative share inside this floor's universal population budget. */
-  share?: number;
-  noiseScale: number;
-  noiseStrength: number;
-  openWeight: number;
-  roomWeights?: Partial<Record<RoomType, number>>;
-  zoneWeights?: Partial<Record<ZoneFaction, number>>;
-}
-
 export const KVARTIRY_POPULATION_PROFILE = {
   id: 'kvartiry_lively',
   z: 14,
@@ -258,8 +236,6 @@ export const PROCEDURAL_POPULATION_PROFILES = {
     },
   },
 } as const satisfies Readonly<Record<ProceduralPopulationProfileId, ProceduralPopulationProfile>>;
-
-export const PROCEDURAL_POPULATION_PROFILE = PROCEDURAL_POPULATION_PROFILES.normal;
 
 export function proceduralPopulationProfileId(anomalyId: string): ProceduralPopulationProfileId {
   for (const id of PROCEDURAL_HIGH_DENSITY_ANOMALIES) {

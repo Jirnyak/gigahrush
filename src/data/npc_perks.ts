@@ -33,10 +33,6 @@ export function registerNpcPerk(def: NpcPerkDef): void {
   NPC_PERKS_BY_ID.set(id, checked);
 }
 
-export function registerNpcPerks(defs: readonly NpcPerkDef[]): void {
-  for (const def of defs) registerNpcPerk(def);
-}
-
 export function getNpcPerk(id: string): NpcPerkDef | undefined {
   return NPC_PERKS_BY_ID.get(id);
 }
@@ -45,14 +41,3 @@ export function allNpcPerks(): readonly NpcPerkDef[] {
   return NPC_PERKS;
 }
 
-export function validateNpcPerks(): readonly string[] {
-  const errors: string[] = [];
-  const seen = new Set<string>();
-  for (const def of NPC_PERKS) {
-    if (!NPC_PERK_ID_RE.test(def.id)) errors.push(`${def.id}:bad id`);
-    if (seen.has(def.id)) errors.push(`${def.id}:duplicate`);
-    seen.add(def.id);
-    if (!def.label.trim()) errors.push(`${def.id}:missing label`);
-  }
-  return errors;
-}

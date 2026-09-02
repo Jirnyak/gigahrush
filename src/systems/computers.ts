@@ -162,10 +162,6 @@ export function getComputerAt(world: World, x: number, y: number): ComputerTermi
   return computerRegistry.get(world.idx(Math.floor(x), Math.floor(y)));
 }
 
-export function isComputerTarget(world: World, x: number, y: number): boolean {
-  return !!getComputerAt(world, x, y);
-}
-
 export function placeComputer(world: World, x: number, y: number, defId: ComputerDefId): ComputerTerminal | null {
   const def = getComputerDef(defId);
   if (!def) return null;
