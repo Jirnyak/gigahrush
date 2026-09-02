@@ -3,7 +3,7 @@
 import { Faction, RoomType, type ZoneFaction } from '../core/types';
 import { DESIGN_FLOOR_ROUTES } from '../data/design_floors';
 import { ITEMS } from '../data/items';
-import { RUMORS, type RumorDef, type RumorLead, type RumorReveal } from '../data/rumors';
+import { RUMORS, builtLeadRoomName, localizedTagName, type RumorDef, type RumorLead, type RumorReveal } from '../data/rumors';
 import { monsterTypeName } from '../entities/monster';
 import { type ContextSnapshot } from './context';
 import { type NpcMemory } from './npc_memory';
@@ -176,7 +176,8 @@ function formatStaticLead(lead: RumorLead): string {
   const parts: string[] = [];
   if (lead.z !== undefined) parts.push(floorName(lead.z));
   if (lead.zoneHint) parts.push(lead.zoneHint);
-  if (lead.roomDefId) parts.push(lead.roomDefId);
+  const roomName = builtLeadRoomName(lead);
+  if (roomName) parts.push(roomName);
   else if (lead.roomType !== undefined) parts.push(roomTypeName(lead.roomType));
   if (lead.itemId) {
     const itemName = ITEMS[lead.itemId]?.name.toLowerCase();
@@ -245,13 +246,13 @@ function formatReveal(reveal: RumorReveal): string {
     case 'monster':
       return reveal.monsterKind !== undefined ? monsterTypeName(reveal.monsterKind).toLowerCase() : '';
     case 'container':
-      return reveal.name ?? (reveal.tag ? containerTagName(reveal.tag) : '');
+      return reveal.name ?? (reveal.tag ? localizedTagName(containerTagName(reveal.tag)) ?? '' : '');
     case 'item':
       return ITEMS[reveal.itemId]?.name.toLowerCase() ?? '';
     case 'faction':
       return reveal.faction !== undefined ? factionName(reveal.faction) : '';
     case 'warning':
-      return warningTagName(reveal.tag);
+      return localizedTagName(warningTagName(reveal.tag)) ?? '';
   }
 }
 

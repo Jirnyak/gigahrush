@@ -9,7 +9,7 @@ import {
 } from '../core/types';
 import { chernobogDocketItemRumorId } from '../data/chernobog_docket';
 import { ITEMS, isSilverSlimeItem } from '../data/items';
-import { RUMORS, type RumorDef, type RumorLead, type RumorReveal, type RumorTopic } from '../data/rumors';
+import { RUMORS, builtLeadRoomName, localizedTagName, type RumorDef, type RumorLead, type RumorReveal, type RumorTopic } from '../data/rumors';
 import { monsterTypeName } from '../entities/monster';
 import { containerTagName, warningTagName } from '../data/rumor_tag_names';
 import { floorDisplayNameForZ } from '../data/floor_names';
@@ -474,7 +474,8 @@ function formatStaticLead(lead: RumorLead): string {
   const parts: string[] = [];
   if (lead.z !== undefined) parts.push(floorDisplayNameForZ(lead.z));
   if (lead.zoneHint) parts.push(lead.zoneHint);
-  if (lead.roomDefId) parts.push(lead.roomDefId);
+  const roomName = builtLeadRoomName(lead);
+  if (roomName) parts.push(roomName);
   else if (lead.roomType !== undefined) parts.push(ROOM_TYPE_NAMES[lead.roomType]);
   if (lead.itemId) {
     const itemName = ITEMS[lead.itemId]?.name.toLowerCase();
@@ -565,7 +566,7 @@ function rememberRecentLead(rumor: RumorDef, text: string, now: number, event?: 
     text,
     heardAt: now,
     z: rumor.lead?.z ?? event?.z,
-    roomDefId: rumor.lead?.roomDefId ?? (event ? eventRoomName(event) : undefined),
+    roomDefId: builtLeadRoomName(rumor.lead) ?? (event ? eventRoomName(event) : undefined),
     roomName: (event ? eventRoomName(event) : undefined) ?? (typeof (rumor.lead as any)?.roomName === 'string' ? (rumor.lead as any).roomName : undefined),
     itemId: rumor.lead?.itemId ?? event?.itemId,
     monsterKind: rumor.lead?.monsterKind ?? event?.monsterKind,
@@ -591,13 +592,13 @@ function formatReveal(reveal: RumorReveal): string {
     case 'monster':
       return reveal.monsterKind !== undefined ? monsterTypeName(reveal.monsterKind).toLowerCase() : '';
     case 'container':
-      return reveal.name ?? (reveal.tag ? containerTagName(reveal.tag) : '');
+      return reveal.name ?? (reveal.tag ? localizedTagName(containerTagName(reveal.tag)) ?? '' : '');
     case 'item':
       return ITEMS[reveal.itemId]?.name.toLowerCase() ?? '';
     case 'faction':
       return reveal.faction !== undefined ? FACTION_NAMES[reveal.faction] ?? '' : '';
     case 'warning':
-      return warningTagName(reveal.tag);
+      return localizedTagName(warningTagName(reveal.tag)) ?? '';
   }
 }
 
