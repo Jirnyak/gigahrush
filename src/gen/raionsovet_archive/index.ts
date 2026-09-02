@@ -13,9 +13,10 @@ import {
 import { World } from '../../core/world';
 import { calcZoneLevel } from '../../systems/rpg';
 import {
-  carveCorridor, ensureConnectivity, generateZones, placeDoor
+  carveCorridor, finalizeExpandedFloor, placeDoor
   ,
 } from '../shared';
+import { designFloorById } from '../../data/design_floors';
 import type { FloorGeneration } from '../floor_manifest';
 import { newEntityIdCursor } from '../entity_ids';
 import { LIDA_DEF, GRANDFATHER_DEF, FIRE_LIQUIDATOR_DEF, FALSE_HEIR_DEF } from "./meta";
@@ -73,13 +74,6 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   for (const room of Object.values(rooms)) paintRoom(world, room);
   decorateArchive(world, rooms);
   paintNonRoomCells(world);
-  ensureConnectivity(world, 512, 507);
-
-  generateZones(world);
-  for (const zone of world.zones) {
-    zone.faction = zone.id % 5 === 0 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
-    zone.level = Math.max(1, calcZoneLevel(zone.cx, zone.cy, 22));
-  }
 
   addArchiveContainer(
     world, nextContainerId, clerk, clerk.x + 3, clerk.y + 3,
@@ -166,9 +160,24 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
 
   const generation: DesignFloorGeneration = { isDecentralized: true, world, entities, spawnX: 512.5, spawnY: 507.5 };
 
-  const rngFn = seededRandom(hashSeed('design-full:raionsovet_archive:22', 22));
+  const route = designFloorById('raionsovet_archive')!;
+  const rngFn = seededRandom(hashSeed(`design-full:${route.id}:${route.z}`, route.z));
   expandRaionsovetArchiveGeometry(world, rngFn);
+  /* Зоны, санация дверей и связность — ПОСЛЕ расширения. Раньше связность
+     считалась по девяти авторским комнатам, и всё, что вырезало расширение
+     (картотеки, очередь формуляров, штабные компаунды), оставалось отдельными
+     компонентами: видно на карте, не дойти ногами. */
+  finalizeExpandedFloor(generation, route, rngFn);
+
+  /* Уровень и фракция зон переобъявляются здесь: `finalizeExpandedFloor` сам
+     зовёт `generateZones`, а тот раздаёт зонам level 1 и случайную фракцию. */
+  for (const zone of world.zones) {
+    zone.faction = zone.id % 5 === 0 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
+    zone.level = Math.max(1, calcZoneLevel(zone.cx, zone.cy, route.z));
+  }
   retuneRaionsovetArchiveZones(world);
+  /* Гермооболочка штабов — ПОСЛЕ санации дверей: та снесла бы гермодверь
+     вместе с косяком, который оболочка только собирается поставить. */
   reinforceRaionsovetArchiveAuthoredHqTerritory(world);
 
   /* Свет и бейк — последними. Раньше `bakeLights()` стоял тут же, но ДО

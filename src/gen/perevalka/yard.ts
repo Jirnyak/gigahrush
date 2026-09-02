@@ -14,7 +14,7 @@
  * садится у ближайшей авеню, а не у чужого лифта.
  */
 
-import { Cell, DoorState, Feature, Tex, ZoneFaction, type Room } from '../../core/types';
+import { Cell, DoorState, Feature, Tex, W, ZoneFaction, type Room } from '../../core/types';
 import { World } from '../../core/world';
 import { stampRoom } from '../shared';
 import { applyNamedRoom } from '../named_rooms';
@@ -28,7 +28,7 @@ const AVENUE_OFFSET = 96;
 
 export function avenueCoords(): number[] {
   const out: number[] = [];
-  for (let c = AVENUE_OFFSET; c < 1024; c += AVENUE_STEP) out.push(c);
+  for (let c = AVENUE_OFFSET; c < W; c += AVENUE_STEP) out.push(c);
   return out;
 }
 
@@ -74,7 +74,7 @@ function carveYardCell(world: World, x: number, y: number): void {
 /** Кольцевая авеню: мир — тор, поэтому линия идёт по всей стороне и замыкается. */
 function carveAvenue(world: World, fixed: number, vertical: boolean): void {
   const half = AVENUE_WIDTH >> 1;
-  for (let p = 0; p < 1024; p++) {
+  for (let p = 0; p < W; p++) {
     for (let n = -half; n <= half; n++) {
       const c = world.wrap(fixed + n);
       carveYardCell(world, vertical ? c : p, vertical ? p : c);

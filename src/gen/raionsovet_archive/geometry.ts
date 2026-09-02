@@ -1143,7 +1143,12 @@ export function paintNonRoomCells(world: World): void {
   }
 }
 
-export function retuneRaionsovetArchiveZones(world: any): void {
+/* Счётчик комнатных клеток по зонам. Раньше и фильтр клетки, и ветки `switch`,
+ * и фракции стояли голыми числами с подписями в комментариях, и НИ ОДНА подпись
+ * не совпадала со своим членом: `!== 2` подписано `Cell.FLOOR` при `DOOR === 2`,
+ * то есть считались одни дверные клетки и вся перенастройка была мертва. Здесь
+ * только члены enum — подпись и значение больше не могут разойтись. */
+export function retuneRaionsovetArchiveZones(world: World): void {
   const storage = new Int32Array(world.zones.length);
   const office = new Int32Array(world.zones.length);
   const common = new Int32Array(world.zones.length);
@@ -1151,25 +1156,25 @@ export function retuneRaionsovetArchiveZones(world: any): void {
   const production = new Int32Array(world.zones.length);
 
   for (let i = 0; i < world.cells.length; i++) {
-    if (world.cells[i] !== 2) continue; // Cell.FLOOR
+    if (world.cells[i] !== Cell.FLOOR) continue;
     const zoneId = world.zoneMap[i];
     if (zoneId < 0 || zoneId >= world.zones.length) continue;
     const room = world.rooms[world.roomMap[i]];
     if (!room) continue;
     switch (room.type) {
-      case 2: // RoomType.STORAGE
+      case RoomType.STORAGE:
         storage[zoneId]++;
         break;
-      case 5: // RoomType.OFFICE
+      case RoomType.OFFICE:
         office[zoneId]++;
         break;
-      case 4: // RoomType.COMMON
+      case RoomType.COMMON:
         common[zoneId]++;
         break;
-      case 3: // RoomType.HQ
+      case RoomType.HQ:
         hq[zoneId]++;
         break;
-      case 14: // RoomType.PRODUCTION
+      case RoomType.PRODUCTION:
         production[zoneId]++;
         break;
     }
@@ -1181,13 +1186,13 @@ export function retuneRaionsovetArchiveZones(world: any): void {
     const adminScore = office[z] + hq[z] * 1.2;
     const queueScore = common[z];
     if (archiveScore > 220 && archiveScore > adminScore + queueScore) {
-      zone.faction = z % 5 === 0 ? 0 : 3; // ZoneFaction.WILD : SAMOSBOR
+      zone.faction = z % 5 === 0 ? ZoneFaction.WILD : ZoneFaction.SAMOSBOR;
       zone.level = Math.max(zone.level, archiveScore > 520 ? 5 : 4);
     } else if (adminScore > 150) {
-      zone.faction = z % 4 === 0 ? 1 : 2; // ZoneFaction.LIQUIDATOR : CITIZEN
+      zone.faction = z % 4 === 0 ? ZoneFaction.LIQUIDATOR : ZoneFaction.CITIZEN;
       zone.level = Math.max(zone.level, 3);
     } else if (queueScore > 150) {
-      zone.faction = 2; // ZoneFaction.CITIZEN
+      zone.faction = ZoneFaction.CITIZEN;
       zone.level = Math.max(zone.level, 2);
     }
   }

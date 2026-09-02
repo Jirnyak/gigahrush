@@ -11,7 +11,7 @@ import {
 } from '../admin_common';
 import type { FloorGeneration } from '../floor_manifest';
 import { xorshift32 } from '../../core/rand';
-import { ensureConnectivity } from '../shared';
+import { ensureConnectivity, sanitizeDoors } from '../shared';
 import {
   fillDefaultTextures,
   expandUpperBureauGeometry,
@@ -67,6 +67,9 @@ export function generateUpperBureauDesignFloor(seed: number): FloorGeneration {
   expandUpperBureauGeometry(world, rand);
   // Expansion tiers/districts carve after finalizeUpperBureauFloor's connectivity
   // pass — stitch orphaned expansion components back to the spawn component.
+  // Санация идёт ПЕРЕД сшивкой, как в `finalizeExpandedFloor`: она снимает двери
+  // расширения, оставшиеся без косяка, а сшивка чинит то, что этим оторвало.
+  sanitizeDoors(world);
   ensureConnectivity(world, spawnX, spawnY);
   retuneUpperBureauZones(world);
   reinforceUpperBureauAuthoredHqTerritory(world);

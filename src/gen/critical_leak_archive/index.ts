@@ -10,7 +10,7 @@ import {
 import { World } from '../../core/world';
 import { hashSeed } from '../../core/rand';
 import { registerFloorSideQuest } from '../../data/plot';
-import { sanitizeDoors } from '../shared';
+import { ensureConnectivity, sanitizeDoors } from '../shared';
 import { newEntityIdCursor } from '../entity_ids';
 import { DESIGN_NPC_HOME_FLOOR_KEY, CRITICAL_LEAK_ARCHIVE_ROUTE_ID, CRITICAL_LEAK_ARCHIVE_Z, CRITICAL_LEAK_ARCHIVE_ROOM_NAMES, CriticalLeakArchiveState, CriticalLeakArchiveGeneration, NextId, TARGET_ROUTE, ARCHIVIST_DEF, LIQUIDATOR_DEF } from "./meta";
 import { addDoor, expandArchiveMidAndMicro, paintCriticalLeakHqTerritory, placeLift, decorateArchiveRooms, carveContaminatedShortcut, connectAnchors, buildRooms, tuneInitialZones } from "./geometry";
@@ -145,6 +145,13 @@ export function generateCriticalLeakArchiveDesignFloor(): CriticalLeakArchiveGen
   spawnLeakNpc(entities, nextId, LIQUIDATOR_DEF, 'critical_leak_liquidator_egor', rooms.floodgate.x + 14, rooms.floodgate.y + 16, 'makarov');
 
   sanitizeDoors(world);
+  /* Связность — после расширения и санации, как в `finalizeExpandedFloor`.
+     Сегодня она ничего не режет: перколяционное поле уже сшито `connectAnchors`,
+     замерено 0 недостижимых клеток на пяти сидах. Шаг стоит здесь потому, что
+     единственная гарантия связности этажа — это `connectAnchors` по девяти
+     авторским якорям; всё, что расширение и санация могут оторвать после них,
+     ловить больше нечем. */
+  ensureConnectivity(world, state.debugEntry.spawnX, state.debugEntry.spawnY);
   world.rebuildContainerMap();
   // Свет ставится после санации дверей и до выпечки: санация сносит косяки, и
   // светильник, повешенный раньше, ушёл бы вместе с ними.

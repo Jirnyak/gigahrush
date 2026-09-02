@@ -154,6 +154,14 @@ export function generateChthonicAtticDesignFloor(
 
   const rngFn = seededRandom(hashSeed('design-full:chthonic_attic:46', 46));
   expandChthonicAtticRootNetwork(generation.world, generation.entities, rngFn);
+  /* `sanitizeDoors` здесь НЕ зовётся намеренно, и это не забывчивость.
+     Замерено: из 113 дверей этажа 7 стоят на клетках, которые дверьми уже не
+     являются, и ещё 99 — без единого косяка. Причина не в порядке фаз, а в
+     расширении: `buildAtticProtectedMask` защищает клетку двери, но не стены
+     рядом, а `stampAtticBulbRoom` маску вообще не получает — два корневых
+     пузыря стоят прямо на створке молельной ниши и на седьмой двери лаза.
+     Санация сейчас снесла бы 106 дверей из 113; сначала надо защитить косяки в
+     маске, и только потом санировать. */
   retuneExpandedChthonicAtticEcology(world);
 
   // Бейк стоял ДО расширения, и потому 4697 источников корневой сети не светили

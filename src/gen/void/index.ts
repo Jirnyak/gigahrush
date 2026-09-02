@@ -9,7 +9,7 @@ import {
   EntityType, AIGoal, MonsterKind, } from '../../core/types';
 import { World } from '../../core/world';
 
-import { generateZones } from '../shared';
+import { generateZones, sanitizeDoors } from '../shared';
 import { VOID_POPULATION_PROFILE } from '../../data/population_profiles';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -42,6 +42,12 @@ export function generateVoid(): { world: World; entities: Entity[]; spawnX: numb
   for (const z of world.zones) z.level = calcZoneLevel(z.cx, z.cy, -50) + 5;
 
   nextId = runVoidContent(world, entities, nextId, spawnX, spawnY);
+  /* Санация дверей — после всей нарезки: `buildVoidGeometry` кладёт двери, а его
+     же поздние проходы (расширение футпринта, хаотическая геометрия, перколяция)
+     режут прямо по ним. Замерено 91 запись из 483 на клетках, которые дверьми
+     уже не были, и ещё 25 створок без единого косяка. Стоит ДО повторной
+     покраски: санация переводит клетку в пол, и пол надо покрасить. */
+  sanitizeDoors(world);
   paintVoidDefaults(world);
 
   /* ══════════════════════════════════════════════════════════════

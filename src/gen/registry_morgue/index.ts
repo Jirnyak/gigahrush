@@ -19,6 +19,7 @@ import {
 import { World } from '../../core/world';
 import { registerFloorSideQuest } from '../../data/plot';
 import {
+  ensureConnectivity,
   generateZones,
   sanitizeDoors,
 } from '../shared';
@@ -268,6 +269,12 @@ export function generateRegistryMorgueDesignFloor(): FloorGeneration {
 
   const rngFn = seededRandom(hashSeed('design-full:registry_morgue:18', 18));
   expandRegistryMorgueGeometry(world, rngFn);
+  /* Санация и связность — ПОСЛЕ расширения. `sanitizeDoors` выше чистит только
+     шесть авторских комнат, а связность корпуса не считал никто: архивные блоки
+     и фрост-камеры висели отдельными компонентами. Порядок как в
+     `finalizeExpandedFloor`: сначала снять двери без косяка, потом сшить. */
+  sanitizeDoors(world);
+  ensureConnectivity(world, spawnX, spawnY);
   reinforceRegistryMorgueAuthoredTerritory(world);
   retuneRegistryMorgueZones(world);
 

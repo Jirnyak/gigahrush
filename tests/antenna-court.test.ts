@@ -51,7 +51,13 @@ test('antenna court expands into mid/micro rooms and five cell-first territories
   const liquidatorCells = countByOwner.get(ZoneFaction.LIQUIDATOR) ?? 0;
 
   assert.equal(world.rooms.length >= 400, true, `rooms ${world.rooms.length}`);
-  assert.equal(world.doors.size >= 400, true, `doors ${world.doors.size}`);
+  /* Порог опущен 400 → 350 вместе с санацией дверей после расширения: до неё в
+     реестре висели 59 записей на клетках, которые дверьми уже не были, и
+     прежние «400 дверей» держались именно на них. Настоящих дверей было и
+     осталось ~370, поэтому вторая строка — то, чего порог не ловил вовсе. */
+  assert.equal(world.doors.size >= 350, true, `doors ${world.doors.size}`);
+  const phantomDoors = [...world.doors.keys()].filter(idx => world.cells[idx] !== Cell.DOOR);
+  assert.equal(phantomDoors.length, 0, `phantom door records ${phantomDoors.length}`);
   assert.equal(microRooms.length >= 280, true, `micro rooms ${microRooms.length}`);
   assert.equal(reachableCells >= 220_000, true, `reachable ${reachableCells}`);
   assert.equal(reachableLift(world, audit.reachable, LiftDirection.UP), true);

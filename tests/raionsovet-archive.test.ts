@@ -126,6 +126,13 @@ test('raionsovet archive profile populates queues, offices, and dangerous stacks
 
   assert.equal(gen.world.rooms.length >= 200, true, `rooms ${gen.world.rooms.length}`);
   assert.equal(gen.world.doors.size >= 220, true, `doors ${gen.world.doors.size}`);
+  /* Замок на порядок фаз: санация дверей и связность живут в
+     `finalizeExpandedFloor` ПОСЛЕ расширения. Пока они стояли до него, реестр
+     дверей расходился с клетками, а квартал вокруг авторского ядра оставался
+     отдельными компонентами. Запись двери на клетке, которая дверью не является,
+     допускается ровно ноль раз. */
+  const phantomDoors = [...gen.world.doors.keys()].filter(idx => gen.world.cells[idx] !== Cell.DOOR);
+  assert.equal(phantomDoors.length, 0, `phantom door records ${phantomDoors.length}`);
   assert.equal(microRooms.length >= 145, true, `micro rooms ${microRooms.length}`);
   assert.equal(authoredHqs.every(Boolean), true, 'five authored human HQ rooms are present');
   assert.equal(hqSupportRooms.length >= 25, true, `HQ support rooms ${hqSupportRooms.length}`);

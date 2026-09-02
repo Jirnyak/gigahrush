@@ -1,6 +1,6 @@
 /* ── Design z: dark_metro / Темная пересадка ─────────────── */
 
-import { RoomType, ZoneFaction, type Entity, type Zone } from '../../core/types';
+import { RoomType, Tex, ZoneFaction, type Entity, type Zone } from '../../core/types';
 import { World } from '../../core/world';
 import { hashSeed, withSeededRandom, seededRandom } from '../../core/rand';
 import { ensureConnectivity, generateZones, sanitizeDoors } from '../shared';
@@ -143,7 +143,14 @@ export function generateDarkMetroDesignFloor(seed = DARK_METRO_DEFAULT_SEED): Da
     const spawnY = layout.hall.y + Math.floor(layout.hall.h / 2) + 0.5;
     // Hooks moved from full_floor.ts
     const rngFn = seededRandom(hashSeed('design-full:dark_metro:-32', -32));
-    const style = { wallTex: 24 /* Tex.METRO_WALL */, floorTex: 10 /* Tex.METRO_FLOOR */, faction: 3 /* ZoneFaction.MONSTERS */, danger: 4 };
+    /* Палитра расширения — та же, что у авторского ядра метро (вестибюль,
+     * платформа, мёртвый вагон) и у соседнего подземного техэтажа: металл по
+     * стенам, бетон по полу. Стояли числа под подписями `Tex.METRO_WALL` /
+     * `Tex.METRO_FLOOR` — таких членов не существует, а 24 — это `Tex.SLIDE_2`,
+     * то есть тоннели метро были затянуты текстурой презентационного слайда.
+     * Тип объявлен явно: `faction`/`danger` в `DarkMetroFullFloorStyle` нет и
+     * никогда не читались, лишний ключ теперь ловит компилятор. */
+    const style: DarkMetroFullFloorStyle = { wallTex: Tex.METAL, floorTex: Tex.F_CONCRETE };
     expandDarkMetroFullFloorGeometry(world, rngFn, style, entities);
     
     // Now finalize

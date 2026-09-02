@@ -140,7 +140,14 @@ test('VOID story floor uses a reachable impossible graph with expanded route-sca
 
   assert.equal(reachableCount(audit), walkable);
   assert.equal(gen.world.rooms.length >= 430, true, `rooms ${gen.world.rooms.length}`);
-  assert.equal(gen.world.doors.size >= 430, true, `doors ${gen.world.doors.size}`);
+  /* Порог опущен 430 → 340 вместе с санацией дверей после нарезки: до неё в
+     реестре висела 91 запись из 483 на клетках, которые дверьми уже не были, и
+     ещё 25 створок стояли без единого косяка. Прежние «430 дверей» держались
+     ровно на них; настоящих осталось ~363. Вторая строка — то, чего порог не
+     ловил вовсе, и она же не даст санации уехать обратно. */
+  assert.equal(gen.world.doors.size >= 340, true, `doors ${gen.world.doors.size}`);
+  const phantomVoidDoors = [...gen.world.doors.keys()].filter(idx => gen.world.cells[idx] !== Cell.DOOR);
+  assert.equal(phantomVoidDoors.length, 0, `phantom door records ${phantomVoidDoors.length}`);
   assert.equal(walkable >= 300_000, true, `walkable ${walkable}`);
   assert.equal(reachableBucketCount(gen, audit, 64) >= 220, true, 'reachable buckets cover the route-scale map');
   // Route-lift contract (owner decision 2026-07-30, #45): void z=-50 is the

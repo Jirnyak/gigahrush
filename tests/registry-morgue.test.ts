@@ -98,10 +98,16 @@ test('registry morgue expands macro idea with mid blocks, micro rooms, and facti
   // Масштаб этажа, а не точный счётчик: сотни дверных проёмов на сотни комнат
   // (микро-ячейки + блоки), и не меньше ~0.8 двери на комнату.
   assert.equal(gen.world.doors.size >= gen.world.rooms.length * 0.8, true, `doors ${gen.world.doors.size} vs rooms ${gen.world.rooms.length}`);
-  // Холодные оболочки и герметичные HQ запечатаны по дизайну, поэтому проверяем
-  // не «почти весь этаж доступен», а игровой минимум: игроку открыта основная
-  // сеть маршрутного масштаба (~100k клеток).
-  assert.equal(reachable >= 90_000, true, `reachable ${reachable}`);
+  /* Порог `>= 90_000` охранял дефект: связность корпуса не считал никто, и из
+     159 880 проходимых клеток игрок доставал 109 649 — 194 комнаты были видны
+     на карте и недостижимы ногами. После переноса `ensureConnectivity` за
+     расширение достижимо ВСЁ, поэтому и замок теперь на полноте, а не на доле. */
+  let walkableCells = 0;
+  for (let i = 0; i < W * W; i++) {
+    const cell = gen.world.cells[i];
+    if (cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER) walkableCells++;
+  }
+  assert.equal(reachable, walkableCells, `reachable ${reachable} of walkable ${walkableCells}`);
   assert.equal(microRooms.length >= 300, true, `micro rooms ${microRooms.length}`);
   assert.equal(hermeticHqs.length >= 5, true, `hermetic HQs ${hermeticHqs.length}`);
 

@@ -13,6 +13,7 @@ import {
   ensureConnectivity,
   generateZones,
   placeDoor,
+  sanitizeDoors,
 } from '../shared';
 import { placeProceduralScreens } from '../../world/procedural_screens';
 import { newEntityIdCursor } from '../entity_ids';
@@ -104,7 +105,6 @@ export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneratio
 
   const spawnX = rooms.entry.x + 5.5;
   const spawnY = rooms.entry.y + 5.5;
-  ensureConnectivity(world, spawnX, spawnY);
 
   const signalState = createAntennaCourtSignalState(seed);
     const generation = { isDecentralized: true as const,
@@ -120,6 +120,12 @@ export function generateAntennaCourtDesignFloor(seed = 0): AntennaCourtGeneratio
 
   const rngFn = seededRandom(hashSeed('design-full:antenna_court:42', 42));
   expandAntennaCourtRouteGeometry(world, rngFn);
+  /* Санация и связность — ПОСЛЕ расширения. Связность считалась по авторскому
+     двору, и весь маршрутный квартал оставался отдельными компонентами; висящие
+     двери расширения не убирал никто. Порядок как в `finalizeExpandedFloor`:
+     сначала снять двери без косяка, потом сшить то, что этим разорвало. */
+  sanitizeDoors(world);
+  ensureConnectivity(world, spawnX, spawnY);
   retuneAntennaCourtRouteZones(world);
   /* Пять развилок сигнала получают клетку в мире и приглашение по `E`.
      Шаг стоит ПОСЛЕ расширения: до него авторские комнаты ещё могут
