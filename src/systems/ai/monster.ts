@@ -5436,7 +5436,12 @@ function fireMonsterProjectile(
   e.attackCd = def.attackRate ?? 2;
 }
 
-function monsterProjectileScale(kind: MonsterKind | undefined, sprite: number): number {
+/* Снаряд монстра узнаётся по спрайту, а спрайт раздаёт `MONSTER_VISUALS`
+ * (`data/monster_visuals.ts`) через `generateSprites()`: `projSprite` в дефе
+ * вида — это НОЛЬ-заглушка под ту раздачу, а не «все стреляют глазом».
+ * Обе таблицы ниже экспортированы ради замка достижимости веток
+ * (`tests/monster-projectile-readability.test.ts`), а не для внешних вызовов. */
+export function monsterProjectileScale(kind: MonsterKind | undefined, sprite: number): number {
   if (sprite === Spr.WEB_BOLT || kind === MonsterKind.PAUPSINA) return 0.42;
   if (sprite === Spr.WET_LINE_BOLT) return 0.5;
   if (sprite === Spr.PARAGRAPH_BOLT) return 0.34;
@@ -5446,7 +5451,7 @@ function monsterProjectileScale(kind: MonsterKind | undefined, sprite: number): 
   return 0.3;
 }
 
-function monsterProjectileSound(kind: MonsterKind | undefined, sprite: number): () => void {
+export function monsterProjectileSound(kind: MonsterKind | undefined, sprite: number): () => void {
   if (sprite === Spr.WEB_BOLT || kind === MonsterKind.PAUPSINA) return playGrowl;
   if (sprite === Spr.WET_LINE_BOLT) return playHostileEnergyShot;
   if (kind === MonsterKind.EYE || kind === MonsterKind.CHERNOSLIZ || sprite === Spr.EYE_BOLT) return playHostileEyeShot;

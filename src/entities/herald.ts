@@ -16,7 +16,7 @@ export const DEF: MonsterDef = {
   sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,
   projSpeed: 7,
-  projSprite: 0,
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.HOSTILE_PSI_BOLT
   counterplay: 'Держите дверь, угол или колонну между залпами: Вестник сторожит открытую линию, а не охотится за героем.',
   lootHint: 'осколок сирены, бирка порога, запечатанный голос',
   boss: {

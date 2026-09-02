@@ -18,7 +18,7 @@ export const DEF: MonsterDef = {
   sprite: 0,           // auto-assigned by generateSprites()
   isRanged: true,
   projSpeed: 12,
-  projSprite: 0,       // auto-assigned to Spr.PSI_BOLT
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.HOSTILE_PSI_BOLT
   counterplay: 'Идол не двигается: сбейте угол стеной или дверью и входите в упор между ПСИ-выстрелами.',
   lootHint: 'ПСИ-пыль, холодный культовый камень, редкий идол Чернобога или меточный сгусток',
   /* Строка семьи замаха: числа и тексты один в один прежние `switch`-и в `ai/monster.ts`. */

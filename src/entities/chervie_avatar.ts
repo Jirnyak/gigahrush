@@ -15,7 +15,7 @@ export const DEF: MonsterDef = {
   sprite: 0,
   isRanged: true,
   projSpeed: 5.8,
-  projSprite: 0,
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.HOSTILE_PSI_BOLT
   aiFlags: ['netPossessor'],
   /* Якорь: живой экран или серверный аппарат в прямой видимости. Пока линия
    * цела, аватар быстрее, злее и видит вдвое дальше; перерезанная линия роняет

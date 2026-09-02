@@ -16,7 +16,7 @@ export const DEF: MonsterDef = {
   sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,
   projSpeed: 6,
-  projSprite: 0, // uses PSI_BOLT or similar
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.HOSTILE_FLAME_BOLT
   counterplay: 'Не входите в прямой сектор: сначала снимите охрану, затем бейте из-за углов между залпами. Стены и колонны режут огненный темп.',
   lootHint: 'жирный металл, командная органика, энергоячейка, закупоренный голос',
   boss: {

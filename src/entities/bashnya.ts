@@ -22,7 +22,7 @@ export const DEF: MonsterDef = {
   sprite: 0,
   isRanged: true,
   projSpeed: 16,
-  projSprite: 0,
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.HOSTILE_PLASMA_BOLT
   aiFlags: ['sided'],
   counterplay: 'Башня не ходит и бьёт только вдоль линии: подходите вплотную по стене или пропускайте вперёд чужих бойцов.',
   lootHint: 'обломки прожектора, стреляная гильза, редкий фокусирующий кристалл',

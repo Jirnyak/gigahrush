@@ -16,7 +16,7 @@ export const DEF: MonsterDef = {
   detect: 23,
   isRanged: true,
   projSpeed: 7.2,
-  projSprite: 0,
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.HOSTILE_PSI_BOLT
   aiFlags: ['officeField'],
   /* Чем кормится офисное поле. Комната и мебель — одна таблица, а не таблица
    * плюс список признаков плюс три литерала веса в теле общего AI. */

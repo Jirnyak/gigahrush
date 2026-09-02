@@ -15,7 +15,7 @@ export const DEF: MonsterDef = {
   sprite: 0,
   isRanged: true,
   projSpeed: 6.5,
-  projSprite: 0,
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.PARAGRAPH_BOLT
   aiFlags: ['rangedClause'],
   counterplay: 'Параграф уточняет по прямой на 15 клеток: ломайте линию видимости шкафом или углом, врывайтесь сразу после выстрела. В упоре он теряет дистанцию и не успевает дописать пункт.',
   lootHint: 'порванный приказ, сургучная пыль и формулировки, которые еще шевелятся',

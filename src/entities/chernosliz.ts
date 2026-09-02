@@ -15,7 +15,7 @@ export const DEF: MonsterDef = {
   sprite: 0,
   isRanged: true,
   projSpeed: 9,
-  projSprite: 0,
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.WET_LINE_BOLT
   aiFlags: ['blackWaterWake'],
   counterplay: 'Не входите лицом в черную воду: подсветите лоток, киньте шумовую банку или дайте пробный выстрел, потом тяните чернослиз на сухую кромку.',
   lootHint: 'проба черной слизи, стеклянная пыль, редкий мутный зрачок из коллектора',

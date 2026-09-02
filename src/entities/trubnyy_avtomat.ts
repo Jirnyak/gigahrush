@@ -14,7 +14,7 @@ export const DEF: MonsterDef = {
   sprite: 0,
   isRanged: true,
   projSpeed: 13,
-  projSprite: 0,
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.WET_LINE_BOLT
   aiFlags: ['wetLineShot'],
   counterplay: 'Сойдите с мокрой прямой до окончания заряда: автомат бьет только по водной линии, долго остывает после залпа и плохо держит фланг в упоре.',
   lootHint: 'мокрая плата, синие трубные кольца, обожженный манометр, редкая энергоячейка',

@@ -17,7 +17,7 @@ export const DEF: MonsterDef = {
   sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,
   projSpeed: 8,
-  projSprite: 0,        // auto-assigned to Spr.EYE_BOLT
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.EYE_BOLT
   aiFlags: ['flying'],
   /* Стеклянный шар слепнет целиком: откат, потеря цели, никакого сдвига — 
    * толкать нечего, он и так висит. */

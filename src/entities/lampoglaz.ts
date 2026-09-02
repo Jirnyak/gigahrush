@@ -15,7 +15,7 @@ export const DEF: MonsterDef = {
   sprite: 0,
   isRanged: true,
   projSpeed: 13,
-  projSprite: 0,
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.EYE_BOLT
   aiFlags: ['lightLock'],
   counterplay: 'Не стойте в светлой полосе: темный угол, выключенная линия или шкаф между вами срывают зеленый захват.',
   lootHint: 'ламповая линза, фарфоровый ободок, стеклянная пыль, редкий предохранитель',

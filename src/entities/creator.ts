@@ -16,7 +16,7 @@ export const DEF: MonsterDef = {
   sprite: 0,   // auto-assigned by generateSprites()
   isRanged: true,
   projSpeed: 7.5,
-  projSprite: 0,
+  projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.HOSTILE_PSI_BOLT
   counterplay: 'Входите с полным запасом: держите укрытие между залпами, уходите из зелёного света и не тратьте рывок без выхода.',
   lootHint: 'пустотные шипы и квитанция контура без владельца',
   boss: {
