@@ -5612,7 +5612,13 @@ testGenerationMatrix('antenna court keeps signal macrostructure with mid micro f
   assert.equal(monsters.length >= 500, true, `antenna monsters ${monsters.length}`);
   assert.equal(ambientNpcs.length + monsters.length <= ACTIVE_ACTOR_SOFT_LIMIT, true, `antenna actors ${ambientNpcs.length + monsters.length}`);
   assert.equal(gen.world.rooms.length >= 400, true, `rooms ${gen.world.rooms.length}`);
-  assert.equal(gen.world.doors.size >= 400, true, `doors ${gen.world.doors.size}`);
+  // Порог опущен 400 → 350: прежнее число держалось на 59 ФАНТОМНЫХ записях —
+  // дверях, чья клетка перестала быть Cell.DOOR после расширения этажа.
+  // sanitizeDoors их снесла, реальных осталось 364–373. Ассерт-близнец с тем же
+  // порогом живёт в tests/antenna-court.test.ts:58, там же проверка на ноль
+  // фантомов; правь оба разом, иначе гейт краснеет здесь.
+  assert.equal(gen.world.doors.size >= 350, true, `doors ${gen.world.doors.size}`);
+  assert.equal([...gen.world.doors.keys()].every(idx => gen.world.cells[idx] === Cell.DOOR), true, 'antenna phantom doors');
   assert.equal(microRooms.length >= 280, true, `micro rooms ${microRooms.length}`);
   assert.equal(routeChoices >= 3, true);
   assert.equal(signalCableCells >= 900, true);
