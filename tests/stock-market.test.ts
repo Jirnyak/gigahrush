@@ -16,7 +16,17 @@ import {
   type StockMarketState,
 } from '../src/systems/stock_market';
 import type { NetMarketSnapshot } from '../src/systems/net_sphere';
-import { makeGameState } from './helpers';
+import { CORPORATIONS } from '../src/data/corporations';
+import { ensureBankingState } from '../src/systems/banking';
+import {
+  activateNetTerminalBank,
+  closeNetTerminalGen,
+  getNetTerminalBankSnapshot,
+  moveNetTerminalBankAction,
+  moveNetTerminalBankPreset,
+  openNetTerminalBank,
+} from '../src/systems/net_terminal_gen';
+import { makeGameState, makeTestPlayer } from './helpers';
 
 type MarketTestState = GameState & {
   banking?: { accountRubles: number };
@@ -306,3 +316,55 @@ function makeMarketState(accountRubles: number): MarketTestState {
   state.stockMarket = normalizeStockMarketState(undefined);
   return state;
 }
+
+/* ── Достижимость: биржа живёт строками того же НЕТ-банка ─────────
+ * Котировки тикали каждый кадр, но купить и продать было нечем. Терминал
+ * отдаёт ровно две оси, поэтому бумаги стоят строками рядом со счётом, а
+ * сторона сделки сидит в пресете строки. */
+test('net terminal rows reach share purchase and sale', () => {
+  const state = makeGameState({ worldEvents: createWorldEventState() });
+  const player = makeTestPlayer({ money: 0 });
+  const corp = CORPORATIONS[0];
+  ensureBankingState(state).accountRubles = 100000;
+  openNetTerminalBank(state);
+
+  // Первые шесть строк — деньги, дальше по строке на корпорацию.
+  moveNetTerminalBankAction(6);
+  const buying = getNetTerminalBankSnapshot(state, player);
+  assert.equal(buying.action, 'buy_shares');
+  assert.equal(buying.actionLabel.includes(corp.ticker), true);
+  assert.equal(buying.shareCount, 1);
+  assert.equal(buying.canSubmit, true);
+  assert.equal(activateNetTerminalBank(state, player), true);
+  assert.equal(ensureStockMarketState(state).portfolio[corp.id]?.shares, 1);
+
+  // Пресеты 4..7 — продажа; последний отдаёт весь пакет.
+  moveNetTerminalBankPreset(7);
+  const selling = getNetTerminalBankSnapshot(state, player);
+  assert.equal(selling.action, 'sell_shares');
+  assert.equal(selling.shareCount, 1);
+  assert.equal(activateNetTerminalBank(state, player), true);
+  assert.equal(ensureStockMarketState(state).portfolio[corp.id], undefined);
+
+  // Нечего продавать — заявка не уходит и портфель не мутирует.
+  assert.equal(getNetTerminalBankSnapshot(state, player).canSubmit, false);
+  assert.equal(activateNetTerminalBank(state, player), false);
+
+  closeNetTerminalGen();
+});
+
+test('net terminal share purchase is refused when the account cannot pay', () => {
+  const state = makeGameState({ worldEvents: createWorldEventState() });
+  const player = makeTestPlayer({ money: 0 });
+  const corp = CORPORATIONS[0];
+  ensureBankingState(state).accountRubles = 1;
+  openNetTerminalBank(state);
+  moveNetTerminalBankAction(6);
+
+  assert.equal(getNetTerminalBankSnapshot(state, player).canSubmit, false);
+  assert.equal(activateNetTerminalBank(state, player), false);
+  assert.equal(ensureStockMarketState(state).portfolio[corp.id], undefined);
+  assert.equal(ensureBankingState(state).accountRubles, 1);
+
+  closeNetTerminalGen();
+});

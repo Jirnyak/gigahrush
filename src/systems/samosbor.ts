@@ -73,6 +73,7 @@ import { hearingRadiusMetersForActor } from './hearing';
 import { createMaronaryWrongDoorRemap } from './wrong_door';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { killEntity } from './entity_death';
+import { installRailTrainsFromGeneration, snapshotRailTrainsForRebuild } from './rail_trains';
 import {
   blocksHermodoorBorerSeal,
   queuePostSamosborHermodoorBorer,
@@ -2561,6 +2562,11 @@ export function updateSamosbor(
        * координаты — уже координаты последствия, и следующий выход с этажа
        * закрепил бы их в A-Life как «где человек жил». */
       captureAlifeFloorState(state, entities);
+      /* Пути перестраиваются вместе с этажом, а составы — нет. Снимок берётся
+       * до стича: без него вагоны продолжали ездить по СТАРЫМ путям сквозь
+       * новую геометрию. Пара snapshot/install была написана и покрыта тестами,
+       * но не вызывалась ниоткуда. */
+      const railSnapshot = snapshotRailTrainsForRebuild(world);
       const replacement = replacementProvider?.() ?? generateFloor(stitchFloor, ensureFloorRunState(state).runSeed, state.tutorialMode);
       applyFrontFieldStitch(world, state, touched, replacement);
       /* Стич пишет клетки и не смотрит, кто на них стоял: замена WALL/ABYSS
@@ -2568,6 +2574,10 @@ export function updateSamosbor(
        * ближайшего пола — спираль радиусом 30 по клеткам, без BFS и без
        * перебэйка nav-кэша: Iron Law не нарушается. */
       relocateBlockedEntities(world, entities);
+      /* После переселения: вагоны стоят на путях, и гнать их спиралью нельзя —
+       * состав уехал бы с линии. Пустая карта id: стич не переносит сущности
+       * генерации, вагоны создаются заново. */
+      installRailTrainsFromGeneration(world, entities, nextId, replacement.world, new Map(), railSnapshot);
       applyPendingSamosborAftermathAfterWave(world, entities, nextId, stitchFloor);
     };
     if (scheduleLocalPatch) {

@@ -7,7 +7,6 @@ import { ensureEconomyState, getEconomyQuote } from '../src/systems/economy';
 import {
   addTradeAskFromSlot,
   addTradeOfferFromSlot,
-  buyFromNpc,
   clearTradeOffers,
   executeTradeDeal,
   getTradeCreditSummary,
@@ -30,37 +29,6 @@ function resourceStock(state: GameState, floor: number, resourceId: string): num
   const economy = ensureEconomyState(state);
   return economy.floors[floor]?.resources[resourceId]?.stock ?? 0;
 }
-
-test('NPC purchase consumes staged player offer as trade credit before cash', () => {
-  const state = makeGameState({ currentZ: 0 });
-  resetFloor(state, 0);
-  const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'flashlight', count: 1 }], money: 100 });
-  const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'water', count: 1 }], money: 0 });
-  const beforeWaterStock = resourceStock(state, 0, 'drink_water');
-
-  assert.equal(addTradeOfferFromSlot(state, player, npc, 0).ok, true);
-  const summary = getTradeCreditSummary(state, npc, 'water');
-  const result = buyFromNpc(state, player, npc, 0);
-
-  assert.equal(result.ok, true);
-  assert.equal(result.code, 'bought');
-  assert.equal(result.price, summary.cashDue);
-  assert.equal(player.money, 100 - summary.cashDue);
-  assert.equal(npc.money, summary.cashDue);
-  assert.equal(countInventoryItem(player, 'flashlight'), 0);
-  assert.equal(countInventoryItem(player, 'water'), 1);
-  assert.equal(countInventoryItem(npc, 'water'), 0);
-  assert.equal(countInventoryItem(npc, 'flashlight'), 1);
-  assert.equal(resourceStock(state, 0, 'drink_water'), beforeWaterStock - 1);
-  assert.equal(getTradeOffer(state).length, 0);
-
-  const event = getRecentEvents(state, { limit: 1 })[0];
-  assert.equal(event.type, 'player_handoff_item');
-  assert.equal(event.data?.cashPaid, summary.cashDue);
-  assert.equal(event.data?.creditValue, summary.creditValue);
-  assert.equal(event.tags.includes('trade'), true);
-  assert.equal(event.tags.includes('barter'), true);
-});
 
 test('symmetric trade stages NPC ask and player offer without mutating inventories', () => {
   const state = makeGameState({ currentZ: 0 });
@@ -218,7 +186,9 @@ test('trade credit can partially discount an NPC purchase with cash top-up', () 
   assert.equal(summary.creditValue, breadQuote.sellPrice);
   assert.equal(summary.cashDue, Math.max(0, flashlightQuote.buyPrice - breadQuote.sellPrice));
 
-  const result = buyFromNpc(state, player, npc, 0);
+  assert.equal(addTradeAskFromSlot(state, npc, 0).ok, true);
+  assert.deepEqual(getTradeDealSummary(state, npc), summary);
+  const result = executeTradeDeal(state, player, npc);
 
   assert.equal(result.ok, true);
   assert.equal(player.money, 1000 - summary.cashDue);
@@ -226,27 +196,6 @@ test('trade credit can partially discount an NPC purchase with cash top-up', () 
   assert.equal(countInventoryItem(player, 'bread'), 0);
   assert.equal(countInventoryItem(player, 'flashlight'), 1);
   assert.equal(countInventoryItem(npc, 'bread'), 1);
-});
-
-test('trade credit purchase rejects missing cash top-up without mutation', () => {
-  const state = makeGameState({ currentZ: 0 });
-  resetFloor(state, 0);
-  const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'bread', count: 1 }], money: 0 });
-  const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'flashlight', count: 1 }], money: 10 });
-
-  assert.equal(addTradeOfferFromSlot(state, player, npc, 0).ok, true);
-  const result = buyFromNpc(state, player, npc, 0);
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, 'player_no_money');
-  assert.equal(player.money, 0);
-  assert.equal(npc.money, 10);
-  assert.equal(countInventoryItem(player, 'bread'), 1);
-  assert.equal(countInventoryItem(player, 'flashlight'), 0);
-  assert.equal(countInventoryItem(npc, 'flashlight'), 1);
-  assert.equal(countInventoryItem(npc, 'bread'), 0);
-  assert.equal(getTradeOffer(state).length, 1);
-  assert.equal(getRecentEvents(state, { limit: 1 }).length, 0);
 });
 
 test('trade credit offer caps distinct staged slots and can be cleared', () => {

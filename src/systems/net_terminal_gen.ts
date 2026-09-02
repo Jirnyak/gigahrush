@@ -37,11 +37,25 @@ import {
   type NetTerminalGenFloorProfile,
 } from '../data/net_terminal_gen';
 import { Spr } from '../entities/sprite_index';
+import { CORPORATIONS, CORPORATION_BY_ID, type CorporationId } from '../data/corporations';
 import {
   accountToCash,
+  bankingSummary,
   cashToAccount,
+  closeDeposit,
   ensureBankingState,
+  openDeposit,
+  repayLoan,
+  takeLoan,
 } from './banking';
+import {
+  buyShares,
+  ensureStockMarketState,
+  estimateStockTrade,
+  portfolioValue,
+  sellShares,
+  stockSharesOwned,
+} from './stock_market';
 import { publishEvent } from './events';
 import {
   currentFloorRunEntry,
@@ -120,7 +134,15 @@ export interface NetTerminalGenPlacementOptions {
 }
 
 export type NetTerminalGenOverlayMode = 'closed' | 'denied' | 'editor' | 'bank';
-export type NetTerminalBankAction = 'deposit' | 'withdraw';
+export type NetTerminalBankAction =
+  | 'deposit'
+  | 'withdraw'
+  | 'open_deposit'
+  | 'close_deposit'
+  | 'take_loan'
+  | 'repay_loan'
+  | 'buy_shares'
+  | 'sell_shares';
 
 export interface NetTerminalGenRuntimeSnapshot {
   mode: NetTerminalGenOverlayMode;
@@ -128,9 +150,16 @@ export interface NetTerminalGenRuntimeSnapshot {
   terminalIdx: number;
   terminalLabel: string;
   text: string;
+  bankRowIndex: number;
   bankAction: NetTerminalBankAction;
   bankPresetIndex: number;
   bankMessage: string;
+}
+
+export interface NetTerminalBankRowSnapshot {
+  label: string;
+  value: string;
+  selected: boolean;
 }
 
 export interface NetTerminalBankSnapshot {
@@ -138,13 +167,18 @@ export interface NetTerminalBankSnapshot {
   terminalLabel: string;
   action: NetTerminalBankAction;
   actionLabel: string;
+  rowIndex: number;
+  rows: NetTerminalBankRowSnapshot[];
   presetIndex: number;
   presetLabel: string;
   amountRubles: number;
+  shareCount: number;
   cashRubles: number;
   accountRubles: number;
   depositRubles: number;
   debtRubles: number;
+  creditAvailable: number;
+  portfolioRubles: number;
   canSubmit: boolean;
   message: string;
 }
@@ -167,19 +201,66 @@ type NetTerminalGenHost = GameState & { netTerminalGen?: Partial<NetTerminalGenS
 const terminalRegistry = new Map<number, NetTerminalGenTerminal>();
 const DIRS: readonly [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-const runtime: NetTerminalGenRuntimeSnapshot = {
-  mode: 'closed',
+const runtime = {
+  mode: 'closed' as NetTerminalGenOverlayMode,
   open: false,
   terminalIdx: -1,
   terminalLabel: '',
   text: '',
-  bankAction: 'deposit',
+  bankRowIndex: 0,
   bankPresetIndex: 0,
   bankMessage: '',
 };
 
-const BANK_ACTIONS: readonly NetTerminalBankAction[] = ['deposit', 'withdraw'];
-const BANK_PRESETS: readonly number[] = [10, 50, 100, -1];
+/* ── НЕТ-БАНК: строки операций ──────────────────────────────────
+ * Оверлей отдаёт ровно две оси — вверх/вниз и влево/вправо, — и обе уже
+ * разведены по терминалам: ось строк выбирает ОПЕРАЦИЮ, ось пресетов —
+ * ПАРАМЕТР. Поэтому счёт, вклад, кредит и биржа живут одним списком строк, а
+ * не четырьмя экранами: третьей оси у терминала нет и заводить её негде.
+ * Сторона биржевой сделки (купить/продать) поэтому сидит в пресете — у строки
+ * бумаги параметр один, и он же решает направление. */
+type NetTerminalBankRowKind = 'money' | 'shares';
+
+interface NetTerminalBankRow {
+  kind: NetTerminalBankRowKind;
+  action: NetTerminalBankAction;
+  label: string;
+  corpId?: CorporationId;
+}
+
+interface NetTerminalBankSharePreset {
+  side: 'buy' | 'sell';
+  /** 0 — всё, что есть в портфеле; терминал не считает «максимум покупки». */
+  lot: number;
+}
+
+const BANK_ROWS: readonly NetTerminalBankRow[] = [
+  { kind: 'money', action: 'deposit', label: 'Внести нал' },
+  { kind: 'money', action: 'withdraw', label: 'Снять со счета' },
+  { kind: 'money', action: 'open_deposit', label: 'Вклад: пополнить' },
+  { kind: 'money', action: 'close_deposit', label: 'Вклад: закрыть' },
+  { kind: 'money', action: 'take_loan', label: 'Кредит: взять' },
+  { kind: 'money', action: 'repay_loan', label: 'Кредит: погасить' },
+  ...CORPORATIONS.map((corp): NetTerminalBankRow => ({
+    kind: 'shares',
+    action: 'buy_shares',
+    label: `Биржа: ${corp.ticker}`,
+    corpId: corp.id,
+  })),
+];
+
+const BANK_MONEY_PRESETS: readonly number[] = [10, 50, 100, -1];
+const BANK_CLOSE_PRESETS: readonly number[] = [-1];
+const BANK_SHARE_PRESETS: readonly NetTerminalBankSharePreset[] = [
+  { side: 'buy', lot: 1 },
+  { side: 'buy', lot: 5 },
+  { side: 'buy', lot: 10 },
+  { side: 'buy', lot: 25 },
+  { side: 'sell', lot: 1 },
+  { side: 'sell', lot: 5 },
+  { side: 'sell', lot: 10 },
+  { side: 'sell', lot: 0 },
+];
 
 function cleanCoord(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
@@ -688,7 +769,7 @@ export function openNetTerminalGenEditor(state: GameState, terminal?: NetTermina
 export function openNetTerminalBank(state: GameState, terminal?: NetTerminalGenTerminal): void {
   ensureBankingState(state);
   state.paused = true;
-  runtime.bankAction = 'deposit';
+  runtime.bankRowIndex = 0;
   runtime.bankPresetIndex = 0;
   runtime.bankMessage = '';
   setRuntime('bank', terminal);
@@ -715,7 +796,8 @@ export function isNetTerminalBankOpen(): boolean {
 }
 
 export function getNetTerminalGenRuntimeSnapshot(): NetTerminalGenRuntimeSnapshot {
-  return { ...runtime };
+  clampBankRuntime();
+  return { ...runtime, bankAction: bankRowAction() };
 }
 
 function cleanCash(player: Entity): number {
@@ -723,86 +805,238 @@ function cleanCash(player: Entity): number {
   return Number.isFinite(cash) ? Math.max(0, Math.floor(cash)) : 0;
 }
 
-function bankActionLabel(action: NetTerminalBankAction): string {
-  return action === 'deposit' ? 'Внести' : 'Снять';
+function bankRow(): NetTerminalBankRow {
+  return BANK_ROWS[runtime.bankRowIndex] ?? BANK_ROWS[0];
 }
 
-function selectedBankLimit(state: GameState, player: Entity): number {
-  const banking = ensureBankingState(state);
-  return runtime.bankAction === 'deposit' ? cleanCash(player) : banking.accountRubles;
+function bankMoneyPresets(row: NetTerminalBankRow): readonly number[] {
+  return row.action === 'close_deposit' ? BANK_CLOSE_PRESETS : BANK_MONEY_PRESETS;
 }
 
-function selectedBankAmount(state: GameState, player: Entity): number {
-  const preset = BANK_PRESETS[runtime.bankPresetIndex] ?? BANK_PRESETS[0];
-  return preset < 0 ? selectedBankLimit(state, player) : preset;
+function bankPresetCount(row: NetTerminalBankRow): number {
+  return row.kind === 'shares' ? BANK_SHARE_PRESETS.length : bankMoneyPresets(row).length;
 }
 
-function bankPresetLabel(state: GameState, player: Entity): string {
-  const preset = BANK_PRESETS[runtime.bankPresetIndex] ?? BANK_PRESETS[0];
+function wrapIndex(value: number, count: number): number {
+  if (count <= 0) return 0;
+  return ((Math.trunc(value) % count) + count) % count;
+}
+
+function clampBankRuntime(): void {
+  runtime.bankRowIndex = wrapIndex(runtime.bankRowIndex, BANK_ROWS.length);
+  runtime.bankPresetIndex = wrapIndex(runtime.bankPresetIndex, bankPresetCount(bankRow()));
+}
+
+function bankSharePreset(): NetTerminalBankSharePreset {
+  return BANK_SHARE_PRESETS[runtime.bankPresetIndex] ?? BANK_SHARE_PRESETS[0];
+}
+
+function bankRowAction(): NetTerminalBankAction {
+  const row = bankRow();
+  if (row.kind !== 'shares') return row.action;
+  return bankSharePreset().side === 'buy' ? 'buy_shares' : 'sell_shares';
+}
+
+/** Сколько рублей эта операция вправе двинуть при нынешних балансах. */
+function bankMoneyLimit(state: GameState, player: Entity, row: NetTerminalBankRow): number {
+  const bank = bankingSummary(state);
+  switch (row.action) {
+    case 'deposit': return cleanCash(player);
+    case 'withdraw': return Math.floor(bank.accountRubles);
+    case 'open_deposit': return Math.floor(bank.accountRubles);
+    case 'close_deposit': return Math.floor(bank.depositPrincipal);
+    case 'take_loan': return Math.floor(bank.availableCredit);
+    case 'repay_loan': return Math.floor(Math.min(bank.accountRubles, bank.debtRubles));
+    default: return 0;
+  }
+}
+
+function bankMoneyAmount(state: GameState, player: Entity, row: NetTerminalBankRow): number {
+  const presets = bankMoneyPresets(row);
+  const preset = presets[runtime.bankPresetIndex] ?? presets[0];
+  return preset < 0 ? bankMoneyLimit(state, player, row) : preset;
+}
+
+function bankShareCount(state: GameState, row: NetTerminalBankRow): number {
+  const preset = bankSharePreset();
+  if (!row.corpId) return 0;
+  if (preset.lot > 0) return preset.lot;
+  return preset.side === 'sell' ? stockSharesOwned(state, row.corpId) : 0;
+}
+
+function bankActionLabel(row: NetTerminalBankRow): string {
+  if (row.kind !== 'shares') return row.label;
+  const corp = row.corpId ? CORPORATION_BY_ID[row.corpId] : undefined;
+  return `${bankSharePreset().side === 'buy' ? 'Купить' : 'Продать'} ${corp?.ticker ?? '?'}`;
+}
+
+function bankPresetLabel(state: GameState, player: Entity, row: NetTerminalBankRow): string {
+  if (row.kind === 'shares') {
+    const preset = bankSharePreset();
+    const shares = bankShareCount(state, row);
+    if (preset.lot > 0) return `${preset.lot} шт.`;
+    return `${shares} шт. (весь пакет)`;
+  }
+  const presets = bankMoneyPresets(row);
+  const preset = presets[runtime.bankPresetIndex] ?? presets[0];
   if (preset >= 0) return `${preset} руб.`;
-  return runtime.bankAction === 'deposit'
-    ? `${selectedBankLimit(state, player)} руб. (все наличные)`
-    : `${selectedBankLimit(state, player)} руб. (весь счет)`;
+  const limit = bankMoneyLimit(state, player, row);
+  switch (row.action) {
+    case 'deposit': return `${limit} руб. (все наличные)`;
+    case 'close_deposit': return `${limit} руб. (весь вклад)`;
+    case 'take_loan': return `${limit} руб. (весь лимит)`;
+    case 'repay_loan': return `${limit} руб. (весь долг)`;
+    default: return `${limit} руб. (весь счет)`;
+  }
 }
 
-function clampBankPreset(): void {
-  runtime.bankPresetIndex = ((runtime.bankPresetIndex % BANK_PRESETS.length) + BANK_PRESETS.length) % BANK_PRESETS.length;
+function bankShortfallMessage(row: NetTerminalBankRow): string {
+  switch (row.action) {
+    case 'deposit': return 'Недостаточно наличных.';
+    case 'close_deposit': return 'Вклад пуст.';
+    case 'take_loan': return 'Кредитный лимит исчерпан.';
+    case 'repay_loan': return 'Нечего гасить или пуст счет.';
+    default: return 'Недостаточно на счете.';
+  }
 }
 
 export function moveNetTerminalBankAction(delta: number): void {
-  const current = Math.max(0, BANK_ACTIONS.indexOf(runtime.bankAction));
-  const next = (current + delta + BANK_ACTIONS.length) % BANK_ACTIONS.length;
-  runtime.bankAction = BANK_ACTIONS[next];
+  runtime.bankRowIndex = wrapIndex(runtime.bankRowIndex + delta, BANK_ROWS.length);
+  clampBankRuntime();
   runtime.bankMessage = '';
 }
 
 export function moveNetTerminalBankPreset(delta: number): void {
-  runtime.bankPresetIndex += delta;
-  clampBankPreset();
+  runtime.bankPresetIndex = wrapIndex(runtime.bankPresetIndex + delta, bankPresetCount(bankRow()));
   runtime.bankMessage = '';
 }
 
-export function activateNetTerminalBank(state: GameState, player: Entity): boolean {
-  const moved = selectedBankAmount(state, player);
-  const limit = selectedBankLimit(state, player);
-  if (moved <= 0 || moved > limit) {
-    runtime.bankMessage = runtime.bankAction === 'deposit' ? 'Недостаточно наличных.' : 'Недостаточно на счете.';
-    state.msgs.push(msg(runtime.bankMessage, state.time, '#f84'));
-    return false;
-  }
-
-  const ok = runtime.bankAction === 'deposit'
-    ? cashToAccount(state, player, moved, 'net_terminal')
-    : accountToCash(state, player, moved, 'net_terminal');
-  runtime.bankMessage = ok
-    ? runtime.bankAction === 'deposit'
-      ? `Внесено ${moved} руб.`
-      : `Снято ${moved} руб.`
-    : runtime.bankAction === 'deposit'
-      ? 'Взнос не прошел.'
-      : 'Снятие не прошло.';
-  state.msgs.push(msg(runtime.bankMessage, state.time, ok ? '#6cf' : '#f84'));
+function reportBank(state: GameState, text: string, ok: boolean): boolean {
+  runtime.bankMessage = text;
+  state.msgs.push(msg(text, state.time, ok ? '#6cf' : '#f84'));
   return ok;
 }
 
+function activateBankMoney(state: GameState, player: Entity, row: NetTerminalBankRow): boolean {
+  const moved = bankMoneyAmount(state, player, row);
+  const limit = bankMoneyLimit(state, player, row);
+  if (moved <= 0 || moved > limit) return reportBank(state, bankShortfallMessage(row), false);
+
+  switch (row.action) {
+    case 'deposit':
+      return cashToAccount(state, player, moved, 'net_terminal')
+        ? reportBank(state, `Внесено ${moved} руб.`, true)
+        : reportBank(state, 'Взнос не прошел.', false);
+    case 'withdraw':
+      return accountToCash(state, player, moved, 'net_terminal')
+        ? reportBank(state, `Снято ${moved} руб.`, true)
+        : reportBank(state, 'Снятие не прошло.', false);
+    case 'open_deposit':
+      return openDeposit(state, moved)
+        ? reportBank(state, `На вклад ушло ${moved} руб.`, true)
+        : reportBank(state, 'Вклад не принял взнос.', false);
+    case 'close_deposit': {
+      const returned = closeDeposit(state);
+      return returned > 0
+        ? reportBank(state, `Вклад закрыт: ${Math.floor(returned)} руб. на счет.`, true)
+        : reportBank(state, 'Вклад пуст.', false);
+    }
+    case 'take_loan':
+      return takeLoan(state, moved, 'net_terminal')
+        ? reportBank(state, `Выдан кредит ${moved} руб.`, true)
+        : reportBank(state, 'Кредитный лимит исчерпан.', false);
+    case 'repay_loan':
+      return repayLoan(state, moved, 'net_terminal')
+        ? reportBank(state, `Погашено ${moved} руб.`, true)
+        : reportBank(state, 'Погашение не прошло.', false);
+    default:
+      return reportBank(state, 'Операция недоступна.', false);
+  }
+}
+
+function activateBankShares(state: GameState, row: NetTerminalBankRow): boolean {
+  const corpId = row.corpId;
+  if (!corpId) return reportBank(state, 'Бумага не найдена.', false);
+  const corp = CORPORATION_BY_ID[corpId];
+  const side = bankSharePreset().side;
+  const shares = bankShareCount(state, row);
+  if (shares <= 0) {
+    return reportBank(state, side === 'buy' ? 'Лот пуст.' : `Нет бумаг ${corp?.ticker ?? corpId}.`, false);
+  }
+
+  const result = side === 'buy' ? buyShares(state, corpId, shares) : sellShares(state, corpId, shares);
+  if (!result.ok) {
+    const text = result.reason === 'insufficient_funds'
+      ? 'Недостаточно на счете.'
+      : result.reason === 'insufficient_shares'
+        ? `Нет ${shares} бумаг ${corp?.ticker ?? corpId}.`
+        : 'Биржа отклонила заявку.';
+    return reportBank(state, text, false);
+  }
+  const total = Math.floor(result.total ?? 0);
+  return reportBank(
+    state,
+    side === 'buy'
+      ? `Куплено ${shares} ${corp?.ticker ?? corpId} за ${total} руб.`
+      : `Продано ${shares} ${corp?.ticker ?? corpId} за ${total} руб.`,
+    true,
+  );
+}
+
+export function activateNetTerminalBank(state: GameState, player: Entity): boolean {
+  clampBankRuntime();
+  const row = bankRow();
+  return row.kind === 'shares' ? activateBankShares(state, row) : activateBankMoney(state, player, row);
+}
+
+function bankRowValue(state: GameState, player: Entity, row: NetTerminalBankRow): string {
+  if (row.kind === 'shares' && row.corpId) {
+    const market = ensureStockMarketState(state);
+    const quote = market.quotes[row.corpId];
+    const owned = stockSharesOwned(state, row.corpId);
+    const arrow = quote.lastDelta > 0 ? '+' : quote.lastDelta < 0 ? '-' : '=';
+    return `${Math.round(quote.price)}${arrow} x${owned}`;
+  }
+  return `${bankMoneyLimit(state, player, row)} руб.`;
+}
+
 export function getNetTerminalBankSnapshot(state: GameState, player: Entity): NetTerminalBankSnapshot {
-  const banking = ensureBankingState(state);
-  clampBankPreset();
-  const limit = selectedBankLimit(state, player);
-  const moved = selectedBankAmount(state, player);
+  const bank = bankingSummary(state);
+  clampBankRuntime();
+  const row = bankRow();
+  const shares = row.kind === 'shares' ? bankShareCount(state, row) : 0;
+  const side = bankSharePreset().side;
+  const estimate = row.kind === 'shares' && row.corpId
+    ? estimateStockTrade(state, row.corpId, side, shares)
+    : { unitPrice: 0, gross: 0, fee: 0, total: 0 };
+  const moved = row.kind === 'shares' ? Math.floor(estimate.total) : bankMoneyAmount(state, player, row);
+  const limit = row.kind === 'shares' ? 0 : bankMoneyLimit(state, player, row);
+  const canSubmit = row.kind === 'shares'
+    ? shares > 0 && (side === 'buy' ? estimate.total <= bank.accountRubles : shares <= stockSharesOwned(state, row.corpId ?? ''))
+    : moved > 0 && moved <= limit;
+
   return {
     terminalIdx: runtime.terminalIdx,
     terminalLabel: runtime.terminalLabel,
-    action: runtime.bankAction,
-    actionLabel: bankActionLabel(runtime.bankAction),
+    action: bankRowAction(),
+    actionLabel: bankActionLabel(row),
+    rowIndex: runtime.bankRowIndex,
+    rows: BANK_ROWS.map((entry, index) => ({
+      label: entry.label,
+      value: bankRowValue(state, player, entry),
+      selected: index === runtime.bankRowIndex,
+    })),
     presetIndex: runtime.bankPresetIndex,
-    presetLabel: bankPresetLabel(state, player),
+    presetLabel: bankPresetLabel(state, player, row),
     amountRubles: moved,
+    shareCount: shares,
     cashRubles: cleanCash(player),
-    accountRubles: banking.accountRubles,
-    depositRubles: banking.depositPrincipal,
-    debtRubles: banking.loanPrincipal + banking.loanAccrued,
-    canSubmit: moved > 0 && moved <= limit,
+    accountRubles: bank.accountRubles,
+    depositRubles: bank.depositPrincipal,
+    debtRubles: bank.debtRubles,
+    creditAvailable: bank.availableCredit,
+    portfolioRubles: portfolioValue(state),
+    canSubmit,
     message: runtime.bankMessage,
   };
 }

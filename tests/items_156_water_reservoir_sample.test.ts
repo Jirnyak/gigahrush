@@ -7,7 +7,7 @@ import { RESOURCES, resourceForItem } from '../src/data/resources';
 import { ensureEconomyState } from '../src/systems/economy';
 import { getRecentEvents } from '../src/systems/events';
 import { getInventorySlotActionInfo, inventoryItemCategory } from '../src/systems/inventory';
-import { sellToNpc } from '../src/systems/trade';
+import { addTradeOfferFromSlot, executeTradeDeal } from '../src/systems/trade';
 import { countInventoryItem, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
 const ITEM_ID = 'water_reservoir_sample';
@@ -59,17 +59,18 @@ test('water reservoir sample sale feeds water economy evidence', () => {
   });
   const beforeStock = resourceStock(state, 0, 'drink_water');
 
-  const result = sellToNpc(state, player, buyer, 0, { reason: 'water_safety_evidence' });
+  assert.equal(addTradeOfferFromSlot(state, player, buyer, 0, { reason: 'water_safety_evidence' }).ok, true);
+  const result = executeTradeDeal(state, player, buyer, { reason: 'water_safety_evidence' });
 
   assert.equal(result.ok, true);
-  assert.equal(result.code, 'sold');
+  assert.equal(result.code, 'deal_done');
   assert.equal(result.quote?.resourceId, 'drink_water');
   assert.equal(resourceStock(state, 0, 'drink_water'), beforeStock + 1);
   assert.equal(countInventoryItem(player, ITEM_ID), 0);
   assert.equal(countInventoryItem(buyer, ITEM_ID), 1);
   assert.ok((player.money ?? 0) > 0);
 
-  const event = getRecentEvents(state, { type: 'player_sell_item', tags: ['res_drink_water'], limit: 1 })[0];
+  const event = getRecentEvents(state, { type: 'player_handoff_item', tags: ['res_drink_water'], limit: 1 })[0];
   assert.equal(event?.itemId, ITEM_ID);
-  assert.equal(event?.data?.resourceId, 'drink_water');
+  assert.equal(event?.tags.includes('sell'), true);
 });

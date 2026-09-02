@@ -19,6 +19,14 @@ import {
   tickBankingInterest,
 } from '../src/systems/banking';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
+import {
+  activateNetTerminalBank,
+  closeNetTerminalGen,
+  getNetTerminalBankSnapshot,
+  moveNetTerminalBankAction,
+  moveNetTerminalBankPreset,
+  openNetTerminalBank,
+} from '../src/systems/net_terminal_gen';
 import { makeGameState, makeTestPlayer } from './helpers';
 
 test('ensureBankingState initializes missing banking state', () => {
@@ -270,4 +278,67 @@ test('bankingForSave returns a distinct clone of the banking state', () => {
   // References should be distinct
   assert.notEqual(saved, bank);
   assert.notEqual(saved.recentLedger, bank.recentLedger);
+});
+
+/* ── Достижимость: вклад и кредит живут в НЕТ-банке ───────────────
+ * Проценты по вкладу тикали в кадре, а сам вклад открыть было нечем: четыре
+ * операции не звал никто, кроме тестов. Строка терминала — единственный путь
+ * игрока к ним, и он проверяется здесь, а не только в самой банковской математике. */
+test('net terminal rows reach deposit, deposit close, loan and repayment', () => {
+  const state = makeGameState({ worldEvents: createWorldEventState() });
+  const player = makeTestPlayer({ money: 200 });
+  openNetTerminalBank(state);
+
+  // Строка 0 «Внести нал», пресет 100 руб.
+  moveNetTerminalBankPreset(2);
+  assert.equal(getNetTerminalBankSnapshot(state, player).action, 'deposit');
+  assert.equal(activateNetTerminalBank(state, player), true);
+  assert.equal(player.money, 100);
+  assert.equal(ensureBankingState(state).accountRubles, 100);
+
+  // Строка 2 «Вклад: пополнить», тот же пресет.
+  moveNetTerminalBankAction(2);
+  assert.equal(getNetTerminalBankSnapshot(state, player).action, 'open_deposit');
+  assert.equal(activateNetTerminalBank(state, player), true);
+  assert.equal(ensureBankingState(state).depositPrincipal, 100);
+  assert.equal(ensureBankingState(state).accountRubles, 0);
+
+  // Строка 3 «Вклад: закрыть» — один пресет, весь вклад.
+  moveNetTerminalBankAction(1);
+  const closing = getNetTerminalBankSnapshot(state, player);
+  assert.equal(closing.action, 'close_deposit');
+  assert.equal(closing.amountRubles, 100);
+  assert.equal(activateNetTerminalBank(state, player), true);
+  assert.equal(ensureBankingState(state).depositPrincipal, 0);
+  assert.equal(ensureBankingState(state).accountRubles, 100);
+
+  // Строка 4 «Кредит: взять», пресет вернулся к 10 руб.
+  moveNetTerminalBankAction(1);
+  assert.equal(getNetTerminalBankSnapshot(state, player).action, 'take_loan');
+  assert.equal(activateNetTerminalBank(state, player), true);
+  assert.equal(ensureBankingState(state).loanPrincipal, 10);
+  assert.equal(ensureBankingState(state).accountRubles, 110);
+
+  // Строка 5 «Кредит: погасить».
+  moveNetTerminalBankAction(1);
+  assert.equal(getNetTerminalBankSnapshot(state, player).action, 'repay_loan');
+  assert.equal(activateNetTerminalBank(state, player), true);
+  assert.equal(bankingSummary(state).debtRubles, 0);
+  assert.equal(ensureBankingState(state).accountRubles, 100);
+
+  closeNetTerminalGen();
+});
+
+test('net terminal refuses an operation the balances cannot cover', () => {
+  const state = makeGameState({ worldEvents: createWorldEventState() });
+  const player = makeTestPlayer({ money: 0 });
+  openNetTerminalBank(state);
+
+  const snapshot = getNetTerminalBankSnapshot(state, player);
+  assert.equal(snapshot.canSubmit, false);
+  assert.equal(activateNetTerminalBank(state, player), false);
+  assert.equal(ensureBankingState(state).accountRubles, 0);
+  assert.equal(getNetTerminalBankSnapshot(state, player).message, 'Недостаточно наличных.');
+
+  closeNetTerminalGen();
 });

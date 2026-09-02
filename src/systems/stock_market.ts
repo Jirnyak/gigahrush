@@ -326,6 +326,30 @@ export function sellShares(state: GameState, corpId: CorporationId, shares: numb
   return { ok: true, corpId, shares: amount, unitPrice, fee, total, accountRubles: bank.accountRubles };
 }
 
+/** Сколько бумаг корпорации уже лежит в портфеле. Терминалу нужно одно число,
+ *  а не весь снимок рынка: снимок строит запись на каждую из корпораций. */
+export function stockSharesOwned(state: GameState, corpId: CorporationId): number {
+  return ensureStockMarketState(state).portfolio[corpId]?.shares ?? 0;
+}
+
+/** Предпросмотр сделки теми же спредом и комиссией, которыми считает сама
+ *  сделка. Терминал показывает цену ДО подтверждения, и вторая формула для того
+ *  же числа разошлась бы с первой на первом же изменении спреда. */
+export function estimateStockTrade(
+  state: GameState,
+  corpId: CorporationId,
+  side: 'buy' | 'sell',
+  shares: number,
+): { unitPrice: number; gross: number; fee: number; total: number } {
+  const corp = CORPORATION_BY_ID[corpId];
+  const amount = Math.max(0, Math.floor(cleanNumber(shares, 0)));
+  if (!corp || amount <= 0) return { unitPrice: 0, gross: 0, fee: 0, total: 0 };
+  const unitPrice = tradeUnitPrice(ensureStockMarketState(state).quotes[corp.id], side);
+  const gross = roundMoney(unitPrice * amount);
+  const fee = tradeFee(gross);
+  return { unitPrice, gross, fee, total: roundMoney(side === 'buy' ? gross + fee : Math.max(0, gross - fee)) };
+}
+
 function hashString(value: string): number {
   let h = 2166136261;
   for (let i = 0; i < value.length; i++) {

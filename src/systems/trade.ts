@@ -7,12 +7,10 @@ import {
   changeResourceStock,
   getEconomyQuote,
   primeTradePriceCache,
-  recordPlayerItemSale,
   type EconomyQuote,
   type EconomyQuoteOptions,
 } from './economy';
 import { publishEvent } from './events';
-import { isGovnyakItem } from './govnyak';
 
 export type TradeResultCode =
   | 'bought'
@@ -51,20 +49,6 @@ export interface TradeResult {
   credit?: TradeCreditSummary;
 }
 
-export interface TradeHookContext {
-  state: GameState;
-  player: Entity;
-  npc: Entity;
-  slotIndex: number;
-}
-
-export interface CompletedTradeContext extends TradeHookContext {
-  defId: string;
-  price: number;
-  quote: EconomyQuote;
-  zoneId?: number;
-}
-
 export interface TradeOptions {
   floor?: EconomyFloorRef;
   stockFloor?: number;
@@ -72,8 +56,6 @@ export interface TradeOptions {
   tariffMultiplier?: number;
   tags?: readonly string[];
   reason?: string;
-  beforeSell?: (ctx: TradeHookContext) => boolean;
-  afterSell?: (ctx: CompletedTradeContext) => void;
 }
 
 interface TradeOfferSession {
@@ -134,13 +116,6 @@ function quoteOptions(npc: Entity, opts: TradeOptions): EconomyQuoteOptions {
 function stockFloorForTrade(state: GameState, opts: TradeOptions): number {
   if (opts.stockFloor !== undefined) return opts.stockFloor;
   return typeof opts.floor === 'number' ? opts.floor : state.currentZ;
-}
-
-function decrementSlot(inv: Entity['inventory'], slotIndex: number): void {
-  const slot = inv?.[slotIndex];
-  if (!slot) return;
-  slot.count--;
-  if (slot.count <= 0) inv?.splice(slotIndex, 1);
 }
 
 function sameItemData(a: unknown, b: unknown): boolean {
@@ -234,70 +209,6 @@ function itemListForEvent(items: readonly Item[]): { id: string; count: number }
     .filter(item => item.count > 0)
     .slice(0, TRADE_OFFER_SLOT_CAP)
     .map(item => ({ id: item.defId, count: item.count }));
-}
-
-function publishPlayerBuyEvent(
-  state: GameState,
-  player: Entity,
-  npc: Entity,
-  defId: string,
-  price: number,
-  quote: EconomyQuote,
-  zoneId?: number,
-  credit?: TradeCreditSummary,
-  playerOffer: readonly Item[] = [],
-): void {
-  const def = ITEMS[defId];
-  const govnyak = isGovnyakItem(defId);
-  const hasCredit = (credit?.creditCount ?? 0) > 0;
-  const fullPrice = credit?.fullPrice ?? price;
-  publishEvent(state, {
-    type: 'player_handoff_item',
-    zoneId,
-    actorId: player.id,
-    actorName: player.name ?? 'Вы',
-    actorFaction: player.faction,
-    targetId: npc.id,
-    targetName: npc.name,
-    targetFaction: npc.faction,
-    itemId: defId,
-    itemName: def?.name ?? defId,
-    itemCount: 1,
-    itemValue: fullPrice,
-    severity: govnyak ? 3 : 1,
-    privacy: govnyak ? 'local' : 'private',
-    tags: [
-      'player',
-      'inventory',
-      'trade',
-      'buy',
-      ...(hasCredit ? ['barter'] : []),
-      ...(govnyak ? ['govnyak', 'contraband'] : []),
-      ...quote.tags,
-    ],
-    data: {
-      price,
-      cashPaid: price,
-      cashReceived: credit?.changeDue ?? 0,
-      netCashPaid: price - (credit?.changeDue ?? 0),
-      direction: 'npc_to_player',
-      unitPrice: fullPrice,
-      totalPrice: fullPrice,
-      creditValue: credit?.creditValue ?? 0,
-      creditCount: credit?.creditCount ?? 0,
-      creditSurplus: credit?.surplus ?? 0,
-      unpaidSurplus: Math.max(0, (credit?.surplus ?? 0) - (credit?.changeDue ?? 0)),
-      creditItems: itemListForEvent(playerOffer),
-      sellerId: npc.id,
-      sellerName: npc.name,
-      buyerId: player.id,
-      buyerName: player.name,
-      resourceId: quote.resourceId,
-      quoteReason: quote.reason,
-      quoteTags: quote.tags,
-      rumorIds: govnyak ? ['govnyak_trade'] : [],
-    },
-  });
 }
 
 function tradeCreditUnitQuote(
@@ -637,96 +548,4 @@ export function executeTradeDeal(
   clearTradeOffers(state);
   primeTradePriceCache(state, [npc.inventory, player.inventory]);
   return { ok: true, code: 'deal_done', defId: firstItem.defId, price: summary.cashDue, quote: quotes[0], credit: summary };
-}
-
-export function buyFromNpc(
-  state: GameState,
-  player: Entity,
-  npc: Entity,
-  slotIndex: number,
-  opts: TradeOptions = {},
-): TradeResult {
-  const npcInv = npc.inventory ?? [];
-  const slot = npcInv[slotIndex];
-  if (!slot || slot.count <= 0) return { ok: false, code: 'no_item' };
-
-  const defId = slot.defId;
-  const quote = getEconomyQuote(state, defId, quoteOptions(npc, opts));
-  const playerOffer = cloneInventory(getTradeOffer(state));
-  const credit = getTradeCreditSummary(state, npc, defId, opts);
-  const cashDue = credit.cashDue;
-  if ((player.money ?? 0) < cashDue) return { ok: false, code: 'player_no_money', defId, price: cashDue, quote, credit };
-  if (!hasInventoryItems(player.inventory, playerOffer)) {
-    clearTradeOffers(state);
-    return { ok: false, code: 'no_item', defId, price: cashDue, quote, credit: getTradeCreditSummary(state, npc, defId, opts) };
-  }
-
-  const playerAfterOutgoing = cloneInventory(player.inventory);
-  const npcAfterOutgoing = cloneInventory(npc.inventory);
-  if (!removeInventoryItems(playerAfterOutgoing, playerOffer)) {
-    clearTradeOffers(state);
-    return { ok: false, code: 'no_item', defId, price: cashDue, quote, credit: getTradeCreditSummary(state, npc, defId, opts) };
-  }
-  decrementSlot(npcAfterOutgoing, slotIndex);
-  const purchased: Item = { defId, count: 1 };
-  if (slot.data !== undefined) purchased.data = slot.data;
-  if (!canReceiveAll(player, playerAfterOutgoing, [purchased])) {
-    return { ok: false, code: 'player_no_space', defId, price: cashDue, quote, credit };
-  }
-  if (!canReceiveAll(npc, npcAfterOutgoing, playerOffer)) {
-    return { ok: false, code: 'npc_no_space', defId, price: cashDue, quote, credit };
-  }
-
-  if (!player.inventory) player.inventory = [];
-  if (!npc.inventory) npc.inventory = [];
-  removeInventoryItems(player.inventory, playerOffer);
-  decrementSlot(npcInv, slotIndex);
-  addItem(player, defId, 1, slot.data);
-  for (const item of playerOffer) addItem(npc, item.defId, item.count, item.data);
-  reconcileEquippedAfterLoss(player, playerOffer.map(i => i.defId));
-  reconcileEquippedAfterLoss(npc, [defId]);
-  player.money = (player.money ?? 0) - cashDue + credit.changeDue;
-  npc.money = (npc.money ?? 0) + cashDue - credit.changeDue;
-  if (quote.resourceId) changeResourceStock(state, quote.resourceId, -1, stockFloorForTrade(state, opts));
-  applyTradeCreditStockDeltas(state, npc, playerOffer, opts);
-  publishPlayerBuyEvent(state, player, npc, defId, cashDue, quote, opts.zoneId, credit, playerOffer);
-  clearTradeOffers(state);
-  primeTradePriceCache(state, [npc.inventory, player.inventory]);
-  return { ok: true, code: 'bought', defId, price: cashDue, quote, credit };
-}
-
-export function sellToNpc(
-  state: GameState,
-  player: Entity,
-  npc: Entity,
-  slotIndex: number,
-  opts: TradeOptions = {},
-): TradeResult {
-  if (opts.beforeSell?.({ state, player, npc, slotIndex })) return { ok: true, code: 'handoff' };
-
-  const playerInv = player.inventory ?? [];
-  const slot = playerInv[slotIndex];
-  if (!slot || slot.count <= 0) return { ok: false, code: 'no_item' };
-
-  const defId = slot.defId;
-  const quote = getEconomyQuote(state, defId, quoteOptions(npc, opts));
-  const price = quote.sellPrice;
-  if ((npc.money ?? 0) < price) return { ok: false, code: 'npc_no_money', defId, price, quote };
-  if (!addItem(npc, defId, 1, slot.data)) return { ok: false, code: 'npc_no_space', defId, price, quote };
-
-  npc.money = (npc.money ?? 0) - price;
-  player.money = (player.money ?? 0) + price;
-  decrementSlot(playerInv, slotIndex);
-  reconcileEquippedAfterLoss(player, [defId]);
-  if (quote.resourceId) changeResourceStock(state, quote.resourceId, 1, stockFloorForTrade(state, opts));
-  recordPlayerItemSale(state, player, npc, defId, 1, price, opts.zoneId, {
-    tags: ['sell', ...quote.tags],
-    data: {
-      resourceId: quote.resourceId,
-      quoteReason: quote.reason,
-      quoteTags: quote.tags,
-    },
-  });
-  opts.afterSell?.({ state, player, npc, slotIndex, defId, price, quote, zoneId: opts.zoneId });
-  return { ok: true, code: 'sold', defId, price, quote };
 }

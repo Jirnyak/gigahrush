@@ -492,6 +492,19 @@ export function installRailTrainsFromGeneration(
     if (train.passengerId >= 0) interruptedPassengers.push(train);
   }
 
+  /* Вагоны снятых составов — обычные сущности этажа, и держал их только реестр
+   * поездов. Реестр сейчас пересобирается из свежей генерации, поэтому не снятый
+   * вагон остался бы стоять на месте старого пути и копился бы набором на каждую
+   * перестройку. Переиспользуемые (те, кому генерация дала соответствие) живут. */
+  const reusedIds = new Set<number>(generatedIdMap.values());
+  for (const train of world.railTrains) {
+    for (const id of train.entityIds) {
+      if (reusedIds.has(id)) continue;
+      const segment = entityById(entities, id);
+      if (segment && segment.type === EntityType.BILLBOARD) killEntity(segment);
+    }
+  }
+
   world.railTracks = generatedWorld.railTracks.map(cloneRailTrack);
   world.railTrains = [];
   world.railTrainCells.clear();

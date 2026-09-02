@@ -144,3 +144,43 @@ test('rail train rebuild install clears stale train cells and exits interrupted 
   const playerCell = live.world.idx(Math.floor(player.x), Math.floor(player.y));
   assert.equal(live.track.platformCells.includes(playerCell), true);
 });
+
+test('rebuild install retires the segments of the trains it replaced', () => {
+  const live = makeRailWorld();
+  const liveEntities: Entity[] = [];
+  const liveNextId = { v: getPlotNpcCount() + 1 };
+  const oldTrain = addRailTrainRoute(live.world, liveEntities, liveNextId, live.track, {
+    id: 'test_train',
+    label: 'Тестовый состав',
+    speed: 8,
+    length: 5,
+    initialOffset: 10,
+    stopSeconds: 2,
+  });
+  assert.ok(oldTrain);
+  const oldIds = oldTrain.entityIds.slice();
+  assert.equal(oldIds.length, 5);
+
+  const generated = makeRailWorld();
+  const generatedEntities: Entity[] = [];
+  assert.ok(addRailTrainRoute(generated.world, generatedEntities, { v: 100 }, generated.track, {
+    id: 'test_train',
+    label: 'Тестовый состав',
+    speed: 8,
+    length: 5,
+    initialOffset: 10,
+    stopSeconds: 2,
+  }));
+
+  const snapshot = snapshotRailTrainsForRebuild(live.world);
+  installRailTrainsFromGeneration(live.world, liveEntities, liveNextId, generated.world, new Map(), snapshot);
+
+  assert.equal(live.world.railTrains.length, 1);
+  for (const id of oldIds) {
+    assert.equal(liveEntities.find(e => e.id === id)?.alive, false, `stale segment ${id} must be retired`);
+  }
+  for (const id of live.world.railTrains[0].entityIds) {
+    assert.equal(oldIds.includes(id), false);
+    assert.equal(liveEntities.find(e => e.id === id)?.alive, true);
+  }
+});

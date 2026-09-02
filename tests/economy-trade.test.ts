@@ -4,7 +4,12 @@ import { type GameState } from '../src/core/types';
 import { createEconomyFloorState } from '../src/data/economy';
 import { MAX_INVENTORY_SLOTS, MAX_ITEM_STACK } from '../src/data/inventory_limits';
 import { ensureEconomyState, getEconomyQuote, primeTradePriceCache, getAdjustedItemPrice } from '../src/systems/economy';
-import { buyFromNpc, sellToNpc } from '../src/systems/trade';
+import {
+  addTradeAskFromSlot,
+  addTradeOfferFromSlot,
+  executeTradeDeal,
+  getTradeDealSummary,
+} from '../src/systems/trade';
 import { getRecentEvents } from '../src/systems/events';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
@@ -50,7 +55,8 @@ test('buying water from an NPC moves one item, money, event data and floor suppl
   const beforeStock = resourceStock(state, state.currentZ, 'drink_water');
   const quote = getEconomyQuote(state, 'water', { trader: npc });
 
-  const result = buyFromNpc(state, player, npc, 0, { zoneId: 3 });
+  assert.equal(addTradeAskFromSlot(state, npc, 0, { zoneId: 3 }).ok, true);
+  const result = executeTradeDeal(state, player, npc, { zoneId: 3 });
 
   assert.equal(result.ok, true);
   assert.equal(result.price, quote.buyPrice);
@@ -76,10 +82,13 @@ test('selling water to an NPC moves one item, money, event data and floor supply
   const beforeStock = resourceStock(state, state.currentZ, 'drink_water');
   const quote = getEconomyQuote(state, 'water', { trader: npc });
 
-  const result = sellToNpc(state, player, npc, 0, { zoneId: 4 });
+  assert.equal(addTradeOfferFromSlot(state, player, npc, 0, { zoneId: 4 }).ok, true);
+  const summary = getTradeDealSummary(state, npc, { zoneId: 4 });
+  assert.equal(summary.creditValue, quote.sellPrice);
+  assert.equal(summary.changeDue, quote.sellPrice);
+  const result = executeTradeDeal(state, player, npc, { zoneId: 4 });
 
   assert.equal(result.ok, true);
-  assert.equal(result.price, quote.sellPrice);
   assert.equal(player.money, 1 + quote.sellPrice);
   assert.equal(npc.money, 20 - quote.sellPrice);
   assert.equal(player.inventory?.[0]?.count, 1);
@@ -89,7 +98,7 @@ test('selling water to an NPC moves one item, money, event data and floor supply
 
   const event = getRecentEvents(state, { limit: 1 })[0];
   assert.equal(event.itemId, 'water');
-  assert.equal(event.data?.price, quote.sellPrice);
+  assert.equal(event.data?.creditValue, quote.sellPrice);
   assert.equal(event.data?.direction, 'player_to_npc');
   assert.equal(event.tags.includes('sell'), true);
 });
@@ -101,7 +110,8 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
   const waterSeller = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'water', count: 1 }], money: 7 });
   const stockBeforeBuy = resourceStock(noMoneyState, 0, 'drink_water');
 
-  const buyResult = buyFromNpc(noMoneyState, poorPlayer, waterSeller, 0);
+  assert.equal(addTradeAskFromSlot(noMoneyState, waterSeller, 0).ok, true);
+  const buyResult = executeTradeDeal(noMoneyState, poorPlayer, waterSeller);
 
   assert.equal(buyResult.ok, false);
   assert.equal(buyResult.code, 'player_no_money');
@@ -122,7 +132,8 @@ test('failed trades do not mutate money, inventories or resource stock', () => {
   });
   const stockBeforeSell = resourceStock(noSpaceState, 0, 'drink_water');
 
-  const sellResult = sellToNpc(noSpaceState, seller, fullNpc, 0);
+  assert.equal(addTradeOfferFromSlot(noSpaceState, seller, fullNpc, 0).ok, true);
+  const sellResult = executeTradeDeal(noSpaceState, seller, fullNpc);
 
   assert.equal(sellResult.ok, false);
   assert.equal(sellResult.code, 'npc_no_space');

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEconomyFloorState } from '../src/data/economy';
 import { ensureEconomyState } from '../src/systems/economy';
-import { buyFromNpc, sellToNpc } from '../src/systems/trade';
+import { addTradeAskFromSlot, addTradeOfferFromSlot, executeTradeDeal } from '../src/systems/trade';
 import { reconcileEquippedAfterLoss } from '../src/systems/inventory';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 import { type GameState } from '../src/core/types';
@@ -19,7 +19,8 @@ test('selling the equipped weapon to a vendor unequips it (no phantom weapon)', 
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'knife', count: 1 }], weapon: 'knife', money: 0 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', money: 500 });
 
-  const result = sellToNpc(state, player, npc, 0);
+  assert.equal(addTradeOfferFromSlot(state, player, npc, 0).ok, true);
+  const result = executeTradeDeal(state, player, npc);
 
   assert.equal(result.ok, true);
   assert.equal(player.weapon, '');
@@ -31,7 +32,8 @@ test('selling one of a stack keeps the weapon equipped', () => {
   const player = makeTestPlayer({ id: 1, inventory: [{ defId: 'knife', count: 2 }], weapon: 'knife', money: 0 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', money: 500 });
 
-  const result = sellToNpc(state, player, npc, 0);
+  assert.equal(addTradeOfferFromSlot(state, player, npc, 0).ok, true);
+  const result = executeTradeDeal(state, player, npc);
 
   assert.equal(result.ok, true);
   assert.equal(player.weapon, 'knife');
@@ -46,7 +48,8 @@ test('selling equipped armor unequips it', () => {
   // тест падал на бедности покупателя, а проверял снятие надетого.
   const npc = makeTestNpc({ id: 2, name: 'Торговец', money: ITEMS.armor_light.value });
 
-  const result = sellToNpc(state, player, npc, 0);
+  assert.equal(addTradeOfferFromSlot(state, player, npc, 0).ok, true);
+  const result = executeTradeDeal(state, player, npc);
 
   assert.equal(result.ok, true);
   assert.equal(player.armorDefId, undefined);
@@ -58,7 +61,8 @@ test('buying the vendor equipped weapon unequips the vendor side', () => {
   const player = makeTestPlayer({ id: 1, money: 500 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'knife', count: 1 }], weapon: 'knife', money: 0 });
 
-  const result = buyFromNpc(state, player, npc, 0);
+  assert.equal(addTradeAskFromSlot(state, npc, 0).ok, true);
+  const result = executeTradeDeal(state, player, npc);
 
   assert.equal(result.ok, true);
   assert.equal(npc.weapon, '');
@@ -70,7 +74,8 @@ test('template NPC loadout weapon without an inventory slot survives unrelated t
   const player = makeTestPlayer({ id: 1, money: 500 });
   const npc = makeTestNpc({ id: 2, name: 'Торговец', inventory: [{ defId: 'water', count: 1 }], weapon: 'pipe', money: 0 });
 
-  const result = buyFromNpc(state, player, npc, 0);
+  assert.equal(addTradeAskFromSlot(state, npc, 0).ok, true);
+  const result = executeTradeDeal(state, player, npc);
 
   assert.equal(result.ok, true);
   assert.equal(npc.weapon, 'pipe');
