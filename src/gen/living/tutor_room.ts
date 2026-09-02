@@ -51,6 +51,17 @@ const STARTER_LOCKER_LOOT: readonly Item[] = [
   { defId: 'water', count: 1 },
   { defId: 'bread', count: 1 },
   { defId: 'bandage', count: 1 },
+  // Полный набор настольных игр (решение владельца 2026-09-02): у каждого
+  // нового жильца под рукой предметы всех кооп-столов — иначе партию
+  // игрок-игроку не собрать, пока набор не выпадет из мира.
+  { defId: 'card_deck', count: 1 },
+  { defId: 'chess_set', count: 1 },
+  { defId: 'checkers_board', count: 1 },
+  { defId: 'backgammon_set', count: 1 },
+  { defId: 'domino_box', count: 1 },
+  { defId: 'go_set', count: 1 },
+  { defId: 'dice_bone', count: 1 },
+  { defId: 'battleship_pad', count: 1 },
 ];
 
 function nextContainerId(world: World): number {
@@ -76,7 +87,7 @@ function addStarterLocker(world: World, room: Room, x: number, y: number): World
     kind: ContainerKind.EMERGENCY_BOX,
     name: 'Учебный шкафчик вылазки',
     inventory: starterLockerLoot(),
-    capacitySlots: 6,
+    capacitySlots: STARTER_LOCKER_LOOT.length + 1,
     access: 'public',
     discovered: true,
     tags: ['tutorial', 'starter', 'public', 'low_level_loot'],

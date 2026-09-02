@@ -167,8 +167,11 @@ export function proposeCoopSession(
   if (invite && invite.expiresAt > time) return { ok: false, reason: 'Другое приглашение еще ждет ответа.' };
   if (!from.alive || !to.alive) return { ok: false, reason: 'Играть не с кем.' };
   if (from.id === to.id) return { ok: false, reason: 'Сам с собой не сыграешь.' };
+  // Нулевая ставка легальна: ОБМЕН объявляет `stake: () => 0` замыслом
+  // («деньги не в игре»), а нищие соседи вправе сыграть партию просто так —
+  // интерфейс стола рисует оба случая. Отказ `stake <= 0` здесь молча хоронил
+  // бартер целиком: «обмен» не открывался никогда.
   const stake = coopStakeBetween(def, from, to);
-  if (stake <= 0) return { ok: false, reason: 'Ставку не покрыть.' };
   invite = {
     activityId,
     fromId: from.id,

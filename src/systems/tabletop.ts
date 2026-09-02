@@ -19,7 +19,7 @@
  */
 
 import type { Entity, GameState } from '../core/types';
-import { registerCoopActivity, type CoopSeat } from './coop_session';
+import { isCoopSeated, registerCoopActivity, type CoopSeat } from './coop_session';
 
 /** Superset of the keystrokes any table reads. A game ignores what it does not
  *  use; go and checkers are the ones that need the vertical pair. */
@@ -138,5 +138,12 @@ export function openTabletopGameFor(npcId: number): TabletopGameDef | undefined 
   const def = openTabletopGame();
   if (!def) return undefined;
   const snapshot = def.snapshot();
-  return snapshot.open && snapshot.npcId === npcId ? def : undefined;
+  if (!snapshot.open) return undefined;
+  /* За кооп-столом `snapshot.npcId` — хостовый id кресла 'npc', а меню открыто
+   * на ОППОНЕНТЕ. У принявшего приглашение это разные номера (его собственное
+   * кресло и есть 'npc'), и сверка прятала доску, оставляя текст-заглушку.
+   * Сидящий за столом оппонент — достаточное доказательство, что открытая
+   * партия наша; точная сверка номеров остаётся для игр против NPC. */
+  if (isCoopSeated(npcId)) return def;
+  return snapshot.npcId === npcId ? def : undefined;
 }

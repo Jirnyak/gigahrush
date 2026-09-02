@@ -790,6 +790,10 @@ const _peerVisitEnded = new Set<number>();         // host: slots whose visit al
 const PEER_REMOTE_CONTAINER_ID = -777001;
 const ONLINE_PLAYER_SPRITE_SCALE = 0.65;
 let _peerRemoteContainerCell: { x: number; y: number } | null = null;
+// Копия хранится и здесь: `containerById` — производная карта, и любой
+// `rebuildContainerMap()` (прунинг, ститчи) её чистит. Меню закрывалось «само»,
+// когда копия исчезала; теперь кадр пира возвращает её на место.
+let _peerRemoteContainerCopy: WorldContainer | null = null;
 
 /* Локальный id игрока-пира — ЗАРЕЗЕРВИРОВАН далеко за пределами хостового
  * пространства id. Общая последовательность продолжает расти на хосте, поэтому
@@ -1629,14 +1633,19 @@ function onOnlinePeerIntent(msgData: any): void {
         const container = resolvePeerContainerAtCell(world, state.currentZ, intent.cx, intent.cy);
         if (container) {
           const cSlot = Math.max(0, Math.floor(intent.slot ?? 0));
+          let opOk = true;
           if (intent.op === 'take') {
-            takeFromContainer(container, actor, cSlot, 1, { state, world, entities });
+            opOk = takeFromContainer(container, actor, cSlot, 1, { state, world, entities });
           } else if (intent.op === 'put') {
-            putIntoContainer(container, actor, cSlot, 1, { state, world, entities });
+            opOk = putIntoContainer(container, actor, cSlot, 1, { state, world, entities });
           }
+          netlog('host: container', intent.op, 'слот', cSlot, 'от пира', slot, '→', container.name, container.id,
+            opOk ? 'ок' : 'ОТКАЗ', 'осталось', container.inventory.length);
           hostSetOpenContainer(slot, { cx: container.x, cy: container.y });
           // fresh contents ride the next host_state container push; inventory
           // reconciles via actor_echo — no extra targeted messages needed
+        } else {
+          netlog('host: container', intent.op, 'от пира', slot, '— контейнер НЕ НАЙДЕН в', intent.cx, intent.cy);
         }
       }
     }
@@ -1657,6 +1666,7 @@ function onOnlineFloorSnapshotBegin(msgData: any): void {
   if (state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
     world.containerById.delete(PEER_REMOTE_CONTAINER_ID);
     _peerRemoteContainerCell = null;
+    _peerRemoteContainerCopy = null;
     state.showContainerMenu = false;
     state.containerMenuTarget = -1;
     syncPauseState();
@@ -1854,6 +1864,8 @@ function onOnlineHostState(msgData: any): void {
     const copy = buildRemoteContainer(world, containerPayload, PEER_REMOTE_CONTAINER_ID);
     world.containerById.set(PEER_REMOTE_CONTAINER_ID, copy);
     _peerRemoteContainerCell = { x: copy.x, y: copy.y };
+    _peerRemoteContainerCopy = copy;
+    netlog('peer: контейнер обновлён хостом,', copy.inventory.length, 'слотов');
   }
 
   // 6b. Live update for the NPC menu the peer is viewing (trade stock/money)
@@ -1886,6 +1898,8 @@ function onOnlineContainerOpen(msgData: any): void {
     state.containerCursorY = 0;
     state.containerSide = 'container';
     _peerRemoteContainerCell = { x: copy.x, y: copy.y };
+    _peerRemoteContainerCopy = copy;
+    netlog('peer: container_open', copy.name, `(${copy.x},${copy.y})`, copy.inventory.length, 'слотов');
     syncPauseState();
   }
 }
@@ -6711,6 +6725,7 @@ function closeContainerMenu(): void {
   // (symmetric with the inventory-copy model — both sides drop the copy).
   if (isOnlinePeer() && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID) {
     world.containerById.delete(PEER_REMOTE_CONTAINER_ID);
+    _peerRemoteContainerCopy = null;
     if (_peerRemoteContainerCell) {
       sendPeerIntent({ kind: 'container', op: 'close', cx: _peerRemoteContainerCell.x, cy: _peerRemoteContainerCell.y });
       _peerRemoteContainerCell = null;
@@ -10002,6 +10017,14 @@ function gameLoop(now: number): void {
           state.msgs.push(msg('Хост отошёл: мир замер, ждём его возвращения.', state.time, '#f84'));
         }
       }
+      // Копия удалённого ящика живёт только в производной карте containerById —
+      // вернуть её, если карту пересобрали, пока меню открыто (иначе меню
+      // закрывается «само» на первом же чтении).
+      if (state.showContainerMenu && state.containerMenuTarget === PEER_REMOTE_CONTAINER_ID
+        && _peerRemoteContainerCopy && !world.containerById.has(PEER_REMOTE_CONTAINER_ID)) {
+        world.containerById.set(PEER_REMOTE_CONTAINER_ID, _peerRemoteContainerCopy);
+        netlog('peer: копия ящика была стёрта пересборкой карты — восстановлена');
+      }
       const peerMenuOpen = state.showContainerMenu || state.showInventory || state.showNpcMenu
         || state.showCraftMenu || state.showMenu;
       maybeSendPeerMove({
@@ -10009,13 +10032,15 @@ function gameLoop(now: number): void {
         angle: player.angle, pitch: player.pitch ?? 0,
       });
       // Interact stays reliable/immediate because it opens host-owned doors,
-      // pickups, containers and the evacuation lift.
-      if (input.interact) {
+      // pickups, containers and the evacuation lift. При открытом меню клавишу
+      // НЕ трогаем: она принадлежит самому меню (E-взять в ящике), а этот блок
+      // съедал её фронт раньше, чем handleMenuInput успевал его увидеть.
+      if (input.interact && !peerMenuOpen) {
         // Another human is not a host-owned fixture: the menu is a local
         // proposal screen, so it opens here rather than round-tripping.
-        const facedPlayer = peerMenuOpen ? null : facedNetworkedPlayer();
+        const facedPlayer = facedNetworkedPlayer();
         if (facedPlayer) openNpcMenu(facedPlayer);
-        else if (!peerMenuOpen) sendPeerIntent({ kind: 'interact' });
+        else sendPeerIntent({ kind: 'interact' });
         input.interact = false;
       }
     }

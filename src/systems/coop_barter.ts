@@ -235,6 +235,8 @@ function settleBarter(t: BarterTable, state: GameState, player: Entity, npc: Ent
 export interface CoopBarterInput {
   leftNav?: boolean;
   rightNav?: boolean;
+  /** Подтверждение сделки («ударили по рукам»). Повторное нажатие снимает. */
+  upNav?: boolean;
   interactEdge?: boolean;
   dropEdge?: boolean;
   escEdge?: boolean;
@@ -302,8 +304,16 @@ export function handleCoopBarterInput(ctx: {
     return { handled: true };
   }
 
+  // Подтверждение живёт на двух проводах: клавиша ↑ (единственный путь с
+  // клавиатуры — payload-флаг ни одна кнопка не слала, и сделку было нечем
+  // закрыть) и старый payload `confirm` для совместимости.
   const payload = ctx.payload as { confirm?: boolean } | undefined;
-  if (payload?.confirm === true) {
+  if (ctx.input.upNav || payload?.confirm === true) {
+    if (me.confirmed) {
+      me.confirmed = false;
+      appendLog(t, `${seatName(t, seat)} снимает подтверждение.`);
+      return { handled: true };
+    }
     me.confirmed = true;
     appendLog(t, `${seatName(t, seat)} подтверждает обмен.`);
     if (t.player.confirmed && t.npc.confirmed) {

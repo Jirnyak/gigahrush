@@ -7,6 +7,8 @@ import { FACTION_NAMES, OCCUPATION_NAMES } from '../data/relations';
 import { controlBindingLabel, controlHint, menuCloseHint } from '../systems/controls';
 import { openTabletopGameFor } from '../systems/tabletop';
 import { tabletopPanel } from './tabletop_ui';
+import { getCoopBarterSnapshot, isCoopBarterOpen } from '../systems/coop_barter';
+import { drawBarterInterface } from './barter_ui';
 import {
   getNpcInteractionInterfaceSnapshot,
   getNpcMenuOptions,
@@ -171,6 +173,10 @@ export function drawNpcMenu(
     const drawPanel = table ? tabletopPanel(table.id) : undefined;
     if (table && drawPanel) {
       drawPanel(ctx, table.snapshot() as never, px, py, pw, ph, sx, sy, time);
+      return;
+    }
+    if (isCoopBarterOpen()) {
+      drawBarterInterface(ctx, getCoopBarterSnapshot(), px, py, pw, ph, sx, sy, time);
       return;
     }
     const snapshot = getNpcInteractionInterfaceSnapshot();

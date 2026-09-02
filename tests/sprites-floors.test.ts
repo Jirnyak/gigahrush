@@ -476,7 +476,11 @@ testGenerationMatrix('living start tutorial hall exposes a public low-level loot
   const locker = generated.world.containers.find(container => container.name === 'Учебный шкафчик вылазки');
   assert.ok(locker, 'tutorial hall should contain a starter locker');
   const idx = generated.world.idx(locker.x, locker.y);
-  const expectedIds = ['water', 'bread', 'bandage'];
+  const expectedIds = [
+    'water', 'bread', 'bandage',
+    'card_deck', 'chess_set', 'checkers_board', 'backgammon_set',
+    'domino_box', 'go_set', 'dice_bone', 'battleship_pad',
+  ];
   const actualIds = locker.inventory.map(item => item.defId);
 
   assert.equal(locker.kind, ContainerKind.EMERGENCY_BOX);
