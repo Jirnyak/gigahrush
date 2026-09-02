@@ -1,3 +1,4 @@
+import { clamp } from '../core/math';
 import { } from '../core/types';
 import { RESOURCES } from './resources';
 
@@ -59,9 +60,6 @@ export function createEconomyRouteState(routeId: string): EconomyRouteState {
   };
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 function finiteOr(value: number | undefined, fallback: number): number {
   return value !== undefined && Number.isFinite(value) ? value : fallback;

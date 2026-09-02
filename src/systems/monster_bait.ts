@@ -1,5 +1,6 @@
 /* ── Bounded food/govnyak bait markers for small monsters ─────── */
 
+import { clamp } from '../core/math';
 import {
   EntityType,
   ItemType,
@@ -119,9 +120,6 @@ export function isMonsterBaitUseItem(defId: string): boolean {
   return baitKindForItem(defId, 'use') !== null;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 function addUnique(tags: string[], tag: string): void {
   if (tag.length > 0 && !tags.includes(tag)) tags.push(tag);

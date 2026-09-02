@@ -1,3 +1,4 @@
+import { clamp } from '../core/math';
 import {
   AIGoal,
   Cell,
@@ -107,9 +108,6 @@ export interface CaravanState {
 type CaravanGameState = GameState & { caravans?: CaravanState };
 const normalizedStates = new WeakMap<GameState, CaravanState>();
 
-function clamp(value: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, value));
-}
 
 function laneInterval(def: CaravanLaneDef): number {
   let hash = 0;

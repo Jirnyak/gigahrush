@@ -1,30 +1,7 @@
 /* ── Bounded module-level NPC memory store ────────────────────── */
 
-import { Faction, MonsterKind, type Entity } from '../core/types';
-
-
-
-export interface NpcMemoryEventLike {
-  id?: number;
-  type?: string;
-  time?: number;
-  z?: number;
-  zoneId?: number;
-  roomId?: number;
-  severity?: number;
-  privacy?: string;
-  tags?: readonly string[];
-  actorId?: number;
-  actorName?: string;
-  actorFaction?: Faction;
-  targetId?: number;
-  targetName?: string;
-  targetFaction?: Faction;
-  itemId?: string;
-  itemName?: string;
-  monsterKind?: MonsterKind;
-  data?: Record<string, unknown>;
-}
+import { clamp } from '../core/math';
+import { MonsterKind, type Entity } from '../core/types';
 
 export interface NpcMemory {
   entityId: number;
@@ -148,8 +125,6 @@ export function notePlayerTheftAudited(npc: Entity, now: number, amount = 1): vo
   applyPlayerTheftAudited(memory, amount);
 }
 
-
-
 export function rememberRumor(npc: Entity, rumorId: string, now: number): boolean {
   return storeRumor(npc, rumorId, now, true);
 }
@@ -240,26 +215,3 @@ function applyPlayerTheftAudited(memory: NpcMemory, amount: number): void {
   memory.fear = clamp(memory.fear + 5 * amount, 0, 100);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v));
-}

@@ -1,3 +1,4 @@
+import { clamp } from '../core/math';
 import { INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS } from '../data/inventory_limits';
 import { TRADE_OFFER_SLOT_CAP } from '../systems/trade';
 
@@ -6,9 +7,6 @@ const GRID_ROWS = INVENTORY_GRID_ROWS;
 const GRID_CELL_UNITS = 22;
 
 
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v));
-}
 
 /** Uniform scale of the canvas menu layer. Draw and hit-test must use the same
  *  clamp: main.ts used to clamp to [0.8, 2] while the panels were painted with

@@ -9,11 +9,13 @@ import {
 } from '../core/types';
 import { damageActorByEnvironment } from './actor_damage';
 import { World } from '../core/world';
+import { DESIGN_FLOOR_DEFAULT_DANGER, designFloorAtZ } from '../data/design_floors';
 import { getNetHackTerminalDef, NET_HACK_TERMINALS, type NetHackTerminalDef, type NetHackTerminalDefId } from '../data/net_hack';
 import { publishEvent } from './events';
 import { floorKeyForDesign  } from './floor_keys';
 import { currentFloorRunEntry, floorRunEntryFloorKey } from './procedural_floors';
 import { rng } from '../core/rand';
+import { clamp } from '../core/math';
 
 export interface NetHackTerminal {
   idx: number;
@@ -69,10 +71,6 @@ const runtime = {
   message: '',
 };
 
-function clamp(min: number, max: number, value: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
 function cleanMoney(actor: Entity): number {
   const money = actor.money ?? 0;
   return Number.isFinite(money) ? Math.max(0, Math.floor(money)) : 0;
@@ -117,10 +115,20 @@ function terminalRandom(def: NetHackTerminalDef, terminal: NetHackTerminal): num
   return (terminal.seed >>> 0) % (def.randomDifficultyMax + 1);
 }
 
+/* Сложность взлома берёт опасность этажа, объявленную автором в маршруте, —
+   ту же, что считает население A-Life. Второй шкалы не заводим.
+
+   Стояло `state.currentZ * 2` со ЗНАКОВЫМ z, и это делало навык бесполезным
+   по всей башне: ниже z≈−10 слагаемое уносило сложность так далеко в минус,
+   что шанс упирался в потолок 0.92, а выше z≈+10 — в пол 0.08. Взламывал не
+   тот, кто вложился в netHackSkill, а тот, кто спустился ниже. Авторская
+   опасность лежит в 1..5 и соразмерна уровню зоны, с которым складывается,
+   поэтому навык снова решает. */
 function floorDanger(world: World, state: GameState, terminal: NetHackTerminal): number {
   const zone = world.zones[world.zoneMap[terminal.idx]];
   const zoneDanger = zone?.level ?? 1;
-  return zoneDanger + state.currentZ * 2 + (state.samosborActive ? 3 : 0);
+  const floorAuthoredDanger = designFloorAtZ(state.currentZ)?.danger ?? DESIGN_FLOOR_DEFAULT_DANGER;
+  return zoneDanger + floorAuthoredDanger * 2 + (state.samosborActive ? 3 : 0);
 }
 
 function currentTerminal(): NetHackTerminal | undefined {
@@ -138,7 +146,7 @@ export function netHackSkill(level: number, int: number): number {
 export function netHackChance(input: NetHackChanceInput): number {
   const difficulty = netHackDifficultyTotal(input);
   const skill = netHackSkill(input.level, input.int);
-  return clamp(0.08, 0.92, 0.45 + (skill - difficulty) * 0.035);
+  return clamp(0.45 + (skill - difficulty) * 0.035, 0.08, 0.92);
 }
 
 export function clearNetHackTerminals(): void {

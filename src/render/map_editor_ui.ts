@@ -1,3 +1,4 @@
+import { clamp } from '../core/math';
 import {
   Cell, DoorState, EntityType, Feature, LiftDirection, RoomType, W,
   type Entity,
@@ -441,9 +442,6 @@ function finiteNumber(value: number | undefined, fallback: number): number {
   return value !== undefined && Number.isFinite(value) ? value : fallback;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 function drawMapTiles(
   ctx: CanvasRenderingContext2D,

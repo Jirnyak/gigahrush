@@ -1,4 +1,5 @@
 import { getPlotNpcNumericId, getPlotNpcStringId } from '../data/npc_packages';
+import { hashSeed } from '../core/rand';
 import { openArena } from './arena';
 import { EntityType, NpcState, AIGoal, msg, type Entity, type GameState, type AIState } from '../core/types';
 import { craftRecipeSourcesForNpc, type CraftRecipeSourceDef } from '../data/craft_recipe_sources';
@@ -214,12 +215,6 @@ function openDesignFloorInteraction(option: DesignFloorNpcInteractionProfile, ct
   });
 }
 
-function hashString32(value: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < value.length; i++) h = Math.imul(h ^ value.charCodeAt(i), 16777619);
-  return h >>> 0;
-}
-
 function npcRecipeLessonKey(npc: Entity): string {
   return [
     npc.persistentNpcId ?? '',
@@ -238,7 +233,7 @@ function npcRecipeLesson(ctx: NpcInteractionContext): NpcRecipeLesson | undefine
     for (const recipeId of source.recipeIds) choices.push({ source, recipeId });
   }
   if (choices.length === 0) return undefined;
-  const lesson = choices[hashString32(npcRecipeLessonKey(ctx.npc)) % choices.length];
+  const lesson = choices[hashSeed(npcRecipeLessonKey(ctx.npc)) % choices.length];
   return lesson && !isCraftRecipeKnown(ctx.state, lesson.recipeId) ? lesson : undefined;
 }
 
@@ -380,10 +375,6 @@ export function closeNpcInteractionInterface(state?: GameState): void {
   runtime.stakeRubles = undefined;
   runtime.message = '';
   if (state?.npcMenuTab === NPC_MENU_INTERFACE_TAB) state.npcMenuTab = 'main';
-}
-
-export function isNpcInteractionInterfaceOpen(): boolean {
-  return runtime.open;
 }
 
 export function getNpcInteractionInterfaceSnapshot(): NpcInteractionInterfaceSnapshot {

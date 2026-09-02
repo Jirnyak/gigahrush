@@ -4,6 +4,7 @@ import { ItemType, type ItemDef } from '../core/types';
 import { ITEMS, ITEM_TAGS } from '../data/items';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
 import { fitTextStable } from './ui_text';
+import { hashSeed } from '../core/rand';
 
 export type ItemSpriteData = Uint32Array;
 
@@ -40,15 +41,6 @@ function trimItemIconCanvasCache(): void {
     ICON_CANVAS_CACHE.delete(key);
     if (ICON_CANVAS_CACHE.size <= ICON_CANVAS_CACHE_TARGET) break;
   }
-}
-
-function hashString(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
 }
 
 function tagSet(defId: string, def: ItemDef | undefined): readonly string[] {
@@ -15545,7 +15537,7 @@ export function itemDropDefId(e: { inventory?: readonly { defId: string; count: 
 
 export function generateItemSprite(defId: string, def: ItemDef | undefined = ITEMS[defId]): ItemSpriteData {
   const t = new Uint32Array(S * S).fill(CLEAR);
-  const seed = hashString(defId);
+  const seed = hashSeed(defId);
   const kind = itemVisualKind(defId, def);
   const palette = paletteFor(kind, seed, defId);
   drawDropShadow(t);

@@ -1,5 +1,6 @@
 import { EntityType, Faction, MonsterKind, Occupation, type Entity } from '../core/types';
 import { S, rgba, noise, clamp, CLEAR } from '../core/pixutil';
+import { hashSeed } from '../core/rand';
 import { MONSTER_SPRITES } from './monster';
 import { generateIdolSprite } from './idol';
 import { generateBashnyaSprite } from './bashnya';
@@ -56,15 +57,6 @@ function mix32(v: number): number {
   v = Math.imul(v, 0x846ca68b) >>> 0;
   v ^= v >>> 16;
   return v >>> 0;
-}
-
-function hashText(text: string, seed: number): number {
-  let h = (0x811c9dc5 ^ seed) >>> 0;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h >>> 0;
 }
 
 function rnd(seed: number, salt: number): number {
@@ -670,8 +662,8 @@ function deriveEntitySpriteSeed(e: Entity): number {
   let h = e.spriteSeed ?? 0;
   if (h === 0) {
     h = mix32(e.id ^ Math.imul(Math.floor(e.x * 16), 0x45d9f3b) ^ Math.imul(Math.floor(e.y * 16), 0x119de1f3));
-    if (e.name) h = hashText(e.name, h);
-    if (e.id) h = hashText(String(e.id), h);
+    if (e.name) h = hashSeed(e.name, h);
+    if (e.id) h = hashSeed(String(e.id), h);
   }
   return h || 1;
 }
@@ -705,7 +697,7 @@ export function proceduralEntitySpriteKey(e: Entity): number {
       age: e.age,
       sprite: e.sprite,
     });
-    if (key) return hashText(`npc_visual:${key}`, 0x6a09e667) || 1;
+    if (key) return hashSeed(`npc_visual:${key}`, 0x6a09e667) || 1;
   }
   if (e.monsterKind === MonsterKind.PROTOKOLNIK) h = mix32(h ^ Math.imul((e.protocolPressureTier ?? 0) + 1, 0x6d2b79f5));
   if (e.monsterKind === MonsterKind.ZAKALENNAYA_ARMATURA) h = mix32(h ^ Math.imul((e.monsterArmorStacks ?? ZAK_ARMOR_MAX_STACKS) + 1, 0x7feb352d));
@@ -713,7 +705,7 @@ export function proceduralEntitySpriteKey(e: Entity): number {
   if (e.monsterKind === MonsterKind.BLACK_LIQUIDATOR) h = mix32(h ^ Math.imul((e.monsterStage ?? 0) + 1, 0x2545f491));
   h = mix32(h ^ Math.imul(e.type, 0x9e3779b1) ^ Math.imul(kind + 1, 0x85ebca6b) ^ Math.imul(occ + 1, 0xc2b2ae35));
   h = mix32(h ^ Math.imul((e.sprite ?? 0) + 1, 0x165667b1));
-  if (e.npcVisualId) h = hashText(e.npcVisualId, h);
+  if (e.npcVisualId) h = hashSeed(e.npcVisualId, h);
   if (e.isFemale) h = mix32(h ^ 0x51ed270b);
   if (e.faction !== undefined) h = mix32(h ^ Math.imul(e.faction + 1, 0x27d4eb2d));
   return h || 1;

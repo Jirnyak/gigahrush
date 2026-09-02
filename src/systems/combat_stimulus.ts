@@ -1,3 +1,4 @@
+import { clamp } from '../core/math';
 import {
   AIGoal,
   EntityType,
@@ -93,9 +94,6 @@ let killedEventTargets = new WeakSet<Entity>();
  * (`systems/npc_feud.ts`, `systems/arena.ts`), и он же снимает замок. */
 let duelLocked = new WeakSet<Entity>();
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 function eventLocation(world: World, entity: Entity): { zoneId: number; roomId?: number } {
   const cell = world.idx(Math.floor(entity.x), Math.floor(entity.y));

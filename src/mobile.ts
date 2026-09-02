@@ -1,3 +1,4 @@
+import { clamp } from './core/math';
 import { JOYSTICK_CONFIG, triggerHapticFeedback } from './input';
 import { type InputState } from './core/types';
 import {
@@ -50,9 +51,6 @@ function mobileInteractLabel(): string {
   return mobileText({ ru: 'ДЕЙСТ', en: 'ACT' });
 }
 
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v));
-}
 
 export function shouldUseTouchControls(): boolean {
   const ua = navigator.userAgent;
