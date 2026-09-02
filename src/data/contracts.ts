@@ -1337,7 +1337,10 @@ export const CONTRACTS: ContractDef[] = [
     id: 'ministry_registry_tag_return', title: 'Номерок к живому ящику', issuer: 'Морг регистраций',
     faction: Faction.CITIZEN, rank: 2, type: QuestType.FETCH,
     desc: 'Морг регистраций: вернуть номерок из холодной камеры. Без номера живого закрывают бумагой быстрее, чем тележкой.',
-    target: { z: 30, roomType: RoomType.MEDICAL, roomDefId: 'Морг регистраций', zoneTag: 'morgue', hint: 'Министерство: холодная камера, бирочная и зараженная камера сверки; не подходите к тому, кто сам знает номер ящика.' },
+    /* «Морг регистраций» — имя ЭТАЖА (z=18), а не комнаты, и на министерстве
+     * морга нет вовсе. Цель ведёт в ту самую камеру сверки, которую называет
+     * подсказка, — она штампуется `gen/registry_morgue/geometry.ts`. */
+    target: { z: 18, roomType: RoomType.MEDICAL, roomDefId: 'Зараженная камера сверки', zoneTag: 'morgue', hint: 'Морг регистраций: холодная камера, бирочная и зараженная камера сверки; не подходите к тому, кто сам знает номер ящика.' },
     targetItem: 'corpse_number_tag', targetCount: 1, rewardItem: 'official_quarantine_clearance', rewardCount: 1,
     moneyReward: 125, rewardResourceId: 'medicine', rewardScarcityMax: 2.2,
     xpReward: 75, relationDelta: 10, tags: ['ministry', 'registry_morgue', 'fetch', 'identity', 'documents', 'harm'],
@@ -1663,7 +1666,10 @@ export const CONTRACTS: ContractDef[] = [
     id: 'transport_depot_white_lamp', title: 'Белая лампа депо', issuer: 'Машинист обратной петли',
     faction: Faction.CITIZEN, rank: 2, type: QuestType.VISIT,
     desc: 'Осмотреть депо без рельсов и подтвердить, что белая лампа еще ведет назад. Если стрелка желтая, не трать предохранитель до отхода.',
-    target: { z: -26, roomType: RoomType.CORRIDOR, roomDefId: METRO_DEPOT_ROOM_DEF_ID, zoneTag: 'metro_depot', hint: 'Коллекторы: депо без рельсов, белая служебная петля и шкаф предохранителей.' },
+    /* Депо — не переход, а работа: станок, аппарат, стол и шкаф предохранителей
+     * (`gen/maintenance/error_line.ts`). Коридором здесь стоит платформа 19, и
+     * `CORRIDOR` приехал сюда копией из её двух контрактов выше. */
+    target: { z: -26, roomType: RoomType.PRODUCTION, roomDefId: METRO_DEPOT_ROOM_DEF_ID, zoneTag: 'metro_depot', hint: 'Коллекторы: депо без рельсов, белая служебная петля и шкаф предохранителей.' },
     rewardItem: 'fuse', rewardCount: 1, extraRewards: [{ defId: 'metro_ticket', count: 1 }],
     moneyReward: 130, rewardResourceId: 'tools', rewardScarcityMax: 2.2,
     xpReward: 70, relationDelta: 10, tags: ['transport', 'metro', 'inspect', 'safe_return', 'depot'],

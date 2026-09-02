@@ -27,6 +27,12 @@ export const SLIME_NII_TOUR_SCENE_ID = 'slime_nii_institute_tour' as const;
 /** Комната-якорь: верхний санитарный шлюз, он же место высадки игрока. */
 export const SLIME_NII_ENTRY_ANCHOR = 'slime_nii_entry_lock' as const;
 export const SLIME_NII_GALLERY_ANCHOR = 'slime_nii_west_gallery' as const;
+/* Чистая лаборатория зелёной пробы — дом Олевии Кибер. Псевдонимы комнат НИИ
+ * живут здесь все вместе: файл — лист графа импортов, и на него одинаково
+ * смотрят и `index.ts`, который роет комнаты, и `olevia.ts`, который на них
+ * ссылается. Обе стороны обязаны читать одну строку, иначе анкета снова
+ * объявит дом, которого нет. */
+export const SLIME_NII_CLEAN_LAB_ANCHOR = 'slime_nii_clean_lab' as const;
 
 const SLIME_NII_FLOOR_KEY = designNpcFloorKey('slime_nii');
 

@@ -110,6 +110,7 @@ import { lightSlimeNii } from './lighting';
 import {
   GALLERY_W,
   GALLERY_X,
+  SLIME_NII_CLEAN_LAB_ANCHOR,
   SLIME_NII_ENTRY_ANCHOR,
   SLIME_NII_GALLERY_ANCHOR,
 } from './tour_scene';
@@ -953,6 +954,12 @@ function buildRooms(world: World): SlimeNiiRooms {
     type: entry.type,
     name: entry.name,
     tags: ['slime_nii', 'tour', 'entry'],
+  });
+  // Дом Олевии Кибер: её анкета ссылается на этот же псевдоним.
+  applyNamedRoom(cleanLab, SLIME_NII_CLEAN_LAB_ANCHOR, {
+    type: cleanLab.type,
+    name: cleanLab.name,
+    tags: ['slime_nii', 'lab', 'clean'],
   });
   return { entry, atrium, checkpoint, admin, secretary, cleanLab, coldStorage, drainWard, volunteerWard, liquidatorPost, lowerLift, bypass, cameras, gallery };
 }

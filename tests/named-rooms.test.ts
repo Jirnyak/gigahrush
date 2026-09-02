@@ -5,7 +5,7 @@ import '../src/content';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
 import { LIVING_NAMED_ROOMS } from '../src/gen/living/rooms';
 import { findNamedRoom, missingNamedRooms } from '../src/gen/named_rooms';
-import { getNpcPackage } from '../src/data/npc_packages';
+import { allNpcPackages, getNpcPackage } from '../src/data/npc_packages';
 
 /* Комнаты — основа мира (`rooms.md`). У комнаты, на которую ссылается контент,
  * обязано быть имя, известное системе, а не только игроку. Объявление и есть
@@ -75,5 +75,41 @@ test('человек объявляет комнату, а не полагает
     assert.ok(pack, `пакет ${packageId} не зарегистрирован`);
     assert.equal(pack.placement.roomId, alias, `${packageId}: комната не объявлена`);
     assert.ok(findNamedRoom(gen.world, pack.placement.roomId), `${packageId}: объявленная комната на этаже отсутствует`);
+  }
+});
+
+/* ── Замок на КЛАСС, а не на жилой этаж ────────────────────────────
+ *
+ * Проверка выше знает три пакета жилого поимённо, и ровно поэтому мимо неё
+ * прошла Олевия Кибер: её анкета объявляла `clean_lab`, которого НИИ слизи не
+ * рыл, `roomForPlacement` возвращал undefined, и человек молча уезжал по
+ * ремеслу в произвольную медкомнату — на этаже, но не дома.
+ *
+ * Список берётся из реестра, а не из этого файла: новый пакет с псевдонимом
+ * попадает под проверку сам, вместе со своим этажом. Промах ловится с той же
+ * стороны, с какой его видит игра — `roomForPlacement` ищет сперва точный
+ * `defId`, затем теги (`gen/plot_npc_spawn.ts`), и обе дороги здесь повторены.
+ */
+test('каждый объявленный псевдоним комнаты вырыт на своём этаже', () => {
+  const byFloor = new Map<string, { packageId: string; alias: string }[]>();
+  for (const pack of allNpcPackages()) {
+    const alias = pack.placement.roomId;
+    if (!alias) continue;
+    const floorKey = pack.placement.homeFloorKey;
+    // Псевдоним без этажа адресовать некуда: чинить надо анкету, а не тест.
+    assert.ok(floorKey, `${pack.id}: комната объявлена, а домашний этаж — нет`);
+    const floorId = floorKey.replace(/^design:/, '');
+    if (!byFloor.has(floorId)) byFloor.set(floorId, []);
+    byFloor.get(floorId)!.push({ packageId: pack.id, alias });
+  }
+  assert.ok(byFloor.size > 0, 'ни один пакет не объявил комнату — реестр не собрался');
+
+  for (const [floorId, declared] of byFloor) {
+    const gen = generateDesignFloor(floorId, SEED);
+    for (const { packageId, alias } of declared) {
+      const room = findNamedRoom(gen.world, alias)
+        ?? gen.world.rooms.find(candidate => candidate?.tags?.some(tag => tag === alias));
+      assert.ok(room, `${floorId}: ${packageId} объявил комнату «${alias}», которую этаж не роет`);
+    }
   }
 });

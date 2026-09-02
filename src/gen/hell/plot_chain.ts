@@ -1,14 +1,19 @@
 /* ── Hell main plot rooms — contact + Herald threshold ───────── */
 
 import {
-  W, Cell, Feature, type Room, type Entity, type Item,
-  EntityType,
+  W, Cell, Feature, type Room, type Entity, type Item, type WorldContainer,
+  AIGoal, ContainerKind, EntityType, Faction, MonsterKind,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { PLOT_ROOMS } from '../../data/plot_rooms';
+import { MONSTERS } from '../../entities/monster';
 import { registerRouteCue } from '../../systems/route_cues';
+import { entitySpawnSlots } from '../../systems/entity_limits';
+import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { stampRoom, protectRoom, connectProtectedRoom, findClearArea } from '../shared';
-import { Spr } from '../../entities/sprite_index';
+import { monsterSpr, Spr } from '../../entities/sprite_index';
+
+const HELL_Z = -36;
 
 /**
  * Псевдоним комнаты-якоря. Имя И ЕСТЬ адрес: шаг цепочки адресует зону строкой
@@ -18,6 +23,25 @@ import { Spr } from '../../entities/sprite_index';
  * запасной ветке по имени, а прибытие молча откатывалось на позицию игрока.
  */
 export const HELL_ANCHOR_ZONE_ALIAS = PLOT_ROOMS.hell_anchor_zone.name;
+
+/** Те же адреса для двух других объявленных комнат Мясного низа. */
+export const HELL_CONTACT_CELL_ALIAS = PLOT_ROOMS.hell_contact_cell.name;
+export const HERALD_THRESHOLD_ALIAS = PLOT_ROOMS.herald_threshold.name;
+
+/**
+ * Зонный тег порога. Им два культовых контракта (`data/contracts.ts`,
+ * `exp_hell_threshold_inspect` и `exp_hell_herald_bounty`) адресуют цель, а
+ * `resolveByTaggedContainer` ищет её ПО ПОМЕЧЕННОМУ ЯЩИКУ — не по имени зоны.
+ * Пока ящика нет, тег не резолвится и контракт молча уезжает в первую
+ * попавшуюся комнату нужного типа.
+ *
+ * Оба контракта просят `RoomType.COMMON`, а сама «Порог Вестников» объявлена
+ * как HQ, и `roomMatchesQuestType` такую комнату отбрасывает. Поэтому тег несут
+ * ОБА ящика связки: сторожка (COMMON) отвечает за резолв, порог (HQ) держит тег
+ * на месте, где стоит Вестник. Комнаты стоят в двух десятках клеток друг от
+ * друга — это одна точка на карте, а не две.
+ */
+export const HERALD_THRESHOLD_ZONE_TAG = 'herald_threshold';
 
 export function generateHellPlotChain(
   world: World, entities: Entity[], nextId: { v: number },
@@ -35,6 +59,75 @@ export function generateHellPlotChain(
   ]);
   dropRoomNote(world, anchorRoom, entities, nextId, 1, anchorRoom.h - 2,
     'Зона закрепления: пять минут держать центр, не отходить за створки, лифт слушать после отбоя.');
+
+  const contactRoom = stampPlotRoom(world, 'hell_contact_cell',
+    roomCenterX(world, anchorRoom), roomCenterY(world, anchorRoom), 40, 110, -28);
+  buildContactCell(world, contactRoom, entities, nextId);
+
+  const thresholdRoom = stampPlotRoom(world, 'herald_threshold',
+    roomCenterX(world, contactRoom), roomCenterY(world, contactRoom), 16, 40, 22);
+  buildHeraldThreshold(world, thresholdRoom, entities, nextId);
+}
+
+/**
+ * Обожжённая сторожка. Три слуха (`monster_matka_spawn`, `hell_matka_wall_heat`,
+ * `lead_hell_contact_cell_voice`) обещают тут матку с приплодом и голос в банке;
+ * до сих пор комнаты не существовало вовсе, и слух вёл в пустоту.
+ */
+function buildContactCell(world: World, room: Room, entities: Entity[], nextId: { v: number }): void {
+  world.features[world.idx(room.x + 1, room.y + 1)] = Feature.CANDLE;
+  world.features[world.idx(room.x + room.w - 2, room.y + 1)] = Feature.CANDLE;
+  world.features[world.idx(room.x + (room.w >> 1), room.y + (room.h >> 1))] = Feature.APPARATUS;
+
+  addPlotContainer(world, room, 1, room.h - 2, ContainerKind.METAL_CABINET,
+    'Обожжённый ящик сторожки', 'public', [
+      { defId: 'bottled_voice', count: 1 },
+      { defId: 'bandage', count: 1 },
+      { defId: 'holy_water', count: 1 },
+    ], ['voice', 'cult', 'watchpost']);
+
+  dropRoomNote(world, room, entities, nextId, room.w - 2, room.h - 2,
+    'Сторожка: банку не открывать у уха. Матка греет стену за порогом; выводок идёт первым, она — второй.');
+
+  // Причина актора: авторская сцена сюжетной цепочки. Матка помечена rare, общий
+  // жребий населения зовёт `chooseFloorMonsterKind({ allowRare: false })` и её
+  // не ставит — поэтому обещание слуха ставится руками, ровно одно.
+  spawnPlotMonster(world, entities, nextId, room, MonsterKind.MATKA,
+    'Матка обожжённой сторожки', room.w - 2, 1, 2);
+}
+
+/**
+ * Порог Вестников. Слух `lead_hell_herald_threshold_shard` обещает осколок
+ * сирены и Вестника, контракт `exp_hell_herald_bounty` просит Вестника убить.
+ * Вестник тоже rare: без авторской постановки его на этаже нет ни на одном сиде.
+ */
+function buildHeraldThreshold(world: World, room: Room, entities: Entity[], nextId: { v: number }): void {
+  world.features[world.idx(room.x + 1, room.y + 1)] = Feature.CANDLE;
+  world.features[world.idx(room.x + room.w - 2, room.y + 1)] = Feature.CANDLE;
+  world.features[world.idx(room.x + 1, room.y + room.h - 2)] = Feature.CANDLE;
+  world.features[world.idx(room.x + room.w - 2, room.y + room.h - 2)] = Feature.CANDLE;
+  world.features[world.idx(room.x + (room.w >> 1), room.y + 1)] = Feature.LAMP;
+
+  addPlotContainer(world, room, 1, room.h - 2, ContainerKind.FILING_CABINET,
+    'Пороговая свеча: ведомость вошедших', 'public', [
+      { defId: 'siren_shard', count: 1 },
+      { defId: 'holy_water', count: 1 },
+      { defId: 'meat_rune', count: 1 },
+    ], ['threshold', 'cult', 'ledger', 'herald']);
+
+  dropRoomNote(world, room, entities, nextId, room.w - 2, room.h - 2,
+    'Ведомость порога: имена вошедших считает свеча, а не человек. Вестник без протокола держит открытую линию — ломай её дверью или углом.');
+
+  spawnPlotMonster(world, entities, nextId, room, MonsterKind.HERALD,
+    'Вестник без протокола', room.w - 2, 1, 3);
+}
+
+function roomCenterX(world: World, room: Room): number {
+  return world.wrap(room.x + (room.w >> 1));
+}
+
+function roomCenterY(world: World, room: Room): number {
+  return world.wrap(room.y + (room.h >> 1));
 }
 
 function registerAnchorCue(world: World, anchorRoom: Room): void {
@@ -64,9 +157,15 @@ function registerAnchorCue(world: World, anchorRoom: Room): void {
   });
 }
 
+/**
+ * Ключ был литеральным типом ровно на одну комнату, и остальные объявленные
+ * сюжетные комнаты Мясного низа физически не могли пройти через эту дверь.
+ */
+type HellPlotRoomId = 'hell_anchor_zone' | 'hell_contact_cell' | 'herald_threshold';
+
 function stampPlotRoom(
   world: World,
-  roomId: 'hell_anchor_zone',
+  roomId: HellPlotRoomId,
   ax: number,
   ay: number,
   minDist: number,
@@ -94,6 +193,98 @@ function decorateAnchorRoom(world: World, room: Room): void {
   world.features[world.idx(room.x + Math.floor(room.w / 2), room.y + Math.floor(room.h / 2))] = Feature.LAMP;
   world.features[world.idx(room.x + room.w - 2, room.y + 1)] = Feature.SHELF;
   world.features[world.idx(room.x + Math.floor(room.w / 2), room.y + room.h - 2)] = Feature.APPARATUS;
+}
+
+function nextContainerId(world: World): number {
+  let id = world.containers.length + 1;
+  while (world.containerById.has(id)) id++;
+  return id;
+}
+
+function addPlotContainer(
+  world: World,
+  room: Room,
+  ox: number,
+  oy: number,
+  kind: ContainerKind,
+  name: string,
+  access: WorldContainer['access'],
+  inventory: WorldContainer['inventory'],
+  tags: readonly string[],
+): number {
+  const x = world.wrap(room.x + ox);
+  const y = world.wrap(room.y + oy);
+  const id = nextContainerId(world);
+  world.addContainer({
+    id,
+    x,
+    y,
+    z: HELL_Z,
+    roomId: room.id,
+    zoneId: world.zoneMap[world.idx(x, y)],
+    kind,
+    name,
+    inventory: [...inventory],
+    capacitySlots: Math.max(6, inventory.length + 3),
+    faction: Faction.CULTIST,
+    access,
+    discovered: access !== 'secret',
+    tags: ['hell_plot_chain', HERALD_THRESHOLD_ZONE_TAG, ...tags],
+  });
+  return id;
+}
+
+function roomFloorCell(world: World, room: Room, ox: number, oy: number): { x: number; y: number } | null {
+  const px = world.wrap(room.x + ox);
+  const py = world.wrap(room.y + oy);
+  if (world.cells[world.idx(px, py)] === Cell.FLOOR) return { x: px, y: py };
+  for (let dy = 1; dy < room.h - 1; dy++) {
+    for (let dx = 1; dx < room.w - 1; dx++) {
+      const x = world.wrap(room.x + dx);
+      const y = world.wrap(room.y + dy);
+      if (world.cells[world.idx(x, y)] === Cell.FLOOR) return { x, y };
+    }
+  }
+  return null;
+}
+
+/** Один авторский монстр сюжетной сцены; мягкий предел актёров соблюдается. */
+function spawnPlotMonster(
+  world: World,
+  entities: Entity[],
+  nextId: { v: number },
+  room: Room,
+  kind: MonsterKind,
+  name: string,
+  ox: number,
+  oy: number,
+  levelBonus: number,
+): void {
+  if (entitySpawnSlots(entities, EntityType.MONSTER, 1) < 1) return;
+  const def = MONSTERS[kind];
+  if (!def) return;
+  const pos = roomFloorCell(world, room, ox, oy);
+  if (!pos) return;
+  const zoneLevel = (world.zones[world.zoneMap[world.idx(pos.x, pos.y)]]?.level ?? 12) + levelBonus;
+  const hp = Math.max(1, Math.round(scaleMonsterHp(def.hp, zoneLevel)));
+  entities.push({
+    id: nextId.v++,
+    type: EntityType.MONSTER,
+    x: pos.x + 0.5,
+    y: pos.y + 0.5,
+    angle: Math.PI,
+    pitch: 0,
+    alive: true,
+    speed: scaleMonsterSpeed(def.speed, zoneLevel),
+    sprite: monsterSpr(kind),
+    name,
+    hp,
+    maxHp: hp,
+    monsterKind: kind,
+    attackCd: def.attackRate,
+    ai: { goal: AIGoal.WANDER, tx: pos.x + 0.5, ty: pos.y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
+    rpg: randomRPG(zoneLevel),
+  });
 }
 
 function dropRoomItem(

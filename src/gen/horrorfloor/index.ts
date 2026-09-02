@@ -156,4 +156,3 @@ export function generateHorrorFloorDesignFloor(): FloorGeneration {
 
 export * from "./meta";
 export * from "./geometry";
-export * from "./npcs";

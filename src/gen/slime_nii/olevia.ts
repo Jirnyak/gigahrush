@@ -2,6 +2,7 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
 import { Faction, Occupation, QuestType } from '../../core/types';
 import { type PlotNpcDef, registerSideQuest } from '../../data/plot';
+import { SLIME_NII_CLEAN_LAB_ANCHOR } from './tour_scene';
 
 const NPC_DEF: PlotNpcDef = {
   name: 'Олевия Кибер',
@@ -13,7 +14,7 @@ const NPC_DEF: PlotNpcDef = {
   occupation: Occupation.SCIENTIST,
   sprite: Occupation.SCIENTIST,
   homeFloorKey: 'design:slime_nii',
-  spawnRoomAlias: 'clean_lab',
+  spawnRoomAlias: SLIME_NII_CLEAN_LAB_ANCHOR,
     level: 2,
     money: 200, inventory: [
     { defId: 'krona_battery', count: 2 },
