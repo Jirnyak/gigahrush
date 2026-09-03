@@ -98,6 +98,7 @@ import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manife
 import { injectFastElevators } from './gen/fast_elevators';
 import { stampCeilingHeights } from './world/ceiling_heights';
 import { fillVisualSlotsForWorldFeatures } from './world/visual_cell_slots';
+import { rebuildPathBlockersFromWorldObjects } from './world/path_blockers';
 import { syncNextEntityId } from './gen/content_manifest_utils';
 import {
   floorInstanceGenerationExtrasForKey,
@@ -129,7 +130,8 @@ import {
   spawnProjectileBodyImpact, spawnProjectileFloorImpact, spawnProjectileWallImpact, isEnergyProjectileImpact,
   spawnExplosionParticles,
 } from './render/blood';
-import { resetComputerState, restoreComputersFromSave } from './systems/computers';
+import { getComputerAt, openComputer, resetComputerState, restoreComputersFromSave } from './systems/computers';
+import { getComputerDef, type ComputerDefId } from './data/computers';
 import { resetNetHackState, restoreNetHackFromSave } from './systems/net_hack';
 import { stampMark, MarkType } from './systems/surface_marks';
 import { stampUrineTrace } from './systems/urination';
@@ -159,7 +161,7 @@ import { calculateReloadTime } from './systems/combat';
 import {
   pickupNearby, pickupDrop, useItem, dropItem, getWeaponStats, equippedCombatItemId,
   consumeDurability, consumeAmmo, consumeToolDurability, getEquippedToolDurability,
-  countAmmo, removeItem, addItem, publishPlayerItemEvent, updateInventoryConditions,
+  countAmmo, removeItem, addItem, publishPlayerItemEvent, updateInventoryConditions, reconcileEquippedAfterLoss,
   hasItem, loadEquippedMagazine, stashEquippedMagazine,
 } from './systems/inventory';
 import { createInput, bindInput } from './input';
@@ -327,6 +329,7 @@ import {
   type CraftingActionResult,
 } from './systems/crafting';
 import { getCraftRecipeSource } from './data/craft_recipe_sources';
+import { craftRecipeById } from './data/craft_recipes';
 import {
   setWorldLogSpatialContextProvider,
   worldLogDistanceForLocation,
@@ -588,6 +591,7 @@ import {
 } from './systems/net_terminal_gen';
 import {
   activateInteraction,
+  activateWorldInteractionForActor,
   closeInteractableOverlay,
   findFriendlyNpcForActor,
   findInteractionTarget,
@@ -814,6 +818,7 @@ const NET_HOST_STALL_WARN_MS = 8000;
 let _lastNetInAt = 0;       // peer: последнее ЛЮБОЕ сообщение от хоста/сервера
 let _lastHostStateAt = 0;   // peer: последний host_state (мир реально тикает)
 let _netStallWarnedAt = 0;
+let _lastCoopViewPushAt = 0;  // host: страховочный повтор кооп-вью
 const _peerLastMsgAt = new Map<number, number>(); // host: последнее сообщение слота
 
 // Сетевой отладочный лог: localStorage.gigahrush_net_debug = '1' в ОБОИХ окнах.
@@ -1434,6 +1439,18 @@ function onPeerIntentInteract(actor: Entity, slot: number): void
       }
     }
   }
+  // Компьютер под взглядом гостя: хост только называет цель (реестр терминалов
+  // живёт хост-стороной и в снапшот не пакуется), оверлей гость открывает сам —
+  // содержимое терминала целиком в data по defId. Раньше NPC, как в локальном
+  // high-priority порядке.
+  if (!handled) {
+    const computer = getComputerAt(world, world.wrap(lx), world.wrap(ly));
+    if (computer) {
+      sendOnlineMessage({ type: 'overlay_open', _targetSlot: slot, overlay: 'computer', idx: computer.idx, cx: computer.x, cy: computer.y, defId: computer.defId });
+      netlog('host: E пира', slot, '→ компьютер', computer.defId, `(${computer.x},${computer.y})`);
+      handled = true;
+    }
+  }
   // Try NPC (talk/trade) — same E priority AND the same aim the host player
   // gets: the shared cone-with-ray from interactions.ts. The old circular
   // radius-1.7 search around the look point handed E to a bystander NPC while
@@ -1491,7 +1508,32 @@ function onPeerIntentInteract(actor: Entity, slot: number): void
         container: containerSyncPayload(container),
       });
       netlog('host: E пира', slot, '→ container_open', container.id, container.name, `(${container.x},${container.y})`);
+      handled = true;
     }
+  }
+  // Мировые интеракции от имени гостя: раковина, туалет, контентные механики,
+  // аномалии. Сообщения адресованы гостю, а не хозяину клавиатуры — на время
+  // вызова лог подменяется буфером и уезжает пиру существующим coop_note.
+  if (!handled) {
+    const realMsgs = state.msgs;
+    const captured: typeof state.msgs = [];
+    state.msgs = captured;
+    let result: ReturnType<typeof activateWorldInteractionForActor>;
+    try {
+      result = activateWorldInteractionForActor(world, state, entities, nextEntityId, actor, world.wrap(lx), world.wrap(ly), {
+        openCraftMenu: req => {
+          sendOnlineMessage({ type: 'craft_open', _targetSlot: slot, mode: req.mode, station: req.station });
+          netlog('host: E пира', slot, '→ craft_open', req.station, req.mode);
+        },
+      });
+    } finally {
+      state.msgs = realMsgs;
+    }
+    if (result.worldChanged) updateWorldData(world);
+    for (const note of captured.slice(0, 4)) {
+      sendOnlineMessage({ type: 'coop_note', _targetSlot: slot, text: note.text, color: note.color });
+    }
+    if (result.handled) netlog('host: E пира', slot, '→ мировая интеракция:', captured[0]?.text ?? '(без текста)');
   }
 }
 
@@ -1529,6 +1571,26 @@ function onOnlinePeerIntent(msgData: any): void {
     }
 
     if (intent.kind === 'interact') { onPeerIntentInteract(actor, slot); return; }
+
+    // ── Крафт гостя: рецепт и материалы уже проверил/потратил гость в СВОЁМ
+    // state.crafting; хост выдаёт результат существующего рецепта (relaxed
+    // trust: произвольный предмет так не сминтить — только выход рецепта). ──
+    if (intent.kind === 'craft') {
+      const recipe = craftRecipeById(intent.recipeId);
+      if (recipe && ITEMS[recipe.itemId] && addItem(actor, recipe.itemId, recipe.resultCount)) {
+        netlog('host: craft пира', slot, intent.recipeId, '→', recipe.itemId, 'x', recipe.resultCount);
+      }
+    }
+
+    // ── Разборка гостя: материалы ушли в гостевой пул на его стороне; хост
+    // забирает сам предмет (слот-валидация как у drop) и снимает надетое. ──
+    if (intent.kind === 'craft_break') {
+      const invSlot = actor.inventory?.[intent.slot];
+      if (invSlot && invSlot.defId === intent.defId && removeItem(actor, intent.defId, 1)) {
+        reconcileEquippedAfterLoss(actor, [intent.defId]);
+        netlog('host: craft_break пира', slot, intent.defId);
+      }
+    }
 
     // ── Co-op table: the peer proposes, answers and plays its own seat; the
     // table and the money stay host-side (see systems/coop_session.ts). ──
@@ -1697,6 +1759,10 @@ function onOnlineFloorSnapshotChunk(msgData: any, chunks: (string | undefined)[]
     injectFastElevators(unpacked.world);
     fillVisualSlotsForWorldFeatures(unpacked.world, unpacked.meta.runSeed);
     stampCeilingHeights(unpacked.world);
+    // Поле блокираторов — производное от features и в снапшот не пакуется;
+    // без пересборки оно нулевое, и пир ходил сквозь мебель и блокираторы
+    // (стены держали — они в cells). Зеркало restore-путей floor_memory.
+    rebuildPathBlockersFromWorldObjects(unpacked.world);
     state.currentZ = unpacked.meta.z;
     world = replaceWorldFromGeneration(world, { world: unpacked.world });
     entities = unpacked.entities;
@@ -1926,6 +1992,31 @@ function onOnlineNpcOpen(msgData: any): void {
   }
 }
 
+// ── PEER: хост назвал верстак — меню рисует и считает сам гость (его пул
+// материалов и изученные рецепты живут в его собственном state) ──
+function onOnlineCraftOpen(msgData: any): void {
+  openCraftMenu({
+    mode: msgData.mode === 'disassemble' ? 'disassemble' : 'craft',
+    station: typeof msgData.station === 'string' ? msgData.station : 'lathe',
+    sourceInteractiveId: -1,
+    sourceDefId: '',
+  } as ContentCraftMenuRequest);
+  netlog('peer: craft_open', msgData.station, msgData.mode);
+}
+
+// ── PEER: хост назвал экранную цель — оверлей открывается локально, данные
+// целиком в data по defId (реестр терминалов в снапшот не пакуется) ──
+function onOnlineOverlayOpen(msgData: any): void {
+  if (msgData.overlay === 'computer') {
+    const defId = typeof msgData.defId === 'string' ? msgData.defId : '';
+    if (!getComputerDef(defId as ComputerDefId)) return;
+    const idx = Math.max(0, Math.floor(msgData.idx ?? 0));
+    openComputer(state, { idx, x: idx % W, y: (idx / W) | 0, defId: defId as ComputerDefId });
+    syncPauseState();
+    netlog('peer: открыт компьютер', defId);
+  }
+}
+
 // ── PEER: dialog line generated by the host ──
 function onOnlineNpcTalk(msgData: any): void {
   if (state.showNpcMenu && state.npcMenuTarget === msgData.npcId && typeof msgData.text === 'string') {
@@ -1949,21 +2040,13 @@ function onOnlineVisitEnd(msgData: any): void {
  * money and ships each seat the view of its own chair. A peer only proposes,
  * answers, and sends its own keystrokes. */
 
-/** The other human directly in front of the player, if any. Mirrors the reach
- *  the host uses for a peer's E (`onPeerIntentInteract`). */
+/** The other human directly in front of the player, if any. Тот же конус-с-
+ *  лучом, что у остального E: круговой радиус вокруг точки взгляда отдавал E
+ *  соседнему игроку, когда смотришь в упор на ящик (подсказка показывала
+ *  «обыскать», а открывалось меню человека). */
 function facedNetworkedPlayer(): Entity | null {
-  const lookX = world.wrap(player.x + Math.cos(player.angle) * 1.5);
-  const lookY = world.wrap(player.y + Math.sin(player.angle) * 1.5);
-  const near: Entity[] = [];
-  ensureEntityIndex(entities).queryRadius(lookX, lookY, 1.7, near, ENTITY_MASK_ACTOR);
-  let best: Entity | null = null;
-  let bestD2 = 1.7 * 1.7;
-  for (const e of near) {
-    if (!e.alive || e.id === player.id || !isNetworkedPlayerActor(e)) continue;
-    const d2 = world.dist2(lookX, lookY, e.x, e.y);
-    if (d2 < bestD2) { best = e; bestD2 = d2; }
-  }
-  return best;
+  const best = findFriendlyNpcForActor(world, entities, player);
+  return best && isNetworkedPlayerActor(best) ? best : null;
 }
 
 /** The actor of a co-op seat, on whichever machine is asking. */
@@ -1993,7 +2076,10 @@ function coopNotify(actor: Entity, text: string, color = '#f84'): void {
 function openCoopInterfaceLocally(opponent: Entity, activityId: string, stake: number): void {
   const def = coopActivity(activityId);
   if (!def) return;
-  closeNpcInteractionInterface(state);
+  /* НЕ closeNpcInteractionInterface: он закрывает ВСЕ настольные игры — и
+   * убивал только что разложенную openCoopSession партию, обе стороны навсегда
+   * видели текст-заглушку вместо доски. openNpcInteractionInterface сам
+   * перезаписывает панель целиком, предварительная чистка не нужна. */
   state.showNpcMenu = true;
   state.npcMenuTarget = opponent.id;
   state.npcMenuTab = NPC_MENU_INTERFACE_TAB;
@@ -2064,6 +2150,9 @@ function hostResolveCoopReply(accept: boolean): void {
     coopNotify(to, 'Вы отказались.', '#aa6');
     return;
   }
+  // Чужая открытая NPC-партия сворачивается ДО раскладки стола — после нельзя:
+  // closeNpcInteractionInterface закрывает все игры, включая новую.
+  closeNpcInteractionInterface(state);
   const opened = openCoopSession({ state, player: from, npc: to }, invite.activityId, invite.stake);
   netlog('host: coop_reply accept, стол', invite.activityId, opened.ok ? 'открыт' : `НЕ открыт: ${opened.ok === false ? opened.reason : ''}`);
   if (!opened.ok) { coopNotify(from, opened.reason); coopNotify(to, opened.reason); return; }
@@ -2143,6 +2232,24 @@ function tickCoopDeaths(): void {
   }
 }
 
+/** Оба клиента, каждый кадр: закрытое меню освобождает кресло. Путей закрыть
+ *  интерфейс много (ЛКМ по крестику, ПКМ, тап), и каждый пропущенный оставлял
+ *  игрока сидящим за невидимым столом — замороженным навсегда (`movePlayer`
+ *  гейтится isCoopSeated). Одна точка примирения ловит их все. */
+function reconcileCoopSeat(): void {
+  const seat = coopSeatOf(player.id);
+  if (seat === null) return;
+  if (state.showNpcMenu && state.npcMenuTab === NPC_MENU_INTERFACE_TAB) return;
+  netlog('кресло без меню — выходим из-за стола');
+  if (isOnlinePeer()) {
+    sendPeerIntent({ kind: 'coop_leave' });
+    endCoopSession();
+    adoptCoopSession(null);
+  } else {
+    hostEndCoopSession(seat, `${player.name || 'Игрок'} вышел из-за стола.`);
+  }
+}
+
 /** Host, per frame: drop an invite nobody answered. */
 function tickCoopInvites(): void {
   if (!isOnlineHost() && isOnlineConnected()) return;
@@ -2218,6 +2325,9 @@ function onOnlineCoopOpen(msgData: any): void {
   const seat: CoopSeat = msgData.seat === 'npc' ? 'npc' : 'player';
   const hostPlayerId = Math.floor(Number(msgData.playerId) || 0);
   const hostNpcId = Math.floor(Number(msgData.npcId) || 0);
+  // Своя незакрытая NPC-партия сворачивается до принятия стола (после нельзя —
+  // общий close убил бы и кооп-вью, которые придут следом).
+  closeNpcInteractionInterface(state);
   /* Ids сессии приходят в ХОСТОВОМ id-пространстве, а наш актор существует
    * здесь только как локальный `player` с независимым id. Не подставив его в
    * своё кресло, coopSeatOf(player.id) не совпадает никогда — стол открывался,
@@ -2335,6 +2445,8 @@ setOnlineMessageHandler((msgData: any) => {
   if (msgData.type === 'container_open' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineContainerOpen(msgData); return; }
   if (msgData.type === 'npc_open' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineNpcOpen(msgData); return; }
   if (msgData.type === 'npc_talk' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineNpcTalk(msgData); return; }
+  if (msgData.type === 'craft_open' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineCraftOpen(msgData); return; }
+  if (msgData.type === 'overlay_open' && isOnlinePeer() && onlinePeerFloorReady) { onOnlineOverlayOpen(msgData); return; }
   if (msgData.type === 'coop_invite' && isOnlinePeer()) { onOnlineCoopInvite(msgData); return; }
   if (msgData.type === 'coop_open' && isOnlinePeer()) { onOnlineCoopOpen(msgData); return; }
   if (msgData.type === 'coop_view' && isOnlinePeer()) { onOnlineCoopView(msgData); return; }
@@ -6812,9 +6924,18 @@ function activateCraftSelection(): void {
   }
   state.craftCursor = Math.max(0, Math.min(entries.length - 1, Math.floor(state.craftCursor)));
   const entry = entries[state.craftCursor];
+  // Гость: defId слота снимается ДО локальной разборки — после неё слот уже другой.
+  const breakDefId = entry.kind === 'disassemble' ? player.inventory?.[entry.slotIndex]?.defId : undefined;
   const result = entry.kind === 'recipe'
     ? craftKnownRecipe({ actor: player, state, stationKind: state.craftStationKind, recipeId: entry.id })
     : disassembleInventorySlot({ actor: player, state, stationKind: state.craftStationKind, slotIndex: entry.slotIndex });
+  /* Гость крафтит локальным предсказанием (его пул материалов и рецепты живут
+   * в его собственном state), а предмет выдаёт/забирает хост — иначе echo
+   * инвентаря откатит результат на следующем тике. */
+  if (isOnlinePeer() && result.ok) {
+    if (entry.kind === 'recipe') sendPeerIntent({ kind: 'craft', recipeId: entry.id });
+    else if (breakDefId) sendPeerIntent({ kind: 'craft_break', slot: entry.slotIndex, defId: breakDefId });
+  }
   pushCraftActionResult(result);
   clampCraftMenuCursor();
 }
@@ -9990,6 +10111,7 @@ function gameLoop(now: number): void {
   }
 
   if (isOnlineConnected() && !isOnlinePeer()) { tickCoopInvites(); tickCoopDeaths(); }
+  if (isOnlineConnected()) reconcileCoopSeat();
   handleCoopInvitePointer();
 
   const snap = getNetSphereSnapshot();
@@ -10053,6 +10175,12 @@ function gameLoop(now: number): void {
       // может молчать вечно — актор-призрак стоял на этаже, а стол с ним висел.
       {
         const liveMs = performance.now();
+        // Страховка стола: потерянный coop_view оставлял кресло без доски
+        // навсегда — раз в секунду вью переезжают заново, пока стол жив.
+        if (activeCoopSession() && liveMs - _lastCoopViewPushAt > 1000) {
+          _lastCoopViewPushAt = liveMs;
+          pushCoopViews();
+        }
         for (const pa of peerActors) {
           const slot = pa.peerSlot!;
           const last = _peerLastMsgAt.get(slot);

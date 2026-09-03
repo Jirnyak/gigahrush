@@ -121,6 +121,9 @@ export interface InteractionContext {
   lookX: number;
   lookY: number;
   readOnly?: boolean;
+  /** Хост обслуживает E сетевого гостя: только мировые эффекты — транспорт,
+   *  двери и всё, что открывает хост-оверлеи, отдано пир-пути в main.ts. */
+  worldOnly?: boolean;
   switchFloor?: (direction: LiftDirection, message?: string, color?: string, allowElevatorAnomaly?: boolean, targetZ?: number) => void;
   movePlayerToMetroRoom?: (roomDefId: string) => boolean;
   openNpcMenu?: (npc: Entity) => void;
@@ -587,22 +590,26 @@ function activateHighPriorityInteractionForLook(ctx: InteractionContext): Intera
 function activateNormalPriorityInteractionForLook(ctx: InteractionContext): InteractionResult {
   const idx = lookIdx(ctx);
 
-  if (tryUsePseudolift(ctx.world, ctx.entities, ctx.nextEntityId, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) {
-    return { handled: true, worldChanged: true };
-  }
+  // Транспорт — не для world-only пути: у сетевого гостя лифт означает
+  // эвакуацию и обработан раньше, а скоростной лифт открыл бы оверлей хосту.
+  if (!ctx.worldOnly) {
+    if (tryUsePseudolift(ctx.world, ctx.entities, ctx.nextEntityId, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) {
+      return { handled: true, worldChanged: true };
+    }
 
-  if (ctx.world.cells[idx] === Cell.LIFT && ctx.world.features[idx] === Feature.MACHINE) {
-    openFastElevator(ctx.state, ctx.player);
-    return { handled: true, openedOverlay: true };
-  }
+    if (ctx.world.cells[idx] === Cell.LIFT && ctx.world.features[idx] === Feature.MACHINE) {
+      openFastElevator(ctx.state, ctx.player);
+      return { handled: true, openedOverlay: true };
+    }
 
-  if (ctx.world.cells[idx] === Cell.LIFT) {
-    ctx.switchFloor?.(ctx.world.liftDir[idx] as LiftDirection);
-    return { handled: true, worldChanged: true };
-  }
+    if (ctx.world.cells[idx] === Cell.LIFT) {
+      ctx.switchFloor?.(ctx.world.liftDir[idx] as LiftDirection);
+      return { handled: true, worldChanged: true };
+    }
 
-  const metro = activateMetro(ctx);
-  if (metro.handled) return metro;
+    const metro = activateMetro(ctx);
+    if (metro.handled) return metro;
+  }
 
   if (tryUseHeatlinePressure(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
   if (tryUseCarnivorousFungus(ctx.world, ctx.entities, ctx.nextEntityId, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
@@ -616,19 +623,55 @@ function activateNormalPriorityInteractionForLook(ctx: InteractionContext): Inte
   if (tryUseSamosborVariantInteraction(ctx.world, ctx.entities, ctx.player, ctx.state, ctx.nextEntityId, ctx.lookX, ctx.lookY)) return { handled: true };
   if (tryRepairHermodoorBorerDamage(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
 
-  if (ctx.world.cells[idx] === Cell.DOOR) {
-    const door = activateDoor(ctx, idx);
-    if (door.handled) return door;
-  }
+  // Двери и контейнеры пир-путь ведёт сам (у гостя контейнер — синхронная
+  // копия, а не локальное меню); world-only здесь просто не отвечает.
+  if (!ctx.worldOnly) {
+    if (ctx.world.cells[idx] === Cell.DOOR) {
+      const door = activateDoor(ctx, idx);
+      if (door.handled) return door;
+    }
 
-  ensureRoomContainers(ctx.world, ctx.state.currentZ);
-  const container = findContainer(ctx, true);
-  if (container) {
-    ctx.openContainerMenu?.(container);
-    return { handled: true, openedOverlay: true };
+    ensureRoomContainers(ctx.world, ctx.state.currentZ);
+    const container = findContainer(ctx, true);
+    if (container) {
+      ctx.openContainerMenu?.(container);
+      return { handled: true, openedOverlay: true };
+    }
   }
 
   return { handled: false };
+}
+
+/** Хост, обслуживание E сетевого гостя: мировые интеракции от имени актора —
+ *  раковина, туалет, контентные механики, аномалии, ремонт гермодвери. Тот же
+ *  near→far проход, что у локального E; UI-колбэки не передаются, так что
+ *  контент, которому нужен экран, тихо не отвечает вместо оверлея у хоста. */
+export function activateWorldInteractionForActor(
+  world: World,
+  state: GameState,
+  entities: Entity[],
+  nextEntityId: { v: number },
+  actor: Entity,
+  lookX: number,
+  lookY: number,
+  ui?: Pick<InteractionContext, 'openCraftMenu'>,
+): InteractionResult {
+  const ctx: InteractionContext = {
+    world, state, player: actor, entities, nextEntityId, lookX, lookY,
+    worldOnly: true,
+    // Единственный проброшенный экран: верстак. Колбэк хоста не открывает
+    // ничего локально — он шлёт гостю craft_open, и меню рисует сам гость.
+    openCraftMenu: ui?.openCraftMenu,
+  };
+  const angle = Math.atan2(lookY - actor.y, lookX - actor.x);
+  const nearCtx: InteractionContext = {
+    ...ctx,
+    lookX: actor.x + Math.cos(angle) * 0.7,
+    lookY: actor.y + Math.sin(angle) * 0.7,
+  };
+  const near = activateNormalPriorityInteractionForLook(nearCtx);
+  if (near.handled) return near;
+  return activateNormalPriorityInteractionForLook(ctx);
 }
 
 export function activateInteraction(ctx: InteractionContext): InteractionResult {

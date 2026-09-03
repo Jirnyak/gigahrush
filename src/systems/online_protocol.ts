@@ -33,6 +33,12 @@ export type PeerIntent =
   | { kind: 'drop'; slot: number; defId: string; count: number; data?: unknown }
   | { kind: 'container'; op: 'take' | 'put' | 'close'; cx: number; cy: number; slot?: number }
   | { kind: 'interact' }
+  /* ── Крафт гостя (relaxed trust, как trade_deal): знание рецепта и
+   * материалы проверяет и тратит сам гость в СВОЁМ state.crafting (пул
+   * материалов и изученные рецепты — гостевые, не хостовые); хост выдаёт или
+   * забирает ПРЕДМЕТ существующего рецепта — произвольное не сминтить. */
+  | { kind: 'craft'; recipeId: string }
+  | { kind: 'craft_break'; slot: number; defId: string }
   | { kind: 'npc_talk'; npcId: number }
   | { kind: 'npc_close'; npcId: number }
   /** Relaxed-trust deal: the peer ran the full local trade UI/pricing; the
@@ -111,6 +117,12 @@ export function sanitizeIntent(raw: unknown): PeerIntent | null {
       };
     }
     case 'interact': return { kind: 'interact' };
+    case 'craft':
+      if (typeof r.recipeId !== 'string') return null;
+      return { kind: 'craft', recipeId: r.recipeId.slice(0, 60) };
+    case 'craft_break':
+      if (typeof r.defId !== 'string') return null;
+      return { kind: 'craft_break', slot: clampInt(r.slot, 0, 255), defId: r.defId.slice(0, 40) };
     case 'npc_talk':
       return { kind: 'npc_talk', npcId: clampInt(r.npcId, 0, 1e9) };
     case 'npc_close':
