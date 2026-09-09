@@ -332,6 +332,29 @@ export function traceChthonicAtticExitPaths(
   });
 }
 
+/**
+ * Створки и их косяки. Отдельной маской, потому что её обязаны уважать ВСЕ
+ * шаги расширения, а широкую маску комнат — только те, кому нельзя резать
+ * авторский объём.
+ *
+ * Дверь без косяков — не дверь: защищалась одна клетка створки, стены рядом
+ * срезались корневой сетью, и `sanitizeDoors` снесла бы 106 дверей из 113 как
+ * беспризорные. Косяк принадлежит двери, а не стене.
+ */
+export function buildAtticDoorGuard(world: World): Uint8Array {
+  const guard = new Uint8Array(W * W);
+  for (const idx of world.doors.keys()) {
+    guard[idx] = 1;
+    const x = idx % W;
+    const y = (idx / W) | 0;
+    guard[world.idx(x - 1, y)] = 1;
+    guard[world.idx(x + 1, y)] = 1;
+    guard[world.idx(x, y - 1)] = 1;
+    guard[world.idx(x, y + 1)] = 1;
+  }
+  return guard;
+}
+
 export function buildAtticProtectedMask(world: World): Uint8Array {
   const mask = new Uint8Array(W * W);
   for (const room of world.rooms) {
@@ -341,7 +364,10 @@ export function buildAtticProtectedMask(world: World): Uint8Array {
       }
     }
   }
-  for (const idx of world.doors.keys()) mask[idx] = 1;
+  const doorGuard = buildAtticDoorGuard(world);
+  for (let i = 0; i < W * W; i++) {
+    if (doorGuard[i]) mask[i] = 1;
+  }
   for (const container of world.containers) mask[world.idx(container.x, container.y)] = 1;
   for (let i = 0; i < W * W; i++) {
     if (world.cells[i] === Cell.LIFT) mask[i] = 1;
@@ -445,7 +471,14 @@ export function stampAtticVoidKnot(world: World, cx: number, cy: number, radius:
   }
 }
 
-export function stampAtticBulbRoom(world: World, plan: AtticChamberPlan): Room {
+/**
+ * Корневой пузырь. Маска обязательна: пузырь — единственный шаг расширения,
+ * который её не получал, и потому «Карман корневого подкорма» и «Кабельная
+ * развилка гудящего корня» вставали прямо на створки, а молельная ниша
+ * объявлялась `HERMETIC_CLOSED` на клетке обычного пола — печать обходилась
+ * бесплатно и незаметно.
+ */
+export function stampAtticBulbRoom(world: World, plan: AtticChamberPlan, doorGuard: Uint8Array): Room {
   const room: Room = {
     id: world.rooms.length,
     type: plan.type,
@@ -471,6 +504,7 @@ export function stampAtticBulbRoom(world: World, plan: AtticChamberPlan): Room {
       const outerNx = dx / Math.max(1, outerRx);
       const outerNy = dy / Math.max(1, outerRy);
       const idx = world.idx(plan.cx + dx, plan.cy + dy);
+      if (doorGuard[idx]) continue;
       if (nx * nx + ny * ny <= 1) {
         world.cells[idx] = Cell.FLOOR;
         world.roomMap[idx] = room.id;

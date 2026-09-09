@@ -788,9 +788,18 @@ export interface ActorDamageInput {
    */
   notifyVictim?: boolean;
   /**
-   * Смерть обрабатывает вызывающий. У каждого пути своя обработка — лут,
-   * приписка опыта пиру, свои сообщения и кровь, — и свести их в общий
-   * `actorDeathHandler` без смены поведения нельзя.
+   * Смерть обрабатывает вызывающий.
+   *
+   * Осталось ТРИ площадки, все в `main.ts`: рукопашная игрока, попадание
+   * снаряда и взрыв. Дефекта там нет — каждая зовёт `handleKill` руками сразу
+   * после `killEntity`, — это чистый дубль. Снимать его надо аккуратно:
+   * `handleKill` считает сторону игрока по `killer`, а снаряд — по
+   * `isPlayerOwnedProjectile(p)`, и формулы расходятся, когда сущность-владелец
+   * уже удалена.
+   *
+   * С боевых путей AI флаг СНЯТ 2026-09-09 (`ai/monster.ts`, `ai/combat.ts`):
+   * рядом были переписаны только лужа и лут, а запись смерти в A-Life, дневник
+   * личности, сюжетный дроп и контентные хуки смерти терялись целиком.
    */
   deathByCaller?: boolean;
 }
@@ -838,7 +847,7 @@ export function damageActor(
   }
 
   if ((target.hp ?? 0) > 0) return { applied: armor.damage, killed: false, armor };
-  // ВРЕМЕННО: пути со своей обработкой смерти (см. `deathByCaller`).
+  // Три пути `main.ts` со своей обработкой смерти (см. `deathByCaller`).
   if (input.deathByCaller === true) return { applied: armor.damage, killed: true, armor };
   finishActorDeath(target, attacker, input);
   return { applied: armor.damage, killed: true, armor };

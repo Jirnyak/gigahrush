@@ -11,7 +11,7 @@ import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { generateZones } from '../shared';
 import { publishEvent } from '../../systems/events';
 
-import { ATTIC_BASE_X, ATTIC_BASE_Y, MAIN_Y, ATTIC_CHAMBERS, ATTIC_SPINE, fillBaseTextures, stampRoom, carveCombatLane, carveCrawlRoute, placeDoor, connectRoomToLane, placeExitLift, decorateAttic, stampRootObstacles, retuneAtticZones, buildAtticProtectedMask, carveAtticPathChain, carveAtticRootPath, stampAtticVoidKnot, stampAtticBulbRoom, dressAtticBulbRoom, fogAtticServiceCavities, carveAtticCrawlBypasses, carveAtticStealthCrawlGraph, stampAtticRootStubs, stampAtticChokepoints, stampAtticLowCeilingShells, stampAtticCapillaryCracks, stampAtticExitCues, carveChthonicLabyrinth, nearestAtticAnchorPressure, traceChthonicAtticExitPaths, setDoorState, scorchRoom } from './geometry';
+import { ATTIC_BASE_X, ATTIC_BASE_Y, MAIN_Y, ATTIC_CHAMBERS, ATTIC_SPINE, fillBaseTextures, stampRoom, carveCombatLane, carveCrawlRoute, placeDoor, connectRoomToLane, placeExitLift, decorateAttic, stampRootObstacles, retuneAtticZones, buildAtticDoorGuard, buildAtticProtectedMask, carveAtticPathChain, carveAtticRootPath, stampAtticVoidKnot, stampAtticBulbRoom, dressAtticBulbRoom, fogAtticServiceCavities, carveAtticCrawlBypasses, carveAtticStealthCrawlGraph, stampAtticRootStubs, stampAtticChokepoints, stampAtticLowCeilingShells, stampAtticCapillaryCracks, stampAtticExitCues, carveChthonicLabyrinth, nearestAtticAnchorPressure, traceChthonicAtticExitPaths, setDoorState, scorchRoom } from './geometry';
 import { ATTIC_NPCS, addAtticContainers, spawnNpc, addItemDrop, spawnMonster, spawnAtticAmbientMonsters, seedAtticShaftCaches } from './npcs';
 import { stampAtticServiceIslands } from './islands';
 import { lightChthonicAttic } from './lighting';
@@ -155,13 +155,17 @@ export function generateChthonicAtticDesignFloor(
   const rngFn = seededRandom(hashSeed('design-full:chthonic_attic:46', 46));
   expandChthonicAtticRootNetwork(generation.world, generation.entities, rngFn);
   /* `sanitizeDoors` здесь НЕ зовётся намеренно, и это не забывчивость.
-     Замерено: из 113 дверей этажа 7 стоят на клетках, которые дверьми уже не
-     являются, и ещё 99 — без единого косяка. Причина не в порядке фаз, а в
-     расширении: `buildAtticProtectedMask` защищает клетку двери, но не стены
-     рядом, а `stampAtticBulbRoom` маску вообще не получает — два корневых
-     пузыря стоят прямо на створке молельной ниши и на седьмой двери лаза.
-     Санация сейчас снесла бы 106 дверей из 113; сначала надо защитить косяки в
-     маске, и только потом санировать. */
+     Закрыта ПЕРВАЯ половина причины (2026-09-09): `buildAtticDoorGuard`
+     защищает косяки, а `stampAtticBulbRoom` наконец получает маску, — из-за
+     этого «Карман корневого подкорма» стоял прямо на створке молельной ниши, и
+     печать `HERMETIC_CLOSED` объявлялась на клетке обычного пола. Замерено:
+     дверей на не-дверной клетке 7 → 5 (все пять — `HERMETIC_OPEN`, то есть и
+     так открытый проход), закрытых печатей мимо створки 1 → 0, недостижимых
+     клеток 2842 → 2603. Замок — `tests/chthonic-attic.test.ts`.
+     ОСТАЁТСЯ вторая половина: 105 дверей из 113 не имеют ни одного косяка ещё
+     НА ПОСТАНОВКЕ — `placeDoor` штампует `Cell.DOOR` не спрашивая соседей, а
+     санация требует двух стен по одной оси. Это авторская работа по этажу, а
+     не порядок фаз; пока она не сделана, санация снесёт 105 дверей из 113. */
   retuneExpandedChthonicAtticEcology(world);
 
   // Бейк стоял ДО расширения, и потому 4697 источников корневой сети не светили
@@ -268,6 +272,7 @@ export function expandChthonicAtticRootNetwork(
   entities: Entity[],
   rng: () => number,
 ): void {
+  const doorGuard = buildAtticDoorGuard(world);
   const protectedMask = buildAtticProtectedMask(world);
 
   carveAtticPathChain(world, ATTIC_SPINE, 3, Tex.F_GUT, protectedMask);
@@ -278,7 +283,7 @@ export function expandChthonicAtticRootNetwork(
   stampAtticVoidKnot(world, 52, 538, 15, protectedMask);
   stampAtticVoidKnot(world, 524, 930, 17, protectedMask);
 
-  const chambers = ATTIC_CHAMBERS.map(plan => stampAtticBulbRoom(world, plan));
+  const chambers = ATTIC_CHAMBERS.map(plan => stampAtticBulbRoom(world, plan, doorGuard));
   for (let i = 0; i < ATTIC_CHAMBERS.length; i++) {
     const plan = ATTIC_CHAMBERS[i];
     const room = chambers[i];

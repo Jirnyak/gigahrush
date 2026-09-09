@@ -6884,7 +6884,6 @@ function isWeepingAngelFrozen(world: World, e: Entity, dt: number): boolean {
 
 export function tryPerformMonsterMeleeAttack(
   world: World,
-  entities: Entity[],
   e: Entity,
   target: Entity,
   def: MonsterDef | null,
@@ -6892,7 +6891,6 @@ export function tryPerformMonsterMeleeAttack(
   time: number,
   msgs: Msg[],
   playerId: number,
-  nextId: { v: number },
   bestDist: number,
   state?: GameState
 ): boolean {
@@ -6928,13 +6926,19 @@ export function tryPerformMonsterMeleeAttack(
             // Единая дверь урона со всем конвейером: резист надетой брони цели
             // и врождённая броня твари. Разбор — `ActorDamageInput.applied`.
             /* Тип удара НЕ прибивается кинетикой: его объявляет вид
-             * (`MonsterDef.damageType`), и дверь берёт его у бьющего сама. */
+             * (`MonsterDef.damageType`), и дверь берёт его у бьющего сама.
+             *
+             * Смерть тоже уходит В ДВЕРЬ. Здесь стоял `deathByCaller`, и все
+             * последствия были переписаны рядом руками — лужа, лут, строка. Мимо
+             * двери терялось ровно то, чего рядом не написали: смерть жильца не
+             * попадала в A-Life, дневник не прикреплялся, сюжетный дроп и
+             * контентные хуки смерти не звались, а тварь, убитая тварью, не
+             * роняла добычи. Это самый частый способ убийства в игре. */
             damageActor(world, state, hitTarget, {
               damage: dmg,
               source: 'monster_melee',
               attacker: e,
               time,
-              deathByCaller: true,
             });
             applyLishennyyContactDecay(state, world, e, hitTarget, dmg, time, msgs, playerId);
             applyKontorshchikGrab(state, world, e, hitTarget, time, msgs);
@@ -6949,12 +6953,12 @@ export function tryPerformMonsterMeleeAttack(
                     : 'задел';
               recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ${verb} тебя: -${dmg}`);
             }
-            if (hitTarget.hp <= 0) { killEntity(hitTarget); hitTarget.hp = 0; }
             const hitAng = Math.atan2(world.delta(e.y, hitTarget.y), world.delta(e.x, hitTarget.x));
             spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, dmg, hitTarget.type === EntityType.MONSTER);
-            if (hitTarget.hp <= 0) {
-              spawnDeathPool(world, hitTarget.x, hitTarget.y, hitTarget.type === EntityType.MONSTER);
-              if (hitTarget.type === EntityType.NPC) dropNpcInventory(hitTarget, entities, nextId);
+            /* Только то, чего общая обработка смерти не знает: чужая строка
+             * убийства и две реакции вида на съеденную жертву. Щит игрока к
+             * этому моменту уже мог поднять его обратно — тогда и строки нет. */
+            if (hitTarget.hp <= 0 && !hitTarget.alive) {
               msgs.push(msg(`${entityDisplayName(e)} убил ${entityDisplayName(hitTarget)}`, time, '#f44'));
               if (e.monsterKind === MonsterKind.SOBRANNYY) growSobrannyy(world, e, hitTarget, time, msgs, state, 'kill');
               if (e.monsterKind === MonsterKind.HEAD_SLUG) rememberHeadSlugVictim(e, hitTarget);
@@ -7412,7 +7416,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   if (def?.speed === 0) return;
 
   // Melee attack if close enough
-  if (tryPerformMonsterMeleeAttack(world, entities, e, target, def, dt, time, msgs, playerId, nextId, bestDist, state)) {
+  if (tryPerformMonsterMeleeAttack(world, e, target, def, dt, time, msgs, playerId, bestDist, state)) {
     return;
   }
 

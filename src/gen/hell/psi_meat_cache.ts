@@ -612,7 +612,12 @@ function addCacheContainer(world: World, room: Room, ownerNpcId: number): number
     access: 'owner',
     lockDifficulty: 4,
     discovered: true,
-    tags: ['hell_psi_cache', 'psi', 'meat', 'voice', 'owner', 'pay_or_steal'],
+    /* `secret_stash` — АДРЕС, а не украшение: `resolveByTaggedContainer` ищет
+     * цель контракта по совпадению тега контейнера с `targetZoneTag`. Два
+     * контракта на голос в банке (`compact_hell_voice_retrieve`,
+     * `exp_hell_bottled_voice_retrieve`) метили сюда, тега не находили и падали
+     * на поиск по типу комнаты — стрелка вела в первый попавшийся склад Ада. */
+    tags: ['hell_psi_cache', 'psi', 'meat', 'voice', 'owner', 'pay_or_steal', 'secret_stash'],
   });
   return id;
 }

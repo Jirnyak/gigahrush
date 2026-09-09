@@ -88,18 +88,18 @@ const PATH_GATES: Record<PathId, (attacker: Entity, victim: Entity) => ActorDama
     deathByCaller: true,
   }),
   /* src/systems/ai/combat.ts, tryFactionCombat.
-   * `applied` СНЯТ 2026-08-27: путь гонит полный конвейер двери. */
+   * `applied` СНЯТ 2026-08-27: путь гонит полный конвейер двери.
+   * `deathByCaller` СНЯТ 2026-09-09: смерть тоже уходит в дверь. */
   'ближний бой NPC': () => ({
     damage: DAMAGE,
     source: 'npc_melee',
-    deathByCaller: true,
   }),
-  // src/systems/ai/monster.ts, tryPerformMonsterMeleeAttack. `applied` снят там же.
+  // src/systems/ai/monster.ts, tryPerformMonsterMeleeAttack. `applied` и
+  // `deathByCaller` сняты там же и по тем же причинам.
   'ближний бой монстра': () => ({
     damage: DAMAGE,
     damageType: DamageType.KINETIC,
     source: 'monster_melee',
-    deathByCaller: true,
   }),
   // src/systems/ai/monster.ts, finishRzhavnikLeap. `applied` снят там же.
   'спецудар монстра': () => ({

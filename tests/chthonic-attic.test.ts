@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { auditReachability } from '../src/core/world';
-import { Cell, EntityType, RoomType, W, ZoneFaction } from '../src/core/types';
+import { Cell, DoorState, EntityType, RoomType, W, ZoneFaction } from '../src/core/types';
 import { designFloorById } from '../src/data/design_floors';
 import { designFloorPopulationProfile } from '../src/data/design_floor_population';
 import { HUMAN_TERRITORY_OWNERS } from '../src/data/factions';
@@ -101,4 +101,28 @@ test('chthonic_attic seeds cell-first faction HQs and target territory shares', 
     assert.equal(territoryRoomOwner(gen.world, anchor.roomId), anchor.owner);
     assert.equal(territoryOwnerAt(gen.world, anchor.x, anchor.y), anchor.owner);
   }
+});
+
+/* ── Печать держит, а не только объявляется ────────────────────────
+ *
+ * `postrelease.md` §2.4: молельная ниша объявлена `HERMETIC_CLOSED`, а её
+ * клетка — обычный пол. Прямое нарушение закона «настоящий замок»: обход
+ * должен СТОИТЬ ресурса, а не быть бесплатным и незаметным. Причина —
+ * корневой пузырь «Карман корневого подкорма» вставал прямо на створку:
+ * `stampAtticBulbRoom` был единственным шагом расширения, который не получал
+ * никакой маски вовсе.
+ *
+ * Замок про ЗАКРЫТЫЕ гермодвери. Открытая гермодверь на клетке пола — это
+ * открытый проход и есть, играть она ничему не мешает; таких пять, и они
+ * остаются как незакрытая гигиена, а не как сломанный замок.
+ */
+test('chthonic_attic keeps every closed hermetic seal on a real door cell', () => {
+  const gen = generatedChthonicAttic();
+  const leaking: string[] = [];
+  for (const [idx, door] of gen.world.doors) {
+    if (door.state !== DoorState.HERMETIC_CLOSED) continue;
+    if (gen.world.cells[idx] === Cell.DOOR) continue;
+    leaking.push(`${idx % W},${(idx / W) | 0}`);
+  }
+  assert.deepEqual(leaking, [], `закрытая печать на клетке без створки: ${leaking.join(' ')}`);
 });

@@ -12,17 +12,16 @@ import {
 } from '../audio';
 import { calculateReloadTime, setCombatClock } from '../combat';
 import { hasLineOfSight, lineCoverCells } from '../../world/line_of_sight';
-import { clearFogInZone } from '../fog_zone';
 import { agiAttackSpeedMult, meleeDamage } from '../rpg';
 import { zhelemishIncomingMeleeDamage } from '../status';
-import { spawnBloodHit, spawnDeathPool } from '../blood_fx';
+import { spawnBloodHit } from '../blood_fx';
 import { consumeDurability, getWeaponStats, removeItem, addItem, pickupDrop } from '../inventory';
 import { ITEMS } from '../../data/items';
 import { isDebugOnePunchManEnabled, keepDebugOnePunchManAlive } from '../debug_cheats';
 import { entityDisplayName } from '../../entities/monster';
 import { assignActorPath, followPath, tryAssignPathToCell } from './pathfinding';
 import { Spr, hostileProjectileSprite } from '../../entities/sprite_index';
-import { findCombatTarget, dropNpcInventory, deterministicScanCd } from './monster';
+import { findCombatTarget, deterministicScanCd } from './monster';
 import { recordEntityKill } from '../alife_rating';
 import { recordPlayerDamage } from '../damage';
 import { ENTITY_MASK_MONSTER, ENTITY_MASK_ACTOR, ENTITY_MASK_ITEM_DROP, getEntityIndex } from '../entity_index';
@@ -42,7 +41,6 @@ import { selectMeleeTarget } from '../melee_targeting';
 import { rng } from '../../core/rand';
 import { tryCombatOrbitStep } from './combat_orbit';
 import { trySetMicroGoal } from './micro_goals';
-import { killEntity } from '../entity_death';
 
 /* ── Module-level bark refs (set each frame) ─────────────────── */
 let _barkMsgs: Msg[] = [];
@@ -533,6 +531,10 @@ export function tryFactionCombat(
            * врождённая броня твари. Считать их здесь нельзя — конвейер брони с
            * побочными действиями (срывает плиты, печатает реплики), и второй
            * прогон удвоил бы их. Разбор и замер — `ActorDamageInput.applied`. */
+          /* Смерть уходит В ДВЕРЬ. Здесь стоял `deathByCaller`, и последствия
+           * были переписаны рядом: лужа и лут были, а записи в A-Life, дневника,
+           * сюжетного дропа и контентных хуков смерти не было — жилец, убитый
+           * жильцом, исчезал из мира не оставив персонального следа. */
           const hit = damageActor(world, state, hitTarget, {
             damage: dmg,
             damageType: ws.damageType,
@@ -540,7 +542,6 @@ export function tryFactionCombat(
             attacker: e,
             weaponId,
             time: _time,
-            deathByCaller: true,
           });
           if (isPlayerEntity(hitTarget)) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} задел тебя: -${dmg}`);
           if (hitTarget.type === EntityType.NPC && hitTarget.hp > 0
@@ -553,15 +554,12 @@ export function tryFactionCombat(
           // снаряд игрока в точке сборки.
           spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, hit.applied, hitTarget.type === EntityType.MONSTER);
           applyMeleeKnockback(world, e, hitTarget, meleeWs);
-          if (hitTarget.hp <= 0) {
+          /* Только то, чего общая обработка не знает: счёт убийств НЕ игрока
+           * (`handleKill` ведёт его лишь игроку) и реплика убийцы. Лужа, лут,
+           * туман босса и всё остальное — уже за дверью. */
+          if (hit.killed && !hitTarget.alive) {
             recordEntityKill(e, hitTarget);
-            killEntity(hitTarget);
-            spawnDeathPool(world, hitTarget.x, hitTarget.y, hitTarget.type === EntityType.MONSTER);
-            if (hitTarget.type === EntityType.NPC) dropNpcInventory(hitTarget, entities, nextId);
             emitMarkovBark(e, msgs, _time, 'combat', 'Готов.', BARK_CHANCE_KILL, '#da4');
-            if (hitTarget.isFogBoss && hitTarget.fogBossZone !== undefined) {
-              clearFogInZone(world, hitTarget.fogBossZone, msgs, _time);
-            }
           }
         }
       }

@@ -612,7 +612,6 @@ function activateNormalPriorityInteractionForLook(ctx: InteractionContext): Inte
   }
 
   if (tryUseHeatlinePressure(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
-  if (tryUseCarnivorousFungus(ctx.world, ctx.entities, ctx.nextEntityId, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
   if (tryCoverSeroburmalineSource(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true, worldChanged: true };
   if (tryUseHladonColdPocketCounter(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
   const content = tryUseContentInteraction(ctx);
@@ -671,7 +670,10 @@ export function activateWorldInteractionForActor(
   };
   const near = activateNormalPriorityInteractionForLook(nearCtx);
   if (near.handled) return near;
-  return activateNormalPriorityInteractionForLook(ctx);
+  const far = activateNormalPriorityInteractionForLook(ctx);
+  if (far.handled) return far;
+  if (tryUseCarnivorousFungus(world, entities, nextEntityId, actor, state, lookX, lookY)) return { handled: true };
+  return far;
 }
 
 export function activateInteraction(ctx: InteractionContext): InteractionResult {
@@ -705,7 +707,20 @@ export function activateInteraction(ctx: InteractionContext): InteractionResult 
 
   const nearNormal = activateNormalPriorityInteractionForLook(nearCtx);
   if (nearNormal.handled) return nearNormal;
-  return activateNormalPriorityInteractionForLook(ctx);
+  const farNormal = activateNormalPriorityInteractionForLook(ctx);
+  if (farNormal.handled) return farNormal;
+
+  /* Плотоядная грибница — интеракция КОМНАТЫ, а не клетки: она отвечает даже
+   * тогда, когда игрок просто СТОИТ внутри, ничего конкретного не выбрав.
+   * Поэтому её место — последнее, после обоих проходов near→far.
+   *
+   * Стояла она выше дверей и ящиков, и потому в комнате гриба нельзя было
+   * открыть по E ни дверь, ни ящик вовсе: ближний проход отвечал грибницей
+   * раньше, чем дальний вообще успевал посмотреть на створку. */
+  if (tryUseCarnivorousFungus(ctx.world, ctx.entities, ctx.nextEntityId, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) {
+    return { handled: true };
+  }
+  return farNormal;
 }
 
 export function isInteractableOverlayOpen(): boolean {
