@@ -98,6 +98,20 @@ import { updateCritterCrunch } from './render/critters';
 import { generateProceduralFloor } from './gen/procedural_floor';
 import { generateDesignFloor, isDesignFloorId } from './gen/design_floors/manifest';
 import { injectFastElevators } from './gen/fast_elevators';
+import {
+  VOID_RETURN_TARGET_Z,
+  type VoidReturnPortalState,
+  announceVoidReturn,
+  beginVoidReturn,
+  clearVoidReturnPortalState,
+  getVoidEntryFromFloor,
+  publishVoidReturnArrival,
+  restoreVoidReturnPortalForCurrentWorld,
+  setVoidEntryFromFloor,
+  setVoidReturnPortalState,
+  setVoidReturnTransition,
+  voidReturnPortalStateForSave,
+} from './gen/void/return_portal';
 import { stampCeilingHeights } from './world/ceiling_heights';
 import { fillVisualSlotsForWorldFeatures } from './world/visual_cell_slots';
 import { rebuildPathBlockersFromWorldObjects } from './world/path_blockers';
@@ -206,7 +220,7 @@ import { applyMapLegendSelection, applyUiSettingsSelection } from './systems/ui_
 import { checkPerformance } from './systems/fps_monitor';
 import { freshNeeds, ITEMS, WEAPON_STATS, type WeaponStats } from './data/catalog';
 import { INVENTORY_GRID_COLS, INVENTORY_GRID_ROWS, MAX_INVENTORY_SLOTS } from './data/inventory_limits';
-import { itemEquipSlot } from './data/items';
+import { itemEquipSlot, itemIsFlammable } from './data/items';
 import { designFloorAmbientLight } from './data/design_floor_profiles';
 import {
   themeForDesignFloor,
@@ -377,6 +391,7 @@ import {
 import {
   runContentEntityDeathHooks,
   updateContentRuntimeHooks,
+  runContentFloorArrivalHooks,
   type ContentCraftMenuRequest,
   type ContentRecipeLearnRequest,
 } from './systems/content_hooks';
@@ -645,12 +660,13 @@ import {
 import { reportPlatformProgress } from './systems/platform_progress';
 import { addFactionRel, addFactionRelMutual, initFactionRelations, resetPlayerFactionRelations, restoreFactionRelations } from './data/relations';
 import { createRuntimeCamera, resetRuntimeCamera, runtimeCameraView, startDeathCamera, updateRuntimeCamera, startTrailerCamera, updateTrailerCamera } from './systems/camera';
-import { onHeraldKilled, onCreatorKilled, onHellArrival, tryCreateVoiceQuest, onVoidEntry } from './data/plot_events';
 import { randomTip } from './data/tips';
 import { drawLoadingScreen } from './render/loading_screen';
 import {
   PROCEDURAL_FLOOR_ZS,
+  FLOOR_RUN_MAX_Z,
   FLOOR_RUN_VOID_Z,
+  ROUTE_SEAM_KEY_ITEM_ID,
   makeProceduralFloorSpec,
   proceduralFloorKey,
   type FloorAnomalyId,
@@ -3045,7 +3061,6 @@ const PORTAL_AD_OPEN_WAIT_MS = 4000;
 let platformGameplayMarkedActive = false;
 let currentTip = randomTip();
 let activeSkyProvider: (DynamicSkyTexture & { update(deltaSeconds: number): boolean }) | null = null;
-let lastVoidReturnPortalHintTick = -9999;
 let lastAttackFeedbackAt = -999;
 let visualDetailCacheKey = '';
 let visualDetailCacheProfile: ResolvedVisualDetailProfile = EMPTY_RESOLVED_VISUAL_DETAIL_PROFILE;
@@ -3350,7 +3365,7 @@ function continueDeathAsAlifePopulationNpc(): boolean {
     prepareEditableFloor(false, !loaded.fromMemory);
     resetMapForLoadedFloor(loaded);
     updateMapExploration(world, player, state);
-    restoreVoidReturnPortalForCurrentWorld();
+    restoreVoidReturnPortalForCurrentWorld(world, entities, state);
     applyDesignRouteGates(world, player, state);
     publishEvent(state, {
       type: 'floor_transition',
@@ -3479,219 +3494,14 @@ setWorldLogSpatialContextProvider(() => {
   };
 });
 
-interface VoidReturnPortalState {
-  active: boolean;
-  used: boolean;
-  cell: number;
-  openedAt: number;
-  openedTick: number;
-  creatorId: number;
-  playerMustLeaveCell?: boolean;
-  enteredFromFloor?: number;
-  usedAt?: number;
-  voidSpikeCarried?: boolean;
-  voidSpikeResolved?: boolean;
-}
-
-type VoidReturnPortalHost = GameState & {
-  voidReturnPortal?: VoidReturnPortalState;
-  voidEntryFromFloor?: number;
-};
-
-function normalizeVoidReturnPortalState(input: unknown): VoidReturnPortalState | undefined {
-  if (!input || typeof input !== 'object') return undefined;
-  const src = input as Partial<VoidReturnPortalState>;
-  const cell = Math.floor(finiteNumber(src.cell, -1));
-  if (cell < 0 || cell >= W * W) return undefined;
-  const enteredFromFloor = isValidZ(src.enteredFromFloor) ? src.enteredFromFloor : undefined;
-  return {
-    active: src.active === true,
-    used: src.used === true,
-    cell,
-    openedAt: finiteNumber(src.openedAt, 0),
-    openedTick: Math.max(0, Math.floor(finiteNumber(src.openedTick, 0))),
-    creatorId: Math.floor(finiteNumber(src.creatorId, -1)),
-    playerMustLeaveCell: src.playerMustLeaveCell === true,
-    enteredFromFloor,
-    usedAt: typeof src.usedAt === 'number' && Number.isFinite(src.usedAt) ? src.usedAt : undefined,
-    voidSpikeCarried: src.voidSpikeCarried === true,
-    voidSpikeResolved: src.voidSpikeResolved === true,
-  };
-}
-
-function getVoidReturnPortalState(targetState: GameState = state): VoidReturnPortalState | undefined {
-  const host = targetState as VoidReturnPortalHost;
-  const normalized = normalizeVoidReturnPortalState(host.voidReturnPortal);
-  if (normalized) host.voidReturnPortal = normalized;
-  else delete host.voidReturnPortal;
-  return normalized;
-}
-
-function setVoidReturnPortalState(targetState: GameState, input: unknown): void {
-  const host = targetState as VoidReturnPortalHost;
-  const normalized = normalizeVoidReturnPortalState(input);
-  if (normalized) host.voidReturnPortal = normalized;
-  else delete host.voidReturnPortal;
-}
-
-function clearVoidReturnPortalState(targetState: GameState = state): void {
-  delete (targetState as VoidReturnPortalHost).voidReturnPortal;
-  lastVoidReturnPortalHintTick = -9999;
-}
-
-function setVoidEntryFromFloor(targetState: GameState, value: unknown): void {
-  const host = targetState as VoidReturnPortalHost;
-  if (isValidZ(value)) host.voidEntryFromFloor = value;
-  else delete host.voidEntryFromFloor;
-}
-
-function voidReturnPortalStateForSave(targetState: GameState): VoidReturnPortalState | undefined {
-  const portal = getVoidReturnPortalState(targetState);
-  return portal ? { ...portal } : undefined;
-}
-
-function hasVoidSpike(): boolean {
-  return (player.inventory ?? []).some(item => item.defId === 'void_spike' && item.count > 0);
-}
-
-function voidSpikeResolved(): boolean {
-  return state.quests.some(q =>
-    q.type === QuestType.FETCH &&
-    q.targetItem === 'void_spike' &&
-    q.done &&
-    !q.failed);
-}
-
-function creatorKillQuestSatisfied(): boolean {
-  return state.quests.some(q =>
-    q.type === QuestType.KILL &&
-    q.targetMonsterKind === MonsterKind.CREATOR &&
-    (q.done || (q.killCount ?? 0) >= (q.killNeeded ?? 1)));
-}
-
-function isVoidReturnPortalFloor(targetState: GameState = state): boolean {
-  if (targetState.currentZ !== FLOOR_RUN_VOID_Z) return false;
-  const entry = currentFloorRunEntry(targetState);
-  return !entry || (!entry.designFloorId && !entry.spec);
-}
-
-function removeCreatorFromResolvedVoid(): void {
-  const portal = getVoidReturnPortalState();
-  if (!portal?.active || portal.used || !isVoidReturnPortalFloor()) return;
-  let writeIdx = 0;
-  for (let i = 0; i < entities.length; i++) {
-    const e = entities[i];
-    if (e.type === EntityType.MONSTER && e.monsterKind === MonsterKind.CREATOR) {
-      continue;
-    }
-    entities[writeIdx++] = e;
-  }
-  entities.length = writeIdx;
-}
-
-function restoreVoidReturnPortalForCurrentWorld(): boolean {
-  let portal = getVoidReturnPortalState();
-  if (!portal && isVoidReturnPortalFloor() && creatorKillQuestSatisfied()) {
-    const creator = entities.find(e => e.type === EntityType.MONSTER && e.monsterKind === MonsterKind.CREATOR);
-    if (creator) {
-      portal = {
-        active: true,
-        used: false,
-        cell: world.idx(Math.floor(creator.x), Math.floor(creator.y)),
-        openedAt: state.time,
-        openedTick: state.tick,
-        creatorId: creator.id,
-      };
-      (state as VoidReturnPortalHost).voidReturnPortal = portal;
-    }
-  }
-  if (!portal?.active || portal.used || !isVoidReturnPortalFloor()) return false;
-  const ci = portal.cell;
-  world.cells[ci] = Cell.FLOOR;
-  world.floorTex[ci] = Tex.PORTAL;
-  world.wallTex[ci] = 0;
-  world.markFloorTexDirty();
-  removeCreatorFromResolvedVoid();
-  return true;
-}
-
-function openVoidReturnPortalFromCreator(creator: Entity, enteredFromFloor?: number): void {
-  const cell = world.idx(Math.floor(creator.x), Math.floor(creator.y));
-  const entryFloor = enteredFromFloor ?? (state as VoidReturnPortalHost).voidEntryFromFloor;
-  const playerCell = world.idx(Math.floor(player.x), Math.floor(player.y));
-  (state as VoidReturnPortalHost).voidReturnPortal = {
-    active: true,
-    used: false,
-    cell,
-    openedAt: state.time,
-    openedTick: state.tick,
-    creatorId: creator.id,
-    playerMustLeaveCell: playerCell === cell,
-    enteredFromFloor: entryFloor,
-  };
-  restoreVoidReturnPortalForCurrentWorld();
-  const x = cell % W;
-  const y = (cell / W) | 0;
-  const zoneId = world.zoneMap[cell];
-  state.msgs.push(msg('Портал возврата закреплён: переход сработает только в его центре.', state.time, '#0ff'));
-  state.msgs.push(msg('Перед входом можно оставить Пустотный шип Жану, если он у вас.', state.time, '#8cf'));
-  publishEvent(state, {
-    type: 'floor_transition',
-    z: -50,
-    zoneId,
-    x: x + 0.5,
-    y: y + 0.5,
-    actorId: player.id,
-    actorName: player.name,
-    actorFaction: player.faction,
-    targetId: creator.id,
-    targetName: 'Портал возврата открыт',
-    monsterKind: MonsterKind.CREATOR,
-    severity: 5,
-    privacy: 'local',
-    tags: ['floor', 'floor_transition', 'void', 'return_portal', 'opened'],
-    data: {
-      portalCell: cell,
-      portalX: x,
-      portalY: y,
-      creatorId: creator.id,
-      enteredFromFloor: entryFloor,
-    },
-  });
-}
-
-function maybeShowVoidReturnPortalHint(playerCell: number): void {
-  if (state.tick - lastVoidReturnPortalHintTick < 180) return;
-  const portal = getVoidReturnPortalState();
-  if (portal?.active && !portal.used) {
-    const px = (portal.cell % W) + 0.5;
-    const py = ((portal.cell / W) | 0) + 0.5;
-    const d2 = world.dist2(player.x, player.y, px, py);
-    if (d2 > 12 * 12) return;
-    const dist = Math.max(0, Math.round(Math.sqrt(d2)));
-    const consequence = hasVoidSpike()
-      ? 'Шип у вас: Жан может забрать его до входа.'
-      : voidSpikeResolved()
-        ? 'Последствие оставлено здесь.'
-        : 'Центр вернёт в жилую зону.';
-    state.msgs.push(msg(`Портал возврата: ${dist}м. ${consequence}`, state.time, '#0ff'));
-    lastVoidReturnPortalHintTick = state.tick;
-    return;
-  }
-  if (world.floorTex[playerCell] === Tex.PORTAL) {
-    state.msgs.push(msg('Эта текстура портала не является закреплённым возвратом.', state.time, '#888'));
-    lastVoidReturnPortalHintTick = state.tick;
-  }
-}
-
+/* Портал возврата из Пустоты живёт в пакете своего этажа
+ * (`gen/void/return_portal.ts`): там его состояние, условия, тексты и хуки.
+ * `main.ts` оставляет за собой только смену мира — она его работа по контракту
+ * слоёв — и отдаёт её модулю впрыском (`setVoidReturnTransition` ниже). */
 function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   restorePlayerBeforeWorldBoundary();
-  portal.used = true;
-  portal.usedAt = state.time;
-  portal.voidSpikeCarried = hasVoidSpike();
-  portal.voidSpikeResolved = voidSpikeResolved();
+  const departure = beginVoidReturn(state, player, portal);
 
-  const fromFloor = state.currentZ;
   captureCurrentAlifeFloor();
   const savedInventory = player.inventory ? [...player.inventory] : [];
   const savedNeeds = player.needs ? { ...player.needs } : freshNeeds();
@@ -3704,40 +3514,24 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   const savedStatuses = player.statuses ? [...player.statuses] : undefined;
   const savedMoney = player.money ?? 100;
   const savedAngle = player.angle;
-  const portalCell = portal.cell;
-  const openedAt = portal.openedAt;
-  const openedTick = portal.openedTick;
-  const creatorId = portal.creatorId;
-  const enteredFromFloor = portal.enteredFromFloor;
-  const voidSpikeWasCarried = portal.voidSpikeCarried;
-  const voidSpikeWasResolved = portal.voidSpikeResolved;
-  const voidSpikeTag = voidSpikeWasResolved ? 'void_spike_left' : voidSpikeWasCarried ? 'void_spike_carried' : 'void_spike_absent';
 
-  state.currentZ = 0;
+  state.currentZ = VOID_RETURN_TARGET_Z;
   state.gameWon = false;
   state.gameOver = false;
   resetRuntimeCamera(runtimeCamera);
   clearVoidReturnPortalState(state);
   setVoidEntryFromFloor(state, undefined);
-  forceFloorRunStory(state, 0);
+  forceFloorRunStory(state, VOID_RETURN_TARGET_Z);
   // Якорь возврата — тот же жилой этаж, что выставлен в `state.currentZ` выше.
   // Стояло 100: ключ жилого по удалённой шкале, этажа с таким z не существует.
-  const floorInstances = ensureFloorInstanceState(state, 0);
+  const floorInstances = ensureFloorInstanceState(state, VOID_RETURN_TARGET_Z);
   floorInstances.current = null;
-  floorInstances.lastStableFloor = 0;
-  state.msgs.push(msg(
-    voidSpikeWasResolved
-      ? 'Возврат принят. Последствие осталось в Пустоте. Жилая зона принимает вас обратно.'
-      : voidSpikeWasCarried
-        ? 'Возврат принят. Пустотный шип вернулся вместе с вами.'
-        : 'Возврат принят. Пустота закрыла за вами центр. Жилая зона снова под ногами.',
-    state.time,
-    '#0f8',
-  ));
+  floorInstances.lastStableFloor = VOID_RETURN_TARGET_Z;
+  announceVoidReturn(state, departure);
 
   scheduleLoading(() => {
     resetGeneratedFloorPopulationState();
-    const loaded = loadFloorForTarget({ entry: null, instanceId: null, z: 0 });
+    const loaded = loadFloorForTarget({ entry: null, instanceId: null, z: VOID_RETURN_TARGET_Z });
     const gen = loaded.generation;
     world = replaceWorldFromGeneration(null, gen);
     entities = gen.entities;
@@ -3789,31 +3583,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     clearLiftArachnaActive(state);
     clearPseudoliftActive(state, entities);
 
-    publishEvent(state, {
-      type: 'floor_transition',
-      z: 0,
-      zoneId: world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))],
-      x: player.x,
-      y: player.y,
-      actorId: player.id,
-      actorName: player.name,
-      actorFaction: player.faction,
-      targetName: 'Возврат в жилую зону',
-      severity: 5,
-      privacy: 'local',
-      tags: ['floor', 'floor_transition', 'void', 'return_portal', 'used', 'freeplay', voidSpikeTag],
-      data: {
-        fromFloor,
-        toFloor: 0,   // канонический жилой этаж; 100 — ключ снятой шкалы
-        portalCell,
-        openedAt,
-        openedTick,
-        creatorId,
-        enteredFromFloor,
-        voidSpikeCarried: voidSpikeWasCarried,
-        voidSpikeResolved: voidSpikeWasResolved,
-      },
-    });
+    publishVoidReturnArrival(world, player, state, departure);
 
     ensureRoomContainers(world, state.currentZ);
     ensureProductionRooms(state, world);
@@ -3825,28 +3595,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   }, true);
 }
 
-function tryUseVoidReturnPortal(playerCell: number): boolean {
-  const portal = getVoidReturnPortalState();
-  if (!portal?.active || portal.used || !isVoidReturnPortalFloor()) {
-    maybeShowVoidReturnPortalHint(playerCell);
-    return false;
-  }
-  if (playerCell !== portal.cell) {
-    if (portal.playerMustLeaveCell) portal.playerMustLeaveCell = false;
-    maybeShowVoidReturnPortalHint(playerCell);
-    return false;
-  }
-  if (portal.playerMustLeaveCell) {
-    if (state.tick - lastVoidReturnPortalHintTick >= 120) {
-      state.msgs.push(msg('Портал раскрылся под ногами. Отойдите и войдите снова, когда будете готовы.', state.time, '#0ff'));
-      lastVoidReturnPortalHintTick = state.tick;
-    }
-    return false;
-  }
-
-  returnFromVoidPortalToLiving(portal);
-  return true;
-}
+setVoidReturnTransition(returnFromVoidPortalToLiving);
 
 interface SmokeDebugSnapshot {
   started: boolean;
@@ -4239,6 +3988,27 @@ function loadingProgress(stage: string, pct: number): void {
   } catch { /* localStorage unavailable — ignore */ }
 }
 
+/* ── Модули со своим состоянием вне `state` ───────────────────────
+ * Один список на оба входа в забег: новую игру и загрузку. Раньше их было два,
+ * они расходились по одной строке за раз, и загрузка в той же вкладке
+ * подхватывала подсказку маршрута, ленту слухов и счётчик реплик прошлого
+ * забега. Дописывать сброс сюда — значит дописать его обоим сразу. */
+function resetRunScopedModules(): void {
+  resetGeneratedFloorPopulationState();
+  clearRoomMemory();
+  resetNpcMemoryStore();
+  resetBarkState();
+  resetMetroCooldown();
+  clearActiveBet();
+  resetArenaDuel();
+  resetArenaLadderRuntime();
+  resetCombatStimulus();
+  resetMonsterBaits();
+  resetRouteCueHud();
+  resetRumorEvents();
+  resetDialogueState();
+}
+
 function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: boolean = false): void {
   const _t0 = performance.now();
   resetRuntimeCamera(runtimeCamera);
@@ -4295,19 +4065,7 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   // Initialize faction relations and per-cell faction control
   initFactionRelations();
   initFactionControl(world);
-  resetGeneratedFloorPopulationState();
-  clearRoomMemory();
-  resetNpcMemoryStore();
-  resetBarkState();
-  resetMetroCooldown();
-  clearActiveBet();
-  resetArenaDuel();
-  resetArenaLadderRuntime();
-  resetCombatStimulus();
-  resetMonsterBaits();
-  resetRouteCueHud();
-  resetRumorEvents();
-  resetDialogueState();
+  resetRunScopedModules();
 
   state = {
     tick: 0,
@@ -5138,8 +4896,12 @@ function handlePlayerAttack(_dt: number): void {
         notifyLiftArachnaNoise(world, player, state, weaponId);
         player.attackCd = ws.speed * atkSpeedMod;
       } else {
-        if (weaponId === 'flamethrower') {
-          pushAttackFeedback('Бензин кончился!', '#f84', 0.3);
+        /* Пустой бак — свойство ОРУЖИЯ, а не одного его id. Сравнение стояло
+         * с `'flamethrower'`, и пять огнемётов из шести (РОКС-47, «Агния»,
+         * О-15, АТО-41, ШМК) сообщали «Нет патронов!» и не публиковали
+         * `fuel_empty` вовсе. Спрашиваем тип снаряда. */
+        if (ws.projType === ProjType.FLAME) {
+          pushAttackFeedback('Горючее кончилось!', '#f84', 0.3);
           publishFuelEmptyEvent(ws.ammoType);
         } else {
           pushAttackFeedback('Нет патронов!', '#f84', 0.3);
@@ -5593,21 +5355,9 @@ function handleKill(e: Entity, killerIsPlayer: boolean, pvx = 0, pvy = 0, goreLe
     if (killerIsPlayer) {
       awardXP(killerActor, xpForMonsterKill(e.monsterKind, e.rpg?.level ?? 1), killerActor === player ? state.msgs : [], state.time);
     }
-    // Herald killed — check if the Podad lower route is now open.
-    if (e.monsterKind === MonsterKind.HERALD && killerIsPlayer && currentFloorRunEntry(state).designFloorId === 'podad') {
-      if (onHeraldKilled(e, world, state)) {
-        applyDesignRouteGates(world, player, state);
-        updateWorldData(world);
-      }
-    }
-    // Creator killed — spawn return portal
-    if (e.monsterKind === MonsterKind.CREATOR && killerIsPlayer && currentFloorRunEntry(state).designFloorId === 'void') {
-      if (onCreatorKilled(e, world, state)) {
-        checkQuests(player, world, entities, state, state.msgs);
-        openVoidReturnPortalFromCreator(e);
-        updateWorldData(world);
-      }
-    }
+    /* Сюжетные последствия смерти живут в пакетах своих этажей и приезжают
+     * общим `runContentEntityDeathHooks` ниже: ворота нижнего маршрута
+     * (`podad_herald_gate`), портал возврата из Пустоты (`void_return_portal`). */
   } else if (e.type === EntityType.NPC && killerIsPlayer) {
     awardXP(killerActor, xpForNpcKill(e.rpg?.level ?? 1), killerActor === player ? state.msgs : [], state.time);
     // Счёт убийств ведётся по СЛОТУ: `targetNpcId` и `failOnNpcDeathId` авторских
@@ -5633,11 +5383,6 @@ setActorDeathHandler((victim, killer, gore, vx, vy) => {
   const playerSide = killer !== undefined && (killer === player || killer.peerSlot !== undefined);
   handleKill(victim, playerSide, vx, vy, gore, killer);
 });
-
-const FLAME_COLLATERAL_ITEMS = new Set([
-  'bread', 'canned', 'rawmeat', 'mushroom_mass', 'infected_mushroom',
-  'cloth_roll', 'note', 'book', 'water_coupon', 'filter_layer',
-]);
 
 function projectileActor(p: Entity): Entity | undefined {
   if (p.ownerId === player.id) return player;
@@ -5685,7 +5430,7 @@ function burnCollateralNearFlame(x: number, y: number, radius: number, actor: En
     let slot = undefined;
     let slotIndex = -1;
     for (let j = 0; j < inv.length; j++) {
-      if (FLAME_COLLATERAL_ITEMS.has(inv[j].defId)) {
+      if (itemIsFlammable(inv[j].defId)) {
         slot = inv[j];
         slotIndex = j;
         break;
@@ -6454,7 +6199,7 @@ function switchFloor(
   // не идёт. Иначе с крыши уезжали бы прямо в Пустоту, минуя весь маршрут, — тот
   // самый бесплатный и случайный обход, который запрещён законом о замках.
   if (!fastTravel && allowElevatorAnomaly && routeMoveCrossesSeam(state.currentZ, direction)
-      && !hasItem(player, 'through_shaft_key')) {
+      && !hasItem(player, ROUTE_SEAM_KEY_ITEM_ID)) {
     state.msgs.push(msg('Кабина не идёт: шахта сквозная, и её держат. Нужен ключ сквозной шахты.', state.time, '#f84'));
     return;
   }
@@ -6474,7 +6219,10 @@ function switchFloor(
       if (state.currentZ <= FLOOR_RUN_VOID_Z) return;
       nextFloor = state.currentZ - 2;
     } else {
-      if (state.currentZ >= 34) return; // 34 is Upper Bureau
+      // Потолок последовательного хода — верх маршрута из данных (крыша, z+50).
+      // Стояло 34 с подписью «Верхнее бюро»: над ним ещё девять остановок
+      // маршрута, и низ рядом уже брал границу из данных (`FLOOR_RUN_VOID_Z`).
+      if (state.currentZ >= FLOOR_RUN_MAX_Z) return;
       nextFloor = state.currentZ + 2;
     }
   }
@@ -6679,18 +6427,14 @@ function switchFloor(
       },
     });
 
-    // Auto-trigger voice quest when entering Hell with step 9 (kill Mancobus) done
-    const enteredStoryHell = generatedRunEntry
-      ? generatedRunEntry.designFloorId === 'hell'
-      : false;   // именно этаж «Ад»: шаг «Зона закрепления» объявляет design:hell, z -36
-    if (!route.activeInstance && enteredStoryHell) {
-      onHellArrival(player, state);
-      tryCreateVoiceQuest(world, entities, state);
-    }
-    const enteredStoryVoid = generatedRunEntry
-      ? generatedRunEntry.designFloorId === 'void'
-      : false;   // именно Пустота: там стоит Творец и там же кончается маршрут
-    if (!route.activeInstance && enteredStoryVoid) onVoidEntry(state);
+    /* Слово этажа при высадке — его собственное дело. Здесь поимённо стояли
+     * Ад и Пустота; теперь этаж объявляет хук прибытия у себя в пакете. */
+    if (runContentFloorArrivalHooks({
+      world, entities, player, state, nextEntityId,
+      designFloorId: generatedRunEntry?.designFloorId,
+      z: nextFloor,
+      insideFloorInstance: route.activeInstance !== null,
+    }).worldChanged) updateWorldData(world);
     loadingProgress('Расставляем лифты и двери', 70);
     ensureRoomContainers(world, state.currentZ);
     ensureProductionRooms(state, world);
@@ -6698,7 +6442,7 @@ function switchFloor(
     resetMapForLoadedFloor(loaded);
     updateMapExploration(world, player, state);
     ensureProceduralSpriteSeeds(entities);
-    restoreVoidReturnPortalForCurrentWorld();
+    restoreVoidReturnPortalForCurrentWorld(world, entities, state);
     applyDesignRouteGates(world, player, state);
     if (allowElevatorAnomaly) {
       tryStartLiftArachnaEncounter(world, player, state, {
@@ -7013,7 +6757,7 @@ function saveGame(auto = false): void {
     captureCurrentFloorMemory();
     const data = createGameSavePayload(player, state, world.containers, {
       voidReturnPortal: voidReturnPortalStateForSave(state),
-      voidEntryFromFloor: (state as VoidReturnPortalHost).voidEntryFromFloor,
+      voidEntryFromFloor: getVoidEntryFromFloor(state),
       floorMemory: floorMemoryStateForSave(),
       playedScenes: floorScenesForSave(),
     });
@@ -7127,22 +6871,7 @@ function loadGame(): boolean {
     });
     scheduleLoading(() => {
       resetNoiseRecords();
-      resetGeneratedFloorPopulationState();
-      clearRoomMemory();
-      resetNpcMemoryStore();
-      resetBarkState();
-      resetMetroCooldown();
-      clearActiveBet();
-      resetArenaDuel();
-      resetArenaLadderRuntime();
-      resetCombatStimulus();
-      resetMonsterBaits();
-      /* Эти три жили ТОЛЬКО в `initGame`, хотя оба списка сбросов в остальном
-       * совпадают строка в строку. Загрузка в той же вкладке подхватывала
-       * подсказку маршрута, ленту слухов и счётчик реплик от прошлого забега. */
-      resetRouteCueHud();
-      resetRumorEvents();
-      resetDialogueState();
+      resetRunScopedModules();
       const loaded = loadFloorForTarget({ entry: generatedRunEntry, instanceId: loadedInstanceId, z: savedFloor });
       const gen = loaded.generation;
 
@@ -7282,7 +7011,7 @@ function loadGame(): boolean {
       resetMapForLoadedFloor(loaded);
       updateMapExploration(world, player, state);
       ensureProceduralSpriteSeeds(entities);
-      restoreVoidReturnPortalForCurrentWorld();
+      restoreVoidReturnPortalForCurrentWorld(world, entities, state);
       applyDesignRouteGates(world, player, state);
 
       state.msgs.push(msg('Игра загружена', state.time, '#4af'));
@@ -10536,6 +10265,10 @@ function gameLoop(now: number): void {
     contentStart = performance.now();
     if (updateContentRuntimeHooks({ world, entities, player, state, nextEntityId, dt, phase: 'floor_activity', gameOver: false })) updateWorldData(world);
     lastContentHookMs += performance.now() - contentStart;
+    /* Контентный хук вправе заказать смену мира (портал возврата из Пустоты):
+     * тогда `state.currentZ` уже переставлен, а геометрия под ногами ещё
+     * старая — дожимать кадр нельзя. Тот же приём, что у самосбора выше. */
+    if (pendingLoad) { syncMsgLog(); requestAnimationFrame(gameLoop); return; }
     const activeAlifeFloorKey = currentFloorMemoryKey();
     tickAlifeMigration(state, dt, { activeFloorKey: activeAlifeFloorKey });
     const alifeArrivals = processAlifePendingArrivals(state, world, entities, nextEntityId, { activeFloorKey: activeAlifeFloorKey });
@@ -10586,16 +10319,6 @@ function gameLoop(now: number): void {
       checkQuests(player, world, entities, state, state.msgs, nextEntityId);
       if (updateScriptedArrivals(world, entities, player, state, nextEntityId)) {
         rebuildEntityIndexAfterSpawnCleanup(entities);
-      }
-    }
-
-    // Return portal in Void — only the Creator-opened portal can end the run.
-    if (currentFloorRunEntry(state).designFloorId === 'void' && state.tick % 10 === 0) {
-      const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
-      if (tryUseVoidReturnPortal(pci)) {
-        syncMsgLog();
-        requestAnimationFrame(gameLoop);
-        return;
       }
     }
 

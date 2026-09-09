@@ -70,6 +70,18 @@ export function itemDefHasTag(def: ItemDef, tag: string): boolean {
   return (ITEM_TAGS[def.id]?.includes(tag) ?? false) || (def.tags?.includes(tag) ?? false);
 }
 
+/**
+ * «Горит» — свойство самого предмета, а не список у огнемёта.
+ *
+ * Список из десяти id жил в `main.ts` рядом с обратной тягой пламени, и всякий
+ * второй источник огня обязан был бы переписать его у себя. Теперь это метка
+ * `flammable` в `ITEM_TAGS`: предмет объявляет себя сам, а спрашивает кто угодно.
+ */
+export function itemIsFlammable(defId: string): boolean {
+  const def = ITEMS[defId];
+  return def ? itemDefHasTag(def, 'flammable') : false;
+}
+
 export function itemEquipSlot(def: ItemDef): ItemEquipSlot | null {
   if (def.type === ItemType.WEAPON) return itemDefHasTag(def, 'psi') ? 'tool' : 'weapon';
   if (def.type === ItemType.TOOL) return 'tool';
@@ -177,12 +189,12 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   chalk: ['tool', 'route_marker', 'map_mark', 'trade'],
   toiletpaper: ['hygiene', 'paper', 'resident_good', 'barter', 'trade'],
   resident_trinket_box: ['resident_good', 'valuable', 'trade'],
-  bread: ['bait', 'bait_starch', 'bait_stale'],
-  canned: ['bait', 'bait_meat', 'bait_sealed'],
+  bread: ['bait', 'bait_starch', 'bait_stale', 'flammable'],
+  canned: ['bait', 'bait_meat', 'bait_sealed', 'flammable'],
   kasha: ['bait', 'bait_starch', 'bait_wet'],
-  rawmeat: ['bait', 'bait_meat', 'bait_risky', 'bait_trap'],
-  mushroom_mass: ['bait', 'bait_fungal', 'bait_wet'],
-  infected_mushroom: ['bait', 'bait_fungal', 'bait_risky', 'contaminant'],
+  rawmeat: ['bait', 'bait_meat', 'bait_risky', 'bait_trap', 'flammable'],
+  mushroom_mass: ['bait', 'bait_fungal', 'bait_wet', 'flammable'],
+  infected_mushroom: ['bait', 'bait_fungal', 'bait_risky', 'contaminant', 'flammable'],
   grey_briquette: ['bait', 'bait_starch', 'concentrate', 'daily_ration'],
   green_briquette: ['bait', 'bait_starch', 'bait_fungal'],
   liquidator_ration: ['liquidator', 'concentrate', 'nutritious_concentrate', 'black_concentrate', 'field_ration', 'closed_issue', 'bait', 'bait_meat'],
@@ -243,7 +255,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   shelter_tally: ['istotit', 'shelter_tally', 'document', 'evidence'],
   forged_shelter_tally: ['istotit', 'shelter_tally', 'document', 'forgery'],
   maronary_shaving: ['maronary', 'contraband', 'evidence', 'science', 'cult'],
-  water_coupon: ['ration', 'coupon', 'document', 'economy'],
+  water_coupon: ['ration', 'coupon', 'document', 'economy', 'flammable'],
   concentrate_coupon: ['ration', 'coupon', 'document', 'economy'],
   ration_registry_extract: ['ration', 'registry', 'document', 'audit'],
   forged_ration_card: ['ration', 'forged', 'contraband', 'audit'],
@@ -349,7 +361,10 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   deactivated_residue: ['slime', 'sample', 'deactivated', 'burned', 'reagent'],
   syringe_empty: ['medical', 'nii', 'component', 'injection', 'trade'],
   cotton_wool: ['medical', 'filter', 'component'],
-  cloth_roll: ['medical', 'filter', 'component', 'cloth', 'wet_cloth', 'samosbor', 'counterplay', 'cold_counter'],
+  cloth_roll: ['medical', 'filter', 'component', 'cloth', 'wet_cloth', 'samosbor', 'counterplay', 'cold_counter', 'flammable'],
+  note: ['flammable'],
+  book: ['flammable'],
+  filter_layer: ['filter', 'component', 'flammable'],
   technical_spirit: ['medical', 'sterilization', 'fuel', 'contraband', 'reagent', 'brewing', 'trade'],
   sugar_pack: ['food', 'sugar', 'brewing', 'barter', 'bait', 'bait_sugar', 'trade'],
   braga_bucket: ['brewing', 'contraband', 'black_market', 'kitchen', 'factory_output', 'food', 'trade'],

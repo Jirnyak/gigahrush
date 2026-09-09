@@ -47,6 +47,29 @@ export interface ContentEntityDeathHook {
   onDeath: (ctx: ContentEntityDeathContext) => void | ContentHookResult | boolean;
 }
 
+/* ── Прибытие на этаж ─────────────────────────────────────────────
+ * Этаж вправе сказать своё слово, когда игрок на него ступил: реплики Ада,
+ * раскрытие ловушки Творца в Пустоте. Раньше такие вызовы стояли поимённо
+ * внутри `switchFloor` в `main.ts` — прямой запрет `CLAUDE.md` на контент в
+ * общем коде. Хук зовётся ОДИН раз за переход, уже после генерации этажа. */
+export interface ContentFloorArrivalContext {
+  world: World;
+  entities: Entity[];
+  player: Entity;
+  state: GameState;
+  nextEntityId: { v: number };
+  /** Маршрутный id остановки, если это авторский этаж. */
+  designFloorId?: string;
+  z: number;
+  /** Внутри экземпляра этажа (аномалия лифта) — не «настоящее» прибытие. */
+  insideFloorInstance: boolean;
+}
+
+export interface ContentFloorArrivalHook {
+  id: string;
+  onArrival: (ctx: ContentFloorArrivalContext) => void | ContentHookResult | boolean;
+}
+
 export interface ContentInteractionContext {
   world: World;
   state: GameState;
@@ -98,6 +121,7 @@ export interface ContentInteractionHook {
 
 const runtimeHooks: ContentRuntimeHook[] = [];
 const entityDeathHooks: ContentEntityDeathHook[] = [];
+const floorArrivalHooks: ContentFloorArrivalHook[] = [];
 const interactionHooks: ContentInteractionHook[] = [];
 
 function upsertById<T extends { id: string }>(list: T[], item: T): void {
@@ -131,6 +155,18 @@ export function runContentEntityDeathHooks(ctx: ContentEntityDeathContext): Cont
   let worldChanged = false;
   for (const hook of entityDeathHooks) {
     worldChanged = resultChanged(hook.onDeath(ctx)) || worldChanged;
+  }
+  return { worldChanged };
+}
+
+export function registerContentFloorArrivalHook(hook: ContentFloorArrivalHook): void {
+  upsertById(floorArrivalHooks, hook);
+}
+
+export function runContentFloorArrivalHooks(ctx: ContentFloorArrivalContext): ContentHookResult {
+  let worldChanged = false;
+  for (const hook of floorArrivalHooks) {
+    worldChanged = resultChanged(hook.onArrival(ctx)) || worldChanged;
   }
   return { worldChanged };
 }

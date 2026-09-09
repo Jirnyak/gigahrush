@@ -678,6 +678,39 @@ system: an unmanned step states that it is unmanned, and the chain does the rest
 Both directions are locked by `tests/npc-home-floor.test.ts` over all design floors: declared home
 equals actual floor, and everyone who declared a floor is on it.
 
+### Floor Content Hook Contract (2026-09-09)
+
+Событие этажа принадлежит этажу. `main.ts` владеет порядком кадра и сменой мира — и
+только ими; **ни один этаж не называется в нём по имени.** Швов четыре, все в
+`systems/content_hooks.ts`, и все зовутся ровно из одного места:
+
+| Шов | Когда | Кто зовёт |
+| --- | --- | --- |
+| `registerContentRuntimeHook` | каждый кадр, три фазы (`pre_ai`, `post_ai`, `floor_activity`) | `updateContentRuntimeHooks` |
+| `registerContentEntityDeathHook` | смерть любой сущности | `runContentEntityDeathHooks` |
+| `registerContentFloorArrivalHook` | один раз за переход, после генерации | `runContentFloorArrivalHooks` |
+| `registerContentInteractionHook` | `E` по цели | `findContentInteractionTarget` / `tryUseContentInteraction` |
+
+Правила:
+
+- **Хук — объявление, и регистрируется импортом.** Своего генератора у такого модуля нет:
+  подключение — строка `import './<module>';` в `content_manifest.ts` этажа. Аудит контента
+  это знает и требует, чтобы модуль действительно что-то регистрировал.
+- **Адрес проверяет сам хук.** Маршрутный id (`ctx.designFloorId`, `currentFloorRunEntry`)
+  — условие внутри модуля, а не `if` в общем коде.
+- **Экземпляр этажа — не прибытие.** `insideFloorInstance` означает аномалию лифта; реплики
+  прибытия там молчат.
+- **`worldChanged` возвращает хук, `updateWorldData` зовёт вызывающий.** Второй owner
+  обновления геометрии не заводится.
+- **Смена мира хуку не принадлежит.** Ей владеет `main.ts`; хук, которому она нужна,
+  получает её впрыском — образец: `setVoidReturnTransition` у портала возврата из Пустоты.
+  Кадр после такого хука обрывается по общему `pendingLoad`, как после самосбора.
+
+Ловушка при написании замка на такой хук: **страж этажа легко оказывается затенён.**
+Если контентная функция сама молчит без своего условия (у `onHellArrival` это открытое
+поручение `hell_holdout`), отрицательный случай молчит не из-за стража. Отрицательный
+случай обязан быть готов ко ВСЕМУ, кроме адреса.
+
 ### Floor Scene Contract
 
 A floor scene is a **declaration, not code**. The floor lists actors and beats; one shared player

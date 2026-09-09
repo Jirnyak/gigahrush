@@ -1626,8 +1626,11 @@ for (const ref of manifestImportRefs) {
     // Наблюдатель мировых событий — тот же случай: модуль этажа, который реагирует
     // на факт мира (последствие сюжетного шага, миграция, авария), объявляется, а не
     // вызывается. Генератора у него тоже нет.
-    if (!/register(?:SideQuest|ZoneContent|FloorScene|WorldEventObserver)\s*\(/.test(text)) {
-      errors.push(`${ref.file}:${ref.line} side-effect manifest import "${ref.spec}" resolves to ${ref.target} but does not register zone content, a side quest, a floor scene or a world event observer`);
+    // Контентный хук (рантайм, смерть, взаимодействие) — тот же класс объявления:
+    // так подключён портал возврата из Пустоты, у которого нет генератора вовсе —
+    // его «постройка» это смерть Творца в рантайме.
+    if (!/register(?:SideQuest|ZoneContent|FloorScene|WorldEventObserver|ContentRuntimeHook|ContentEntityDeathHook|ContentInteractionHook|ContentFloorArrivalHook)\s*\(/.test(text)) {
+      errors.push(`${ref.file}:${ref.line} side-effect manifest import "${ref.spec}" resolves to ${ref.target} but does not register zone content, a side quest, a floor scene, a world event observer or a content hook`);
     }
   }
 }

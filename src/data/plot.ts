@@ -565,7 +565,7 @@ export const PLOT_CHAIN: PlotStep[] = [
   {
     type: QuestType.FETCH,
     sourceLabel: 'Пустота',
-    desc: 'Забери пустотный шип и вынеси его сам. Предъявлять его тут больше некому, а в жилые блоки не тащат то, что не проходит по инвентарной описи.',
+    desc: 'Пустотный шип сдаётся на месте: предъявлять его тут уже некому, а в жилые блоки не тащат то, что не проходит по инвентарной описи. Оставь последствие в Пустоте и уходи через центр портала.',
     targetItem: 'void_spike', targetCount: 1,
     rewardItem: 'holy_water', rewardCount: 2,
     extraRewards: [{ defId: 'bandage', count: 3 }, { defId: 'antidep', count: 1 }],

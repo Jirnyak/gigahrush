@@ -8,6 +8,9 @@ import { generateMaronarySignalshchik } from './maronary_signalshchik';
 import { generatePerestanovshchik } from './perestanovshchik';
 import { generateVoidPlotChain } from './plot_chain';
 import { generatePristavPustoty } from './pristav_pustoty';
+// Портал возврата регистрирует свои хуки на импорте — генератора у него нет.
+import './return_portal';
+import './arrival';
 import { generateSeryySmotritel } from './seryy_smotritel';
 import { generateTraceSealProtocol } from './trace_seal_protocol';
 

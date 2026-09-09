@@ -17,6 +17,8 @@ import { newEntityIdCursor } from '../entity_ids';
 import { PODAD_DEFAULT_SEED, SPAWN_X, SPAWN_Y, CAPILLARY_FIELD_TAG } from "./meta";
 import { expandPodadRouteGeometry, reinforcePodadAuthoredHqTerritory, paintPodadTerrain, decoratePodadRooms, forceUpperLift, registerPodadRouteCues } from "./geometry";
 import { spawnPodadPlotNpcs, buildPodadField, carvePodadSpines, buildPodadRooms, stampPodadCapillaryField, tunePodadZones, spawnPodadHeralds, seedPodadDrops } from "./npcs";
+// Ворота нижнего маршрута открывает смерть Вестника — хук на импорте.
+import "./herald_gate";
 
 export function generatePodadDesignFloor(seed = PODAD_DEFAULT_SEED): FloorGeneration {
   return withSeededRandom(seed, () => {

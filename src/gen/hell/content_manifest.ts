@@ -4,6 +4,8 @@ import { type Entity } from '../../core/types';
 import { World } from '../../core/world';
 import { syncNextEntityId } from '../content_manifest_utils';
 import { generateHellPlotChain } from './plot_chain';
+// Реплики прибытия регистрируют хук на импорте — генератора у них нет.
+import './arrival';
 import { generatePsiMeatCache } from './psi_meat_cache';
 import { spawnMedukaMeguku } from './madoka';
 import { generateThinWallChapel } from './thin_wall_chapel';

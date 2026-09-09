@@ -192,6 +192,13 @@ export const FLOOR_RUN_VOID_Z = -50;
 export const FLOOR_RUN_NPC_FREE_Z = -48;
 
 /**
+ * Замок шва кольца: шахта у мира одна, и без этого ключа кабина через шов не
+ * идёт. Id живёт здесь, рядом с координатами маршрута, а не строкой в `main.ts`:
+ * шов — правило маршрута, и спросить о нём вправе любой слой над данными.
+ */
+export const ROUTE_SEAM_KEY_ITEM_ID = 'through_shaft_key';
+
+/**
  * Gen-time route contract: which lift directions a floor at `z` must offer.
  * Mid-route floors need both; the roof (z = MAX) is the top — down only; the
  * void (z = MIN) is the intentional terminus «конец» — no lifts, no return.
