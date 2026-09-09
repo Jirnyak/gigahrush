@@ -26,12 +26,10 @@ import {
   NET_TERMINAL_GEN_ITEM_ID,
   NET_TERMINAL_GEN_ITEM_NAME,
   NET_TERMINAL_GEN_FLOOR_PROFILES,
-  NET_TERMINAL_GEN_NORMAL_MIN_TERMINALS,
-  NET_TERMINAL_GEN_NORMAL_MAX_TERMINALS,
   NET_TERMINAL_GEN_OPEN_TEXT,
   NET_TERMINAL_GEN_PALETTE,
   NET_TERMINAL_GEN_PICKUP_MESSAGE,
-  NET_TERMINAL_GEN_TERMINAL_COUNT_WEIGHTS,
+  NET_TERMINAL_GEN_NORMAL_TERMINALS,
   NET_TERMINAL_GEN_TERMINALS,
   type NetTerminalGenTerminalDef,
   type NetTerminalGenFloorProfile,
@@ -569,17 +567,6 @@ export function hasNetTerminalGen(state: GameState, player?: Entity): boolean {
   return !!player?.inventory?.some(slot => slot.defId === NET_TERMINAL_GEN_ITEM_ID);
 }
 
-function chooseWeightedCount(rng: () => number): number {
-  let total = 0;
-  for (const def of NET_TERMINAL_GEN_TERMINAL_COUNT_WEIGHTS) total += Math.max(0, def.weight);
-  if (total <= 0) return 0;
-  let roll = rng() * total;
-  for (const def of NET_TERMINAL_GEN_TERMINAL_COUNT_WEIGHTS) {
-    roll -= Math.max(0, def.weight);
-    if (roll <= 0) return Math.max(0, Math.floor(def.count));
-  }
-  return 0;
-}
 
 function chooseTerminalDef(rng: () => number): NetTerminalGenTerminalDef {
   let total = 0;
@@ -713,16 +700,13 @@ export function placeNetTerminalGenTerminalsForCurrentFloor(
   const seed = options.seed ?? hashSeed(`net_terminal_gen:terminals:${currentNetTerminalGenFloorKey(state)}`, ensureFloorRunState(state).runSeed);
   const rng = seededRandom(seed);
   const profile = options.debug ? undefined : floorProfileForCurrentFloor(state);
-  const maxDefault = profile?.maxTerminals ?? (options.debug ? NET_TERMINAL_GEN_DEBUG_MAX_TERMINALS : NET_TERMINAL_GEN_NORMAL_MAX_TERMINALS);
+  const maxDefault = profile?.maxTerminals ?? (options.debug ? NET_TERMINAL_GEN_DEBUG_MAX_TERMINALS : NET_TERMINAL_GEN_NORMAL_TERMINALS);
   const max = Math.max(0, Math.floor(options.max ?? maxDefault));
   const desired = options.debug
     ? Math.max(1, max)
     : profile
       ? Math.max(0, Math.min(max, profile.minTerminals + Math.floor(rng() * Math.max(1, profile.maxTerminals - profile.minTerminals + 1))))
-      : Math.max(
-        Math.min(max, NET_TERMINAL_GEN_NORMAL_MIN_TERMINALS),
-        Math.min(max, chooseWeightedCount(rng)),
-      );
+      : Math.min(max, NET_TERMINAL_GEN_NORMAL_TERMINALS);
   let placed = 0;
 
   for (let attempt = 0; attempt < desired * 24 && placed < desired; attempt++) {

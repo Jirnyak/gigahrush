@@ -9,7 +9,7 @@ import {
   RoomType,
 } from '../src/core/types';
 import { World } from '../src/core/world';
-import { NET_TERMINAL_GEN_NORMAL_MIN_TERMINALS, SILICON_NET_WELL_TERMINAL_DEF } from '../src/data/net_terminal_gen';
+import { NET_TERMINAL_GEN_NORMAL_TERMINALS, SILICON_NET_WELL_TERMINAL_DEF } from '../src/data/net_terminal_gen';
 import { ensureBankingState } from '../src/systems/banking';
 import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import {
@@ -41,8 +41,8 @@ test('normal net terminal placement puts at least sixteen usable terminals on a 
   const placed = placeNetTerminalGenTerminalsForCurrentFloor(world, state, { seed: 1234 });
   const terminals = getNetTerminalGenTerminals();
 
-  assert.equal(placed, NET_TERMINAL_GEN_NORMAL_MIN_TERMINALS);
-  assert.equal(terminals.length, NET_TERMINAL_GEN_NORMAL_MIN_TERMINALS);
+  assert.equal(placed, NET_TERMINAL_GEN_NORMAL_TERMINALS);
+  assert.equal(terminals.length, NET_TERMINAL_GEN_NORMAL_TERMINALS);
   for (const terminal of terminals) {
     const idx = terminal.idx;
     assert.equal(world.aptMask[idx], 0);

@@ -380,6 +380,22 @@ function triggerPaidRouteAdvice(
   const def = marker.paidRouteAdvice;
   if (!def) return;
 
+  /* Кулдаун гейтит ПЛАТУ, а не только звук.
+   *
+   * Стояло наоборот: цена списывалась на КАЖДОМ нажатии E, а `lastPlayedAt`
+   * решал лишь, повторить ли тон проводника. То есть второе нажатие подряд
+   * стоило столько же, сколько первое, и ничего нового не давало — прямой
+   * денежный ущерб на обычном действии. Купленный маршрут повторяется даром,
+   * пока не истёк его же кулдаун: игрок платил за СВЕДЕНИЕ, а не за реплику. */
+  const cueWorldState = cueState(world);
+  const paidAt = cueWorldState.lastPlayedAt.get(marker.id) ?? -Infinity;
+  const cooldownSec = marker.cooldownSec ?? 26;
+  if (state.time - paidAt < cooldownSec) {
+    setCueHud(state, marker);
+    state.msgs.push(msg(`${def.sellerName ?? marker.targetName} повторяет уже оплаченный маршрут: ${marker.hint}`, state.time, marker.color));
+    return;
+  }
+
   const price = Math.max(0, Math.floor(def.priceRubles));
   const cash = Math.max(0, Math.floor(player.money ?? 0));
   if (cash < price) {
@@ -405,12 +421,8 @@ function triggerPaidRouteAdvice(
   }
 
   player.money = cash - price;
-  const cueWorld = cueState(world);
-  const last = cueWorld.lastPlayedAt.get(marker.id) ?? -Infinity;
-  if (state.time - last >= (marker.cooldownSec ?? 26)) {
-    cueWorld.lastPlayedAt.set(marker.id, state.time);
-    playSoundAt(() => playRouteCueTone(marker.toneSeed, 1.1), marker.x, marker.y);
-  }
+  cueWorldState.lastPlayedAt.set(marker.id, state.time);
+  playSoundAt(() => playRouteCueTone(marker.toneSeed, 1.1), marker.x, marker.y);
   setCueHud(state, marker);
   state.msgs.push(msg(`${def.sellerName ?? marker.targetName} берёт ${price}₽ и даёт маршрут: ${marker.hint}`, state.time, marker.color));
   publishEvent(state, {

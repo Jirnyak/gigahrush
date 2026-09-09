@@ -101,20 +101,39 @@ export function buildLootPool(profile: LootProfile, maxAllowedValue: number): { 
     let baseWeight = item.spawnW || 0;
     if (baseWeight <= 0) continue;
 
-    if (LOOT_LICENSE_TAGS.some(tag => itemDefHasTag(item, tag) && !((profile.tagWeights?.[tag] ?? 0) > 0))) continue;
+    const licensed = LOOT_LICENSE_TAGS.some(tag => itemDefHasTag(item, tag));
+    if (licensed && !LOOT_LICENSE_TAGS.some(tag => itemDefHasTag(item, tag) && (profile.tagWeights?.[tag] ?? 0) > 0)) continue;
 
     // Soft exponential decay for items above tier — no hard gates
     if (item.value > maxAllowedValue) {
       baseWeight *= Math.exp(-(item.value / maxAllowedValue - 1) * 3);
     }
 
-    if (profile.weaponMult && item.type === ItemType.WEAPON) baseWeight *= profile.weaponMult;
-    if (profile.ammoMult && item.type === ItemType.AMMO) baseWeight *= profile.ammoMult;
-    if (profile.toolMult && item.type === ItemType.TOOL) baseWeight *= profile.toolMult;
-    if (profile.medicineMult && item.type === ItemType.MEDICINE) baseWeight *= profile.medicineMult;
-    if (profile.foodMult && item.type === ItemType.FOOD) baseWeight *= profile.foodMult;
-    if (profile.drinkMult && item.type === ItemType.DRINK) baseWeight *= profile.drinkMult;
-    if (profile.miscMult && item.type === ItemType.MISC) baseWeight *= profile.miscMult;
+    /* Множитель применяется по «объявлен ли он», а не по «истинен ли».
+     *
+     * Стоял `if (profile.weaponMult && …)`, и НОЛЬ проваливался в falsy: то
+     * есть единственный способ сказать «этого здесь не бывает» не работал ни
+     * разу. Карманы жильцов объявляют ровно это (`pocketProfile.weaponMult = 0`)
+     * и получали оружие с ПОЛНЫМ весом — 51 ствол в пуле из 351. Оттуда стволы
+     * шли и в лут с тела. Ноль обязан значить ноль. */
+    const typeMult = item.type === ItemType.WEAPON ? profile.weaponMult
+      : item.type === ItemType.AMMO ? profile.ammoMult
+      : item.type === ItemType.TOOL ? profile.toolMult
+      : item.type === ItemType.MEDICINE ? profile.medicineMult
+      : item.type === ItemType.FOOD ? profile.foodMult
+      : item.type === ItemType.DRINK ? profile.drinkMult
+      : item.type === ItemType.MISC ? profile.miscMult
+      : undefined;
+    /* ЯВНЫЙ ДОПУСК СИЛЬНЕЕ ОБЩЕГО ЗАПРЕТА ПО ТИПУ.
+     *
+     * Здесь сходятся два авторских замысла, и до починки нуля они не спорили
+     * только потому, что запрет не работал вовсе: карманы объявляют
+     * `weaponMult = 0` («жильцы не носят стволов»), а пси-сгустки — это
+     * `ItemType.WEAPON` и одновременно единственный лицензируемый товар
+     * (`LOOT_LICENSE_TAGS`). Обнулить их типом значило бы снять с прилавка
+     * культа и НИИ то, на что они допуск ОБЪЯВИЛИ поимённо. */
+    if (typeMult !== undefined && !licensed) baseWeight *= typeMult;
+    if (baseWeight <= 0) continue;
 
     if (tagEntries) {
       for (const [tag, weight] of tagEntries) {
@@ -300,7 +319,12 @@ export function generateNpcLoadout(
   
   // 1. Pick weapon
   const weaponProfile = { ...profile, tagWeights: { ...profile.tagWeights } };
-  weaponProfile.foodMult = 0; weaponProfile.drinkMult = 0; weaponProfile.medicineMult = 0; weaponProfile.miscMult = 0; weaponProfile.ammoMult = 0; weaponProfile.toolMult = 0;
+  /* `toolMult` здесь НЕ обнуляется, и это не забывчивость: слот отбирает
+   * `оружие ИЛИ инструмент`, то есть инструменты ему нужны. Ноль стоял и
+   * рядом, но не работал — множители применялись по `if (mult && …)` и
+   * проваливались в falsy. С починенным нулём инструмент исчез бы из пула
+   * целиком: замерено 17 инструментов из 70 позиций. */
+  weaponProfile.foodMult = 0; weaponProfile.drinkMult = 0; weaponProfile.medicineMult = 0; weaponProfile.miscMult = 0; weaponProfile.ammoMult = 0;
   weaponProfile.weaponMult = (weaponProfile.weaponMult || 1) * 10; 
   
   const weaponPool = buildLootPool(weaponProfile, maxVal).filter(p => p.item.type === ItemType.WEAPON || itemEquipSlot(p.item) === 'tool');

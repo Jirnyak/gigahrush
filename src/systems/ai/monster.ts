@@ -2217,9 +2217,11 @@ function applyMonsterStrike(
     keepDebugOnePunchManAlive(target);
     return false;
   }
-  damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e, time });
+  // Печатается СНЯТОЕ, а не задуманное: иначе носимая броня видна на числе
+  // здоровья и не видна в журнале — игрок читает, что плита не сработала.
+  const specialHit = damageActor(world, state, target, { damage: dmg, source: 'monster_special', attacker: e, time });
   if (target.id === playerId && strike.hurt !== undefined) {
-    recordPlayerDamage(state, e, dmg, `${strikeLine(strike.hurt, e, target)}: -${dmg}`);
+    recordPlayerDamage(state, e, specialHit.applied, `${strikeLine(strike.hurt, e, target)}: -${specialHit.applied}`);
   }
   // Дверь смерти игрока не объявляет — у неё своя дорога; клампом здоровья
   // спецудар закрывает шкалу, а не решает судьбу.
@@ -6942,7 +6944,7 @@ export function tryPerformMonsterMeleeAttack(
              * попадала в A-Life, дневник не прикреплялся, сюжетный дроп и
              * контентные хуки смерти не звались, а тварь, убитая тварью, не
              * роняла добычи. Это самый частый способ убийства в игре. */
-            damageActor(world, state, hitTarget, {
+            const meleeHit = damageActor(world, state, hitTarget, {
               damage: dmg,
               source: 'monster_melee',
               attacker: e,
@@ -6959,10 +6961,12 @@ export function tryPerformMonsterMeleeAttack(
                   : hasAIFlag(e, 'lightFollower')
                     ? 'коснулся распадом'
                     : 'задел';
-              recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ${verb} тебя: -${dmg}`);
+              /* СНЯТОЕ, а не задуманное: лужа строкой ниже берёт то же число.
+               * Иначе носимая броня видна на здоровье и не видна в журнале. */
+              recordPlayerDamage(state, e, meleeHit.applied, `${entityDisplayName(e)} ${verb} тебя: -${meleeHit.applied}`);
             }
             const hitAng = Math.atan2(world.delta(e.y, hitTarget.y), world.delta(e.x, hitTarget.x));
-            spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, dmg, hitTarget.type === EntityType.MONSTER);
+            spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, meleeHit.applied, hitTarget.type === EntityType.MONSTER);
             /* Только то, чего общая обработка смерти не знает: чужая строка
              * убийства и две реакции вида на съеденную жертву. Щит игрока к
              * этому моменту уже мог поднять его обратно — тогда и строки нет. */

@@ -28,6 +28,7 @@ import {
 } from '../../core/types';
 import { damageActorByEnvironment } from '../../systems/actor_damage';
 import { World } from '../../core/world';
+import { addItem } from '../../systems/inventory';
 import { rng, hashSeed } from '../../core/rand';
 import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
@@ -1757,14 +1758,23 @@ registerContentInteractionHook({
 
     if (room.name.includes('пост') || room.name.includes('Канцелярия')) {
       // Подделка/печать пропусков и выдача фильтров
-      if (!ctx.player.inventory) ctx.player.inventory = [];
-      const hasPass = ctx.player.inventory.some(i => i.defId === 'official_quarantine_clearance');
+      /* Выдача идёт общей дверью инвентаря, а не сырым `push`.
+       *
+       * Сырой `push` обходил и стак, и кап в 64 слота: терминал печатал
+       * пропуск, игрок видел строку «выдан», а при следующей загрузке предмет
+       * молча исчезал — санитайзер сейва режет всё сверх капа. Полные руки
+       * теперь честно об этом говорят. */
+      const hasPass = ctx.player.inventory?.some(i => i.defId === 'official_quarantine_clearance') ?? false;
       if (!hasPass) {
-        ctx.player.inventory.push({ defId: 'official_quarantine_clearance', count: 1 });
-        ctx.state.msgs.push(msg('Терминал распечатал чистый официальный пропуск.', ctx.state.time, '#4a4'));
-      } else {
-        ctx.player.inventory.push({ defId: 'gasmask_filter', count: 1 });
+        if (addItem(ctx.player, 'official_quarantine_clearance', 1)) {
+          ctx.state.msgs.push(msg('Терминал распечатал чистый официальный пропуск.', ctx.state.time, '#4a4'));
+        } else {
+          ctx.state.msgs.push(msg('Терминал печатает пропуск, но руки заняты: некуда положить.', ctx.state.time, '#f84'));
+        }
+      } else if (addItem(ctx.player, 'gasmask_filter', 1)) {
         ctx.state.msgs.push(msg('Синтезирован аварийный фильтр для противогаза.', ctx.state.time, '#8cf'));
+      } else {
+        ctx.state.msgs.push(msg('Фильтр синтезирован, но руки заняты: некуда положить.', ctx.state.time, '#f84'));
       }
       publishEvent(ctx.state, {
         type: 'permit_forged',
@@ -1829,9 +1839,14 @@ registerContentInteractionHook({
           }
         }
       }
-      if (!ctx.player.inventory) ctx.player.inventory = [];
-      ctx.player.inventory.push({ defId: 'decon_fluid', count: 1 });
-      ctx.state.msgs.push(msg(`Включена УФ-очистка: рассеян туман (${purged}), ослаблены угрозы (${monstersHurt}). Выдан деактиватор.`, ctx.state.time, '#9ed'));
+      // Через общую дверь инвентаря: сырой `push` обходил кап 64 и предмет
+      // пропадал при следующей загрузке. Разбор — у выдачи пропуска выше.
+      const deconGiven = addItem(ctx.player, 'decon_fluid', 1);
+      ctx.state.msgs.push(msg(
+        deconGiven
+          ? `Включена УФ-очистка: рассеян туман (${purged}), ослаблены угрозы (${monstersHurt}). Выдан деактиватор.`
+          : `Включена УФ-очистка: рассеян туман (${purged}), ослаблены угрозы (${monstersHurt}). Деактиватор некуда положить.`,
+        ctx.state.time, deconGiven ? '#9ed' : '#f84'));
       publishEvent(ctx.state, {
         type: 'emergency_panel_used',
         z: VORONOI_QUARANTINE_Z,

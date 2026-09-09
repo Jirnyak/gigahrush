@@ -9,8 +9,20 @@ export const NET_TERMINAL_GEN_PICKUP_MESSAGE = 'НЕТ-ГЕН найден. Те
 export const NET_TERMINAL_GEN_DENIED_TEXT = 'НЕТ-ТЕРМИНАЛ ГЕН НЕ ОБНАРУЖЕН';
 export const NET_TERMINAL_GEN_OPEN_TEXT = 'НЕТ-ТЕРМИНАЛ ГЕН';
 
-export const NET_TERMINAL_GEN_NORMAL_MIN_TERMINALS = 16;
-export const NET_TERMINAL_GEN_NORMAL_MAX_TERMINALS = 16;
+/**
+ * Сколько НЕТ-ГЕН-терминалов на обычном этаже.
+ *
+ * Было ДВЕ константы с одним значением (`MIN` и `MAX`, обе 16) и вес-таблица
+ * `0: 76%, 1: 21%, 2: 3%` рядом. Таблица не работала НИ РАЗУ: потребитель брал
+ * `Math.max(min(max, MIN), min(max, взвешенное))`, то есть `Math.max(16, 0..2)`
+ * — ровно 16 на каждом из пятидесяти этажей без своего профиля.
+ *
+ * Мёртвой признана таблица, а не граница: замок
+ * `tests/net-terminal-economy.test.ts` называет шестнадцать ЗАМЫСЛОМ прямо в
+ * своём заголовке. Если редкость НЕТ-ГЕНа когда-нибудь вернут — это решение о
+ * балансе, и принимать его подменой константы нельзя.
+ */
+export const NET_TERMINAL_GEN_NORMAL_TERMINALS = 16;
 export const NET_TERMINAL_GEN_DEBUG_MAX_TERMINALS = 8;
 
 export const NET_TERMINAL_GEN_FLESH_ITEM: ItemDef = {
@@ -92,16 +104,7 @@ export const NET_TERMINAL_GEN_FLOOR_PROFILES: readonly NetTerminalGenFloorProfil
   },
 ];
 
-export interface NetTerminalGenTerminalCountWeight {
-  count: number;
-  weight: number;
-}
 
-export const NET_TERMINAL_GEN_TERMINAL_COUNT_WEIGHTS: readonly NetTerminalGenTerminalCountWeight[] = [
-  { count: 0, weight: 76 },
-  { count: 1, weight: 21 },
-  { count: 2, weight: 3 },
-];
 
 export const NET_TERMINAL_GEN_PALETTE = {
   denied: '#f44',

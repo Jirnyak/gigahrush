@@ -543,7 +543,10 @@ export function tryFactionCombat(
             weaponId,
             time: _time,
           });
-          if (isPlayerEntity(hitTarget)) recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} задел тебя: -${dmg}`);
+          /* HUD печатает СНЯТОЕ, а не задуманное: строкой ниже кровь уже берёт
+           * `hit.applied`, и расходиться им нельзя. Иначе броня видна на числе
+           * здоровья, но не в журнале — игрок читает, что плита не сработала. */
+          if (isPlayerEntity(hitTarget)) recordPlayerDamage(state, e, hit.applied, `${entityDisplayName(e)} задел тебя: -${hit.applied}`);
           if (hitTarget.type === EntityType.NPC && hitTarget.hp > 0
             && hitTarget.hp < (hitTarget.maxHp ?? 100) * 0.5) {
             emitMarkovBark(hitTarget, msgs, _time, 'wounded', 'Задело!', BARK_CHANCE_WOUNDED, '#f88');
