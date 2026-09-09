@@ -272,11 +272,13 @@ test('в кооп-режиме за кресло npc ИИ не ходит', () =
   for (let tick = 0; tick < 6; tick++) press(table, {}, 'player');
   assert.equal(JSON.stringify(buildChessView('player').pieces), before, 'машина не ходила за второго человека');
 
-  // Второе кресло видит свою доску развёрнутой и ходит само.
+  // Второе кресло видит свою доску развёрнутой (свой король снизу) и ходит
+  // само. Цвет — АБСОЛЮТНЫЙ (2026-09-03): армия принявшего остаётся 'npc' и
+  // на его собственном экране, иначе оба игрока «играют белыми».
   const remoteSeat = buildChessView('npc');
   assert.equal(remoteSeat.mirrored, true);
   assert.equal(remoteSeat.yourTurn, true);
-  assert.ok(remoteSeat.pieces.some(p => p.side === 'player' && p.kind === 'king' && p.y === 7));
+  assert.ok(remoteSeat.pieces.some(p => p.side === 'npc' && p.kind === 'king' && p.y === 7));
   seatMove(table, 'npc', 'e7', 'e5');
   const afterRemote = buildChessView('player');
   assert.notEqual(JSON.stringify(afterRemote.pieces), before, 'второй человек сходил сам');

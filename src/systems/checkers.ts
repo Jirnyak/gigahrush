@@ -129,7 +129,10 @@ function sideName(g: CheckersGame, side: CheckersSide): string {
 /** The board seen from the other chair: a real 180° turn of the table, so the
  *  second human also has their own men at the bottom moving up. */
 function mirrorPiece(piece: CheckersPiece): CheckersPiece {
-  return { ...piece, side: otherSide(piece.side), x: BOARD_MAX - piece.x, y: BOARD_MAX - piece.y };
+  // Координаты зеркалятся (своя армия снизу), а ЦВЕТ — абсолютный: армия
+  // предложившего золотая на обоих экранах, иначе в сетевой партии оба
+  // играют «своими золотыми» и доску оппонента не прочесть.
+  return { ...piece, x: BOARD_MAX - piece.x, y: BOARD_MAX - piece.y };
 }
 
 function cleanMoney(actor: Entity): number {

@@ -263,7 +263,10 @@ export interface NetFx {
   x: number; y: number;
   /** weaponId for 'shot', monsterKind for 'death' (optional). */
   w?: string;
+  /** monsterKind for 'death'; gore flag (0/1) for 'hit'. */
   m?: number;
+  /** hit angle for 'hit' — направление брызг у гостя. */
+  a?: number;
   /** source peer slot — that peer already played the fx locally and skips it */
   s?: number;
 }

@@ -11,6 +11,8 @@ import { addVisualSlotByPriority, hasVisualSlotCode, removeVisualSlotCode } from
  * `rng` следующая правка в этом файле молча ушла бы в недетерминированность —
  * файл смешанный, он пишет и в `world.dangerField`, который читают NPC. */
 import { mathRng as fxRng, SeedRng } from '../core/rand';
+import { pushNetFx } from './online_protocol';
+import { isOnlineHost } from './online_client';
 
 /* ── Transient world-space particles ──────────────────────────── */
 export type ParticleKind =
@@ -335,6 +337,11 @@ function splatAdjacentWalls(
 
 /* ── Spawn blood particles on hit ─────────────────────────────── */
 export function spawnBloodHit(world: World, ex: number, ey: number, fromAngle: number, dmg: number, gore = false, pvx = 0, pvy = 0, hitZ = 0.5): void {
+  // Онлайн: кровь у гостей — реле ОДНИМ хуком, как выстрелы через
+  // publishWeaponNoise (не добавлять pushNetFx в отдельные боевые пути — будут
+  // дубли). Гость проигрывает этот же вызов из fx-очереди, но у него
+  // isOnlineHost() ложен — обратной петли нет.
+  if (isOnlineHost()) pushNetFx({ k: 'hit', x: ex, y: ey, a: +fromAngle.toFixed(2), m: gore ? 1 : 0 });
   bindParticleWorld(world);
   const seed = ++_splatterSeed;
   const [sr, sg, sb] = gore ? GORE : BLOOD;

@@ -19,6 +19,8 @@ import {
   shouldSendHostSync,
   disconnectOnline,
   ONLINE_PROTOCOL_VERSION,
+  netlog,
+  isNetDebugEnabled,
   type SyncEntity,
 } from './systems/online_client';
 import {
@@ -821,14 +823,9 @@ let _netStallWarnedAt = 0;
 let _lastCoopViewPushAt = 0;  // host: страховочный повтор кооп-вью
 const _peerLastMsgAt = new Map<number, number>(); // host: последнее сообщение слота
 
-// Сетевой отладочный лог: localStorage.gigahrush_net_debug = '1' в ОБОИХ окнах.
-const NET_DEBUG = (() => {
-  try { return localStorage.getItem('gigahrush_net_debug') === '1'; } catch { return false; }
-})();
+// Сетевой отладочный лог: команда `/netdebug` в чате (N) в обоих окнах.
+// Сам лог и переключатель живут в systems/online_client.ts.
 let _netlogLastSummaryAt = 0;
-function netlog(...args: unknown[]): void {
-  if (NET_DEBUG) console.log(`[netdbg ${Math.round(performance.now() / 100) / 10}s]`, ...args);
-}
 
 // Peer-side floor checkpoint reassembly (chunks arrive in order from host).
 let _snapChunks: (string | undefined)[] | null = null;
@@ -1284,6 +1281,15 @@ function onOnlinePeerJoin(msgData: any): void {
     sendOnlineMessage({ type: 'server_error', _targetSlot: peerSlot, reason: 'version_mismatch' });
     return;
   }
+  // Самосбор: вход закрыт (решение владельца 2026-09-03). Мир перестраивается
+  // на месте — гость получил бы снапшот, который тут же разъедется. Комната
+  // могла остаться открытой с прошлой сессии, поэтому отказ нужен и здесь,
+  // а не только в /host.
+  if (state.samosborActive) {
+    sendOnlineMessage({ type: 'server_error', _targetSlot: peerSlot, reason: 'samosbor_active' });
+    netlog('host: peer_join слоту', peerSlot, 'отклонён — самосбор');
+    return;
+  }
   const isInvader = msgData.invader === true;
   state.msgs.push(isInvader
     ? msg(`⚠ ТЁМНЫЙ ЖИЛЕЦ ВТОРГСЯ НА ЭТАЖ`, state.time, '#f66')
@@ -1664,8 +1670,16 @@ function onOnlinePeerIntent(msgData: any): void {
 
     // ── Peer drop item (slot-validated against the host-owned inventory) ──
     if (intent.kind === 'drop') {
-      const dropX = actor.x + Math.cos(actor.angle) * 3.0;
-      const dropY = actor.y + Math.sin(actor.angle) * 3.0;
+      // Как в dropItem: вдоль взгляда, но не дальше первой стены.
+      const ddx = Math.cos(actor.angle), ddy = Math.sin(actor.angle);
+      let dropX = actor.x, dropY = actor.y;
+      for (let d = 0.5; d <= 3.0; d += 0.5) {
+        const tx = world.wrap(actor.x + ddx * d);
+        const ty = world.wrap(actor.y + ddy * d);
+        if (world.solid(Math.floor(tx), Math.floor(ty))) break;
+        dropX = tx;
+        dropY = ty;
+      }
       const invSlot = actor.inventory?.[intent.slot];
       if (invSlot && invSlot.defId === intent.defId) {
         const count = Math.min(invSlot.count, intent.count);
@@ -1873,7 +1887,7 @@ function onOnlineHostState(msgData: any): void {
       if (se.peerSlot !== undefined) netlog('peer: появился сетевой игрок', se.peerSlot, se.name, 'id', se.id);
     }
   }
-  if (NET_DEBUG && nowMs - _netlogLastSummaryAt > 2000) {
+  if (isNetDebugEnabled() && nowMs - _netlogLastSummaryAt > 2000) {
     _netlogLastSummaryAt = nowMs;
     const hostSe = syncEntities.find(se => se.peerSlot === 0);
     const hostLocal = entities.find(e => e.peerSlot === 0 && e !== player);
@@ -1915,6 +1929,10 @@ function onOnlineHostState(msgData: any): void {
       if (fx.k === 'shot') {
         const ws = fx.w ? WEAPON_STATS[fx.w] : undefined;
         playSoundAt(ws ? () => playWeaponSound(fx.w!, ws) : playAttack, fx.x, fx.y);
+      } else if (fx.k === 'hit') {
+        // Кровь, которую разрешил хост: брызги и отметины по его углу удара.
+        const hitA = fx.a ?? 0;
+        spawnBloodHit(world, fx.x, fx.y, hitA, 14, fx.m === 1, Math.cos(hitA) * 6, Math.sin(hitA) * 6, 0.5);
       } else if (fx.k === 'death') {
         playSoundAt(playFleshHit, fx.x, fx.y);
       }
@@ -2411,8 +2429,14 @@ function onOnlineServerError(msgData: any): void {
   onlinePeerFloorReady = false;
   const reason = msgData.reason === 'no_welcome'
     ? 'Комната не найдена — хост не отвечает.'
-    : `Ошибка сервера: ${msgData.reason ?? 'неизвестная'}`;
+    : msgData.reason === 'samosbor_active'
+      ? 'У хоста САМОСБОР — вход закрыт. Попробуйте после перестройки.'
+      : msgData.reason === 'version_mismatch'
+        ? 'Версии игры не совпадают — обновите страницу у обоих.'
+        : `Ошибка сервера: ${msgData.reason ?? 'неизвестная'}`;
   state.msgs.push(msg(reason, state.time, '#f44'));
+  // Отказ хоста — конец попытки: висеть подключённым без актора незачем.
+  if (msgData.reason === 'samosbor_active' || msgData.reason === 'version_mismatch') disconnectOnline();
 }
 
 // ── Connection lost ──
@@ -10470,7 +10494,17 @@ function gameLoop(now: number): void {
      * `entities.length = 0` и подменяет геометрию, то есть выбросил бы ровно ту
      * сшитую карту, ради которой самосбор и работал. Свёртка A-Life, стич поля
      * и переселение замурованных живут внутри `updateSamosbor`/`doStitch`. */
-    updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch);
+    /* Самосбор и гости не сосуществуют (решение владельца 2026-09-03):
+     * при живых гостях таймер замирает и новый самосбор не начинается, а
+     * /host и вход гостя во время активного самосбора получают отказ
+     * (net_sphere `/host`, `onOnlinePeerJoin`). Разрешение на тик при
+     * `samosborActive` ниже — страховка на однокадровую гонку join/старт:
+     * замирать ПОСРЕДИ волны нельзя (замороженные фронты, застрявший мир). */
+    const guestsHoldSamosbor = isOnlineHost() && !state.samosborActive
+      && entities.some(e => e.peerSlot !== undefined && e.peerSlot > 0 && e.alive);
+    if (!guestsHoldSamosbor) {
+      updateSamosbor(world, entities, state, dt, nextEntityId, currentLocalSamosborPatchGeneration, scheduleLocalSamosborPatch);
+    }
     lastSamosborUpdateMs = performance.now() - samosborStart;
     if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
     syncMapExplorationAfterSamosborWave(world, state);

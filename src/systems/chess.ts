@@ -992,7 +992,12 @@ function viewPieces(g: ChessGame, mirror: boolean): ChessPieceView[] {
     if (code === 0) continue;
     const seen = mirror ? mirrorSquare(sq) : sq;
     pieces.push({
-      side: mirror ? otherSide(sideOfCode(code)) : sideOfCode(code),
+      /* Цвет — АБСОЛЮТНЫЙ: армия предложившего золотая, принявшего серая на
+       * обоих экранах. Относительная перекраска («свои всегда золотые»)
+       * делала обоих игроков «белыми», и в сетевой партии было не отличить,
+       * чьи фигуры на доске оппонента. Позиция при этом зеркалится по-прежнему:
+       * каждый видит свою армию снизу. */
+      side: sideOfCode(code),
       kind: kindName(code),
       x: sqx(seen),
       y: sqy(seen),

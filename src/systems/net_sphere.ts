@@ -2,7 +2,7 @@ import { type Entity, type GameState } from '../core/types';
 import { getControlCaptureAction, matchesControlAction } from './controls';
 import { isStrictPortalMode, portalAllowsOptionalNetwork } from './platform_bridge';
 import { currentFloorRunEntry, ensureFloorRunState, floorRunEntryMapLabel, floorRunEntryRouteId } from './procedural_floors';
-import { startOnlineHost, joinOnlinePeer, isOnlineHost, isOnlinePeer, getOnlineRoomId, isOnlineConnected, sendOnlineMessage } from './online_client';
+import { startOnlineHost, joinOnlinePeer, isOnlineHost, isOnlinePeer, getOnlineRoomId, isOnlineConnected, sendOnlineMessage, toggleNetDebug } from './online_client';
 
 type NetSphereStatus = 'idle' | 'syncing' | 'online' | 'offline';
 export type NetSphereEventType = 'samosbor' | 'death';
@@ -105,6 +105,9 @@ interface NetSphereProgress {
   maxHp: number;
   alive: boolean;
   gameOver: boolean;
+  /** Хостить во время самосбора нельзя: мир перестраивается на месте, и гость
+   *  получил бы снапшот, который тут же разъедется (решение владельца 2026-09-03). */
+  samosborActive: boolean;
   gameTime: number;
   day: number;
   hour: number;
@@ -473,6 +476,7 @@ function progressFromState(state: GameState, player: Entity): NetSphereProgress 
     maxHp: Math.max(1, Math.floor(player.maxHp ?? 100)),
     alive: player.alive,
     gameOver: state.gameOver,
+    samosborActive: state.samosborActive === true,
     gameTime: Math.max(0, Math.floor(state.time)),
     day: Math.max(0, Math.floor(totalMinutes / 1440)),
     hour: state.clock.hour,
@@ -748,6 +752,8 @@ function handleInvasionSignal(invasion: unknown): void {
   if (typeof by !== 'string' || !by) return;
   if (!runtime.lastProgress || !runtime.lastProgress.alive || runtime.lastProgress.gameOver) return;
   if (isOnlinePeer()) return; // guests can't host; the mark expires server-side
+  // Самосбор: жертва не поднимает хост — метка инвазии истечёт на сервере сама.
+  if (runtime.lastProgress.samosborActive) return;
   const now = performance.now();
   if (runtime.lastInvasionKey === by && now - runtime.lastInvasionWarnAt < INVASION_REWARN_MS) return;
   runtime.lastInvasionKey = by;
@@ -856,8 +862,21 @@ function submitDraft(): void {
         return;
       }
       case '/host': {
+        if (runtime.lastProgress?.samosborActive) {
+          addLocalSystemMessage('САМОСБОР: хостить нельзя, пока структура перестраивается. Дождитесь конца.');
+          return;
+        }
         const roomId = startOnlineHost();
         addLocalSystemMessage(`Хост запущен. Код комнаты: ${roomId}`);
+        return;
+      }
+      case '/netdebug': {
+        // Переключатель на лету: консоль/localStorage подводили — на
+        // встраивающих площадках консоль смотрит не в тот фрейм.
+        const on = toggleNetDebug();
+        addLocalSystemMessage(on
+          ? 'Сетевой лог ВКЛЮЧЕН: строки [netdbg] пишутся в консоль (F12).'
+          : 'Сетевой лог выключен.');
         return;
       }
       case '/join': {

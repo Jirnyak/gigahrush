@@ -2050,11 +2050,24 @@ export function dropItem(
     player.armorDefId = undefined;
   }
 
-  // Place drop 3 cells in front of player (far enough to avoid auto-pickup)
+  // Place drop 3 cells in front of player (far enough to avoid auto-pickup) —
+  // но не дальше первой стены: слепые «3 клетки вперёд» хоронили предмет в
+  // бетоне (невидим и недостижим), стоило бросить лицом к стене.
   const dx = Math.cos(player.angle);
   const dy = Math.sin(player.angle);
-  const dropX = player.x + dx * 3.0;
-  const dropY = player.y + dy * 3.0;
+  let dropX = player.x + dx * 3.0;
+  let dropY = player.y + dy * 3.0;
+  if (world) {
+    dropX = player.x;
+    dropY = player.y;
+    for (let d = 0.5; d <= 3.0; d += 0.5) {
+      const tx = world.wrap(player.x + dx * d);
+      const ty = world.wrap(player.y + dy * d);
+      if (world.solid(Math.floor(tx), Math.floor(ty))) break;
+      dropX = tx;
+      dropY = ty;
+    }
+  }
 
   const dropId = nextId.v++;
   entities.push({

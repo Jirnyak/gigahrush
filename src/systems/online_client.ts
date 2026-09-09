@@ -10,6 +10,27 @@ import { nextIntentMsg, resetOnlineProtocolState, type PeerIntent } from './onli
 
 export const ONLINE_PROTOCOL_VERSION = 2;
 
+// ── Сетевой отладочный лог ────────────────────────────────
+// Живёт в транспортном слое, чтобы им могли пользоваться и main, и НЕТ-СФЕРА.
+// Включается на лету командой `/netdebug` в чате (N) — консоль/localStorage
+// подводили: на встраивающих площадках консоль смотрит не в тот фрейм.
+
+let netDebug = (() => {
+  try { return localStorage.getItem('gigahrush_net_debug') === '1'; } catch { return false; }
+})();
+
+export function isNetDebugEnabled(): boolean { return netDebug; }
+
+export function toggleNetDebug(): boolean {
+  netDebug = !netDebug;
+  try { localStorage.setItem('gigahrush_net_debug', netDebug ? '1' : '0'); } catch {}
+  return netDebug;
+}
+
+export function netlog(...args: unknown[]): void {
+  if (netDebug) console.log(`[netdbg ${Math.round(performance.now() / 100) / 10}s]`, ...args);
+}
+
 // ── Connection state ──────────────────────────────────────
 
 let ws: WebSocket | null = null;
