@@ -58,6 +58,7 @@ export interface SavePayloadSections {
   economy: unknown;
   banking: unknown;
   stockMarket: unknown;
+  caravans: unknown;
   production: unknown;
   factionRelations?: number[];
 }
@@ -124,6 +125,7 @@ export interface SavePayload {
     economy: unknown;
     banking: unknown;
     stockMarket: unknown;
+    caravans: unknown;
     production: ProductionState[];
     factionRelations?: number[];
     containers: WorldContainer[];
@@ -328,6 +330,7 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       economy: sections.economy,
       banking: sections.banking,
       stockMarket: sections.stockMarket,
+      caravans: sections.caravans,
       production: normalizeProductionStateList(sections.production, state.currentZ),
       factionRelations: sections.factionRelations,
       containers: containersForSave(input.containers),
@@ -386,6 +389,7 @@ export function summarizeSavePayload(
     { label: 'economy', value: payload.state.economy },
     { label: 'banking', value: payload.state.banking },
     { label: 'stockMarket', value: payload.state.stockMarket },
+    { label: 'caravans', value: payload.state.caravans },
     { label: 'production', value: payload.state.production, count: payload.state.production.length, cap: PRODUCTION_SAVE_STATE_CAP },
     { label: 'containers', value: payload.state.containers, count: payload.state.containers.length, cap: SAVE_CONTAINER_CAP },
     { label: 'netTerminalGen', value: payload.state.netTerminalGen },

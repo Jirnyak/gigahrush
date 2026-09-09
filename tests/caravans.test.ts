@@ -15,7 +15,10 @@ import {
   ensureCaravanState,
   getCaravanResourceTariffMultiplier,
   getNearestSmallCaravan,
+  caravansForSave,
+  closeCaravanLane,
   payCaravanTariff,
+  restoreCaravansFromSave,
   robCaravanCargo,
   spawnSmallCaravanNear,
   tickCaravans,
@@ -410,4 +413,54 @@ test('off-floor caravan lane migration moves a bounded prefilled A-Life record',
   assert.equal(alife.floorIndex['design:kvartiry'].length, sourceBefore - 1);
   assert.equal(alife.floorIndex['design:living'].length, targetBefore + 1);
   assert.equal(alifeForSave(state).overrides.some(item => item.id === expectedSample[0] && item.floorKey === 'design:living'), true);
+});
+
+/* ── Караванные полосы переживают загрузку ────────────────────────
+ *
+ * `postrelease.md` §3, `#110`. Подсистема тикала вживую — полосы двигались,
+ * малые караваны спавнились, HUD их показывал, — а `state.caravans` жил
+ * нелегальным приведением `GameState & { caravans?: … }` и в сейв НЕ ШЁЛ вовсе.
+ * При загрузке молча обнулялись оплаченные пошлины, открытые и закрытые полосы,
+ * устойчивость, счёт рейсов и налётов. Класс «игрок теряет заработанное».
+ *
+ * Активные малые рейсы в сейв не идут НАМЕРЕННО и по тому же правилу, что и
+ * арена: рейс живёт на сущностях активного этажа (`memberIds`), а после
+ * загрузки этаж строится заново и номера другие.
+ */
+test('оплаченная пошлина и закрытая полоса переживают сохранение и загрузку', () => {
+  const state = makeGameState({ worldEvents: createWorldEventState(), time: 500 });
+  ensureEconomyState(state);
+  const before = ensureCaravanState(state);
+
+  assert.equal(payCaravanTariff(state, LANE_QUEUE), true);
+  closeCaravanLane(state, LANE_MARKET);
+  before.lanes[LANE_QUEUE].runs = 7;
+  before.lanes[LANE_MARKET].raids = 3;
+  const paidUntil = before.lanes[LANE_QUEUE].tariffPaidUntil;
+  assert.ok(paidUntil > 0, 'оплата обязана двигать срок пошлины');
+
+  // Круговорот через сейв: только то, что реально уезжает в payload.
+  const saved = JSON.parse(JSON.stringify(caravansForSave(state)));
+
+  const loaded = makeGameState({ worldEvents: createWorldEventState(), time: 500 });
+  ensureEconomyState(loaded);
+  restoreCaravansFromSave(loaded, saved);
+  const after = ensureCaravanState(loaded);
+
+  assert.equal(after.lanes[LANE_QUEUE].tariffPaidUntil, paidUntil, 'оплаченная пошлина обязана пережить загрузку');
+  assert.equal(after.lanes[LANE_MARKET].open, false, 'закрытая полоса обязана остаться закрытой');
+  assert.equal(after.lanes[LANE_QUEUE].runs, 7);
+  assert.equal(after.lanes[LANE_MARKET].raids, 3);
+});
+
+test('битая караванная секция сейва уходит в дефолт полосы, а не роняет загрузку', () => {
+  const loaded = makeGameState({ worldEvents: createWorldEventState(), time: 100 });
+  ensureEconomyState(loaded);
+  restoreCaravansFromSave(loaded, { lanes: { [LANE_QUEUE]: { open: 'да', stability: Number.NaN, runs: -5 } }, active: 'мусор' });
+  const after = ensureCaravanState(loaded);
+
+  assert.equal(Number.isFinite(after.lanes[LANE_QUEUE].stability), true);
+  assert.equal(after.lanes[LANE_QUEUE].runs >= 0, true);
+  assert.deepEqual(after.active, {}, 'активные рейсы в сейв не идут и из мусора не берутся');
+  for (const def of CARAVAN_LANES) assert.ok(after.lanes[def.id], `полоса ${def.id} обязана быть восстановлена`);
 });

@@ -4,6 +4,7 @@ import { snapshotFactionRelations } from '../data/relations';
 import { activeBetEscrowAmount } from './arena_betting';
 import { alifeMobilityForSave } from './alife_migration';
 import { bankingForSave } from './banking';
+import { caravansForSave } from './caravans';
 import { alifeForSave } from './alife';
 import { computersStateForSave } from './computers';
 import { craftingForSave } from './crafting';
@@ -61,6 +62,7 @@ export function createGameSavePayload(
       economy: economyForSave(state),
       banking: bankingForSave(state),
       stockMarket: stockMarketForSave(state),
+      caravans: caravansForSave(state),
       production: productionForSave(state),
       factionRelations: snapshotFactionRelations(),
     },

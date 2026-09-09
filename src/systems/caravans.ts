@@ -270,6 +270,40 @@ export function ensureCaravanState(state: GameState): CaravanState {
   return next;
 }
 
+/**
+ * Что от караванов переживает загрузку.
+ *
+ * ПОЛОСЫ — да. Пошлина, открытость, устойчивость, счёт рейсов и налётов не
+ * привязаны ни к одной сущности: это чистый факт экономики, и игрок платил за
+ * него деньгами, контрактом и репутацией. До сих пор всё это молча обнулялось
+ * при загрузке — подсистема тикала вживую, а `state.caravans` в сейв не шёл
+ * вовсе.
+ *
+ * АКТИВНЫЕ РЕЙСЫ — нет, и это то же правило, по которому в сейв не идёт арена:
+ * рейс живёт на СУЩНОСТЯХ активного этажа (`memberIds`), а после загрузки этаж
+ * строится заново и номера другие. Сохранить их значило бы восстановить рейс
+ * без каравана; вместо этого следующий спавн назначается штатным кадансом.
+ */
+export function caravansForSave(state: GameState): Omit<CaravanState, 'active'> {
+  const caravans = ensureCaravanState(state);
+  return {
+    tickAccum: caravans.tickAccum,
+    cursor: caravans.cursor,
+    nextRunSeq: caravans.nextRunSeq,
+    nextSmallSpawnAt: caravans.nextSmallSpawnAt,
+    lanes: caravans.lanes,
+  };
+}
+
+/** Санация — та же, что и при обычном обращении: `ensureCaravanState` и есть
+ *  нормализатор, и второго писать не нужно. Битое поле уходит в дефолт полосы. */
+export function restoreCaravansFromSave(state: GameState, value: unknown): void {
+  const host = state as CaravanGameState;
+  host.caravans = (value && typeof value === 'object' ? value : undefined) as CaravanState | undefined;
+  normalizedStates.delete(state);
+  ensureCaravanState(state);
+}
+
 function uniqueResourceIds(def: CaravanLaneDef): string[] {
   const ids: string[] = [];
   for (const id of def.tariffResourceIds) {
