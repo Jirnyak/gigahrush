@@ -11,7 +11,7 @@ import {
   snapshotRailTrainsForRebuild,
   tryUseRailTrain,
   updateRailTrains,
-} from '../src/systems/rail_trains';
+} from '../src/systems/procedural_anomalies/rail_trains';
 import { makeGameState } from './helpers';
 
 function makeRailWorld(): { world: World; track: RailTrainTrack } {

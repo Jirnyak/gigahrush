@@ -29,11 +29,16 @@ import path from 'node:path';
 const GEN_DIR = path.join(process.cwd(), 'src/gen/procedural_anomalies');
 const SYS_DIR = path.join(process.cwd(), 'src/systems/procedural_anomalies');
 
-/** Числовые константы верхнего уровня модуля: `const NAME = 123;` */
+/** Числовые константы верхнего уровня модуля: `const NAME = 123;`
+ *
+ *  `export` в образце обязателен: без него замок не видел ЭКСПОРТИРУЕМЫХ чисел,
+ *  а общее число половин ровно таким и бывает — его же читает соседний слой.
+ *  На сегодня правка не меняет ни одной сверки (2 пары до и 2 после) и стоит
+ *  ради того, чтобы следующее общее число не проехало молча. */
 function numericConstants(file: string): Map<string, number> {
   const out = new Map<string, number>();
   const text = fs.readFileSync(file, 'utf8');
-  for (const m of text.matchAll(/^const ([A-Z][A-Z0-9_]*) = (-?\d+(?:\.\d+)?);/gm)) {
+  for (const m of text.matchAll(/^(?:export )?const ([A-Z][A-Z0-9_]*) = (-?\d+(?:\.\d+)?);/gm)) {
     out.set(m[1], Number(m[2]));
   }
   return out;

@@ -23,7 +23,7 @@ import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
 import { updatePerceptionFields } from '../src/systems/fields';
 import { ensureAlifeState, materializeAlifeFloorPopulation } from '../src/systems/alife';
 import { buildFloor, createArenaGameState } from '../src/arena_scenarios';
-import { updateRailTrains } from '../src/systems/rail_trains';
+import { updateRailTrains } from '../src/systems/procedural_anomalies/rail_trains';
 import { setActorDeathHandler } from '../src/systems/actor_damage';
 
 const floorId = process.argv[2] ?? 'dark_metro';

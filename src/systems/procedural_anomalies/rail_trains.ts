@@ -12,16 +12,16 @@ import {
   type RailTrain,
   type RailTrainTrack,
   type WorldEventSeverity,
-} from '../core/types';
-import { damageActorByEnvironment } from './actor_damage';
-import { recordPlayerDamage } from './damage';
-import { World } from '../core/world';
-import { RUNTIME_TOPOLOGY_LIMITS } from '../data/runtime_topology';
-import { Spr } from '../entities/sprite_index';
-import { ensureEntityIndex, getEntityIndex } from './entity_index';
-import { publishEvent } from './events';
-import { isPlayerEntity } from './player_actor';
-import { killEntity } from './entity_death';
+} from '../../core/types';
+import { damageActorByEnvironment } from '../actor_damage';
+import { recordPlayerDamage } from '../damage';
+import { World } from '../../core/world';
+import { RUNTIME_TOPOLOGY_LIMITS } from '../../data/runtime_topology';
+import { Spr } from '../../entities/sprite_index';
+import { ensureEntityIndex, getEntityIndex } from '../entity_index';
+import { publishEvent } from '../events';
+import { isPlayerEntity } from '../player_actor';
+import { killEntity } from '../entity_death';
 
 const SEGMENT_STRIDE = 2;
 const BOARD_DIST2 = 3.2 * 3.2;

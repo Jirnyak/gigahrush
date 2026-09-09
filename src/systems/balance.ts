@@ -1,5 +1,5 @@
 import { EntityType, type Entity, type GameState, msg } from '../core/types';
-import { summarizeHladonColdPockets } from './hladon';
+import { summarizeHladonColdPockets } from './procedural_anomalies/hladon';
 import { summarizeCarnivorousFungus } from './carnivorous_fungus';
 import { summarizeHeatline } from './heatline';
 import { floorCatalogDebugLines } from './floor_catalog';

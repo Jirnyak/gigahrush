@@ -18,7 +18,7 @@ import { World } from '../../core/world';
 import { type PlotNpcDef } from '../../data/plot';
 import { MONSTERS } from '../../entities/monster';
 import { Spr } from '../../entities/sprite_index';
-import { addRailTrainRoute } from '../../systems/rail_trains';
+import { addRailTrainRoute } from '../../systems/procedural_anomalies/rail_trains';
 import { registerRouteCue } from '../../systems/route_cues';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';

@@ -73,7 +73,7 @@ import { hearingRadiusMetersForActor } from './hearing';
 import { createMaronaryWrongDoorRemap } from './wrong_door';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { killEntity } from './entity_death';
-import { installRailTrainsFromGeneration, snapshotRailTrainsForRebuild } from './rail_trains';
+import { installRailTrainsFromGeneration, snapshotRailTrainsForRebuild } from './procedural_anomalies/rail_trains';
 import {
   blocksHermodoorBorerSeal,
   queuePostSamosborHermodoorBorer,

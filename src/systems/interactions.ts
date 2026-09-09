@@ -55,7 +55,7 @@ import {
 } from './gambling';
 import { tryUseHeatlinePressure } from './heatline';
 import { tryRepairHermodoorBorerDamage } from './hermodoor_borer';
-import { hladonInteractionTargetId, tryUseHladonColdPocketCounter } from './hladon';
+import { hladonInteractionTargetId, tryUseHladonColdPocketCounter } from './procedural_anomalies/hladon';
 import { getEmergencyPanelAt, tryUseEmergencyPanel } from './emergency_panels';
 import {
   activateFastElevator,
@@ -92,7 +92,7 @@ import { findActorDoorPermit, recordPermitAccess } from './permits';
 import { pseudoliftPrompt, tryUsePseudolift } from './pseudolift';
 import { floorRunLiftPrompt, currentFloorRunLabel } from './procedural_floors';
 import { proceduralAnomalyInteractionTargetId, tryUseProceduralFloorAnomaly } from './procedural_anomalies';
-import { railTrainInteractionTargetId, tryUseRailTrain } from './rail_trains';
+import { railTrainInteractionTargetId, tryUseRailTrain } from './procedural_anomalies/rail_trains';
 import { isRouteCueTarget, routeObjectiveLiftPromptSuffix, tryUseRouteCue } from './route_cues';
 import { tryUseSamosborVariantInteraction } from './samosbor';
 import { tryCoverSeroburmalineSource } from './seroburmaline';

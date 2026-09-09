@@ -20,7 +20,7 @@ import {
 } from '../src/core/types';
 import { setCurrentPlayerEntity } from '../src/systems/player_actor';
 import { damageActorByEnvironment } from '../src/systems/actor_damage';
-import { addRailTrainRoute, updateRailTrains } from '../src/systems/rail_trains';
+import { addRailTrainRoute, updateRailTrains } from '../src/systems/procedural_anomalies/rail_trains';
 import { rebuildEntityIndexForSimulation } from '../src/systems/entity_index';
 import { castInstantSpell } from '../src/systems/psi';
 import { makeGameState, makeTestNpc, makeTestPlayer } from './helpers';

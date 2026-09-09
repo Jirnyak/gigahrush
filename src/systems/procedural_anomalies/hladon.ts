@@ -2,7 +2,7 @@
  * Room-local cold pressure only: no floor temperature field.
  */
 
-import { stampSurfaceSplat } from './surface_marks';
+import { stampSurfaceSplat } from '../surface_marks';
 import {
   W,
   Cell,
@@ -11,12 +11,12 @@ import {
   type GameState,
   type Room,
   msg,
-} from '../core/types';
-import { World } from '../core/world';
-import { ITEMS } from '../data/catalog';
-import { hasItem, removeItem } from './inventory';
-import { publishEvent } from './events';
-import { isPlayerEntity } from './player_actor';
+} from '../../core/types';
+import { World } from '../../core/world';
+import { ITEMS } from '../../data/catalog';
+import { hasItem, removeItem } from '../inventory';
+import { publishEvent } from '../events';
+import { isPlayerEntity } from '../player_actor';
 
 const HLADON_PREFIX = 'Хладон:';
 const HLADON_CLEARED = 'разморожен';

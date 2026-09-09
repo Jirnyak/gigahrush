@@ -27,7 +27,7 @@ import { spawnContract, spawnContractById, summarizeContracts } from './contract
 import { getSamosborDebugLines } from './samosbor';
 import { territoryOwnerAtIndex } from './territory';
 import { summarizeCarnivorousFungus } from './carnivorous_fungus';
-import { summarizeHladonColdPockets } from './hladon';
+import { summarizeHladonColdPockets } from './procedural_anomalies/hladon';
 import { ensureFloorInstanceState, floorInstanceIdentityLine, floorInstanceLabel, summarizeFloorInstances } from './floor_instances';
 import {
   currentFloorRunEntry,

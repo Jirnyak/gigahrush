@@ -77,10 +77,10 @@ import {
 } from '../systems/territory';
 import { gaussianLevel, getMaxHp, randomRPG } from '../systems/rpg';
 import { canSpawnEntityType, entitySpawnSlots } from '../systems/entity_limits';
-import { addRailTrainRoute } from '../systems/rail_trains';
+import { addRailTrainRoute } from '../systems/procedural_anomalies/rail_trains';
 import { registerRouteCue } from '../systems/route_cues';
 import { placeEmergencyPanel } from '../systems/emergency_panels';
-import { HLADON_COLD_SHELL_RADIUS } from '../systems/hladon';
+import { HLADON_COLD_SHELL_RADIUS } from '../systems/procedural_anomalies/hladon';
 import {
   buildWalkablePlacementMap,
   canPlaceRoom,

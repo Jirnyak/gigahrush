@@ -14,7 +14,7 @@ import {
 import { tryUseSandpilePerekrytieAnomaly, updateSandpilePerekrytieAnomaly } from '../src/systems/procedural_anomalies/sandpile_perekrytie';
 import { tryUseSectionShiftAnomaly, updateSectionShiftAnomaly } from '../src/systems/procedural_anomalies/section_shift';
 import { tryUseWallSnakeAnomaly, updateWallSnakeAnomaly } from '../src/systems/procedural_anomalies/wall_snake';
-import { addRailTrainRoute, updateRailTrains } from '../src/systems/rail_trains';
+import { addRailTrainRoute, updateRailTrains } from '../src/systems/procedural_anomalies/rail_trains';
 import { addTestRoom, countInventoryItem, makeGameState, makeTestContainer, makeTestPlayer } from './helpers';
 
 const EXPECTED_RUNTIME_TOPOLOGY_IDS = [
