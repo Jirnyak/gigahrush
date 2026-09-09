@@ -34,6 +34,7 @@ import {
   UNDERHELL_ROUTE_ID,
   UNDERHELL_THRESHOLD_COSTS,
   UNDERHELL_Z,
+  type UnderhellLateWarningId,
   type UnderhellRitualState,
   type UnderhellThresholdCostId,
 } from './meta';
@@ -77,6 +78,8 @@ export interface UnderhellDecisionBinding {
   burnDebt(state: GameState, player: Entity, ritual: UnderhellRitualState, world?: World): boolean;
   breakVoidAnchor(state: GameState, ritual: UnderhellRitualState, actor?: Entity, world?: World): boolean;
   snapshot(flags: number): { thresholdPaid: boolean; witnessState: string; debtBurned: boolean; voidGateState: string };
+  /** Позднее предупреждение этажа: цена возвращается слухом, разрез — следом. */
+  lateWarning(state: GameState, warningId: UnderhellLateWarningId, actor?: Entity, world?: World): unknown;
 }
 
 interface UnderhellDecisionState {
@@ -235,6 +238,11 @@ export function applyUnderhellDecision(
   switch (anchor.decision.kind) {
     case 'threshold':
       ok = binding.payThreshold(game, player, ritual, anchor.decision.costId, world);
+      /* Плата отдана — мир узнаёт, что она была. Текст этого предупреждения
+       * лежал на этаже запиской и никуда больше не шёл: `publishUnderhellLateWarning`
+       * не звали ни разу. Эхо цены ведёт к свидетельской клетке, то есть к
+       * следующей развилке, — поэтому оно ставится ровно здесь. */
+      if (ok) binding.lateWarning(game, 'underhell_threshold_price_echo', player, world);
       break;
     case 'witness_rescue':
       binding.resolveWitness(game, ritual, 'rescued', player, world);
@@ -243,10 +251,13 @@ export function applyUnderhellDecision(
     case 'debt_burn':
       ok = binding.burnDebt(game, player, ritual, world);
       break;
-    case 'void_anchor':
-      binding.breakVoidAnchor(game, ritual, player, world);
+    case 'void_anchor': {
+      // Якорь ломается всегда; створка открывается только при оплаченном посте.
+      const opened = binding.breakVoidAnchor(game, ritual, player, world);
+      if (opened) binding.lateWarning(game, 'underhell_void_cut_darkness_trace', player, world);
       ok = true;
       break;
+    }
   }
   if (!ok) game.msgs.push(msg(anchor.failHint, game.time, '#c96'));
   return ok;

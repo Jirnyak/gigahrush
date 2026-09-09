@@ -414,25 +414,37 @@ export function publishDarkMetroRouteEvent(
   });
 }
 
+/**
+ * Откуда пришло предупреждение. Раньше здесь стояли `world` и `actor`, из
+ * которых брались ровно зона и подпись наблюдателя, — а вызывающий у функции
+ * так и не появился. Живой источник у этажа один: маркер маршрутной подсказки,
+ * который УЖЕ публикует свой `route_cue` в шину со всеми этими полями. Поэтому
+ * источник приходит готовым, как у `publishDarknessReturnTrace`.
+ */
+export interface DarkMetroAmbushSource {
+  zoneId?: number;
+  x?: number;
+  y?: number;
+  actorId?: number;
+  actorName?: string;
+  actorFaction?: Faction;
+}
+
 export function publishDarkMetroAmbushWarning(
   state: GameState,
-  world: World,
-  actor: Entity,
   cueId: DarkMetroAmbushCueId,
+  source: DarkMetroAmbushSource = {},
 ): void {
   const cue = DARK_METRO_AMBUSH_CUES.find(c => c.id === cueId);
-  const px = Math.floor(actor.x);
-  const py = Math.floor(actor.y);
-  const zoneId = world.zoneMap[world.idx(px, py)];
   publishEvent(state, {
     type: 'monster_sighted',
     z: DARK_METRO_Z,
-    zoneId: zoneId >= 0 ? zoneId : undefined,
-    x: actor.x,
-    y: actor.y,
-    actorId: actor.id,
-    actorName: actor.name,
-    actorFaction: actor.faction,
+    zoneId: source.zoneId !== undefined && source.zoneId >= 0 ? source.zoneId : undefined,
+    x: source.x,
+    y: source.y,
+    actorId: source.actorId,
+    actorName: source.actorName,
+    actorFaction: source.actorFaction,
     severity: 4,
     privacy: 'local',
     tags: ['dark_metro', 'ambush_cue', cueId, ...(cue?.tags ?? [])],

@@ -54,6 +54,8 @@ import {
 } from './meta';
 import { newEntityIdCursor } from '../entity_ids';
 import { lightDarkMetro } from './lighting';
+// Этаж слушает свои маршрутные подсказки — наблюдатель шины на импорте.
+import './ambush';
 
 export function tuneDarkMetroRouteZone(zone: Zone): void {
   const lineDistance = nearestDarkMetroLineDistance(zone.cy);

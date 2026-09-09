@@ -11,6 +11,9 @@ import {
   scoreUnderhellThresholdChain,
   snapshotUnderhellFlags,
 } from '../src/gen/underhell';
+import { applyUnderhellDecision, underhellDecisionAnchors } from '../src/gen/underhell/decisions';
+import { createWorldEventState } from '../src/systems/events';
+import { makeGameState, makeTestPlayer } from './helpers';
 import {
   countTerritoryCells,
   territoryHqAnchors,
@@ -125,4 +128,40 @@ test('underhell ambient NPC templates align to their own cell territory', () => 
   for (const faction of expectedAmbientFactions) {
     assert.equal(factions.has(faction), true, `missing ambient faction ${faction}`);
   }
+});
+
+/* ── Шов «этаж → шина» ────────────────────────────────────────────
+ * `publishUnderhellLateWarning` был объявлен и не вызван ни разу (§2.3):
+ * четыре поздних предупреждения доставлялись игроку записками на полу и мир
+ * о них не знал. Два из четырёх — последствия развилок, и подключены к ним.
+ * Оставшиеся два (`*_retreat_ledge`) — подсказки при заходе, а не последствия;
+ * они остаются записками намеренно.
+ */
+test('плата поста и открытый разрез доходят до шины предупреждением', () => {
+  const gen = generateDesignFloor('underhell');
+  const world = gen.world;
+  const anchors = underhellDecisionAnchors(world);
+  assert.ok(anchors.length > 0, 'развилок ритуала нет в мире');
+
+  // Плата кровью — единственная без предметного условия: тест проходит развилку
+  // тем же путём, что игрок без нужной фляги и без паспортного корешка.
+  const threshold = anchors.find(a => a.decision.kind === 'threshold' && a.decision.costId === 'blood_35hp');
+  assert.ok(threshold, 'развилки платы кровью нет');
+
+  const state = makeGameState({ worldEvents: createWorldEventState(), currentZ: -38, time: 100 });
+  const player = makeTestPlayer({ x: threshold.x + 0.5, y: threshold.y + 0.5 });
+  // Плата берётся кровью: у неё нет предметного условия, поэтому развилка
+  // проходится в тесте без раздачи инвентаря.
+  player.hp = 100;
+  player.maxHp = 100;
+
+  const paid = applyUnderhellDecision(world, state, player, threshold);
+  assert.equal(paid, true, `плата поста не прошла: ${state.msgs.map(m => m.text).join(' | ')}`);
+
+  const buffer = state.worldEvents!.recentEvents;
+  const published = buffer.items.filter((e): e is NonNullable<typeof e> => !!e);
+  const warnings = published.filter(e => e.tags?.includes('late_warning'));
+  assert.equal(warnings.length, 1, 'предупреждение не дошло до шины');
+  assert.equal(warnings[0].tags?.includes('underhell_threshold_price_echo'), true);
+  assert.equal(warnings[0].type, 'samosbor_warning');
 });

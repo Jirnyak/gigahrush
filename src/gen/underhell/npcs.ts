@@ -17,7 +17,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { UNDERHELL_ROUTE_ID, UNDERHELL_Z, SPAWN_X, SPAWN_Y, UNDERHELL_FLAGS, UnderhellRitualState, UnderhellDesignGeneration, UNDERHELL_LATE_WARNINGS, THRESHOLD_MARFUSHA_DEF, DEBT_CULTIST_DEF, WORDLESS_LIQUIDATOR_DEF, FALSE_YAKOV_DEF } from "./meta";
 import { placeUnderhellDecisionAnchors } from "./decisions";
 import { lightUnderhell, lightUnderhellPosts } from "./lighting";
-import { scoreUnderhellThresholdChain, tryOpenUnderhellVoidGate, registerUnderhellRouteCues, payUnderhellThreshold, resolveUnderhellWitness, burnUnderhellDebt, breakUnderhellVoidAnchor, snapshotUnderhellFlags, paintBaseUnderhell, createUnderhellRoom, connectRooms, carveRootTunnel, touchesRoomInterior, markBridgeCandles, decorateEntry, decorateFallbackLedge, decorateRootStair, decorateThreshold, decorateWitnessCell, decorateTollChamber, decorateDebtWell, decorateInvertedChapel, decorateSacrificeGate, decorateVoidGate, measureUnderhellSdfMetrics, isUnderhellWalkableCell, setFeature, retuneUnderhellZones, addItemDrop, addNote } from "./geometry";
+import { scoreUnderhellThresholdChain, tryOpenUnderhellVoidGate, publishUnderhellLateWarning, registerUnderhellRouteCues, payUnderhellThreshold, resolveUnderhellWitness, burnUnderhellDebt, breakUnderhellVoidAnchor, snapshotUnderhellFlags, paintBaseUnderhell, createUnderhellRoom, connectRooms, carveRootTunnel, touchesRoomInterior, markBridgeCandles, decorateEntry, decorateFallbackLedge, decorateRootStair, decorateThreshold, decorateWitnessCell, decorateTollChamber, decorateDebtWell, decorateInvertedChapel, decorateSacrificeGate, decorateVoidGate, measureUnderhellSdfMetrics, isUnderhellWalkableCell, setFeature, retuneUnderhellZones, addItemDrop, addNote } from "./geometry";
 
 export function isUnderhellAmbientNpc(entity: Entity): boolean {
   return entity.type === EntityType.NPC &&
@@ -309,6 +309,7 @@ export function generateUnderhellDesignFloorSeeded(seed: number, forceOpenVoidGa
         burnDebt: burnUnderhellDebt,
         breakVoidAnchor: breakUnderhellVoidAnchor,
         snapshot: snapshotUnderhellFlags,
+        lateWarning: publishUnderhellLateWarning,
       });
     },
   };

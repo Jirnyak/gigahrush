@@ -25,6 +25,8 @@ import {
   registerDarknessRouteCues
 } from './npcs';
 import { newEntityIdCursor } from '../entity_ids';
+// Вынос имени из темноты — рантайм-хук пакета, регистрируется импортом.
+import './return_trace';
 
 export * from './meta';
 
