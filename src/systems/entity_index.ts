@@ -168,6 +168,10 @@ export class EntityIndex {
    * ровно затем, чтобы вынуть умерших; пока никто не умирал, искать некого, и
    * девять с половиной тысяч предметов трогать незачем. Новая статика в обход
    * не нуждается — её адреса ставит `addEntityTailToCachedBuckets`. */
+  /* Адрес статики в бакетах — по id. Нужен ровно затем, чтобы ДВИЖУЩИЙСЯ
+   * билборд можно было переставить за O(1): полный обход статики ждёт смерти,
+   * и без записанного адреса вынимать его было бы неоткуда. */
+  private readonly staticBucketById = new Map<number, number>();
   private staticScanEpoch = -1;
   private staticScanStats: { liveCount: number; itemCount: number } = { liveCount: 0, itemCount: 0 };
 
@@ -198,6 +202,7 @@ export class EntityIndex {
     const startedAt = nowMs();
     this.clearDynamicBuckets();
     for (let i = 0; i < BUCKET_COUNT; i++) this.staticBuckets[i].length = 0;
+    this.staticBucketById.clear();
     this.dynamicEntities.length = 0;
     this.staticIndexedIds.clear();
     this.byId.clear();
@@ -244,6 +249,7 @@ export class EntityIndex {
       if (staticVisible) {
         bucket.push(e);
         this.staticIndexedIds.add(e.id);
+        this.staticBucketById.set(e.id, bucketIndex);
       } else {
         this.addDynamicEntityToBuckets(e, bucketIndex);
         this.dynamicEntities.push(e);
@@ -289,11 +295,47 @@ export class EntityIndex {
    * живую сущность (включая до 16384 неподвижных дропов) ради восстановления
    * НЕИЗМЕНИВШИХСЯ связей.
    */
+  /**
+   * Переставить ДВИЖУЩУЮСЯ статику в её новый бакет.
+   *
+   * Статика на то и статика, что своих адресов не трогает, — и полный обход
+   * `reindexStaticEntities` поэтому ждёт чужой смерти. Но одна статика в игре
+   * ездит: вагоны состава — билборды (`EntityType.BILLBOARD`), а билборд по
+   * маске всегда статичен. Создаются они в точке (0, 0) и раскладываются по
+   * рельсам каждым тактом, то есть НАВСЕГДА оставались в бакете угла карты.
+   *
+   * Цена была не косметическая: райкастер набирает спрайты радиусным запросом
+   * (`ENTITY_MASK_VISIBLE`), а он идёт по бакетам. Состав, стоящий в двух шагах,
+   * в этот запрос не попадал вовсе.
+   *
+   * Адрес записан по id, поэтому переезд стоит O(1) и делается только когда
+   * бакет реально сменился.
+   */
+  restaticMovedEntity(e: Entity): void {
+    const known = this.staticBucketById.get(e.id);
+    if (known === undefined) return;
+    const bucketIndex = wrappedBucketCoord(e.y) * BUCKETS_PER_AXIS + wrappedBucketCoord(e.x);
+    if (bucketIndex === known) return;
+    const from = this.staticBuckets[known];
+    const at = from.indexOf(e);
+    if (at >= 0) {
+      from[at] = from[from.length - 1];
+      from.length--;
+      if (from.length === 0) this.staticUsedBucketCount = Math.max(0, this.staticUsedBucketCount - 1);
+    }
+    const to = this.staticBuckets[bucketIndex];
+    to.push(e);
+    if (to.length === 1) this.staticUsedBucketCount++;
+    if (to.length > this.staticMaxBucketSize) this.staticMaxBucketSize = to.length;
+    this.staticBucketById.set(e.id, bucketIndex);
+  }
+
   private forgetEntity(e: Entity): void {
     if (this.byId.get(e.id) === e) this.byId.delete(e.id);
     if (e.alifeId !== undefined && this.byAlifeId.get(e.alifeId) === e) this.byAlifeId.delete(e.alifeId);
     this.entityOrder.delete(e.id);
     this.staticIndexedIds.delete(e.id);
+    this.staticBucketById.delete(e.id);
   }
 
   private rebuildDynamicForSimulation(entities: readonly Entity[], simulationFrame: number): void {
@@ -476,6 +518,7 @@ export class EntityIndex {
         const bucketIndex = wrappedBucketCoord(e.y) * BUCKETS_PER_AXIS + wrappedBucketCoord(e.x);
         const bucket = this.staticBuckets[bucketIndex];
         bucket.push(e);
+        this.staticBucketById.set(e.id, bucketIndex);
         if (bucket.length === 1) this.staticUsedBucketCount++;
         if (bucket.length > this.staticMaxBucketSize) this.staticMaxBucketSize = bucket.length;
       } else {

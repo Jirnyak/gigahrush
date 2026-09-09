@@ -1,6 +1,7 @@
 /* ── Lift arachna: rare readable shaft ambush ────────────────── */
 
 import {
+  W,
   AIGoal,
   Cell,
   EntityType,
@@ -83,14 +84,21 @@ function createLiftArachnaState(): LiftArachnaState {
 
 function normalizeActive(input: Partial<ActiveLiftArachna> | null | undefined): ActiveLiftArachna | null {
   if (!input || typeof input.key !== 'string') return null;
+  /* `typeof === 'number'` пропускает `NaN`, `Infinity` и дробное. Координата
+   * шахты приходила из сейва сырой и уезжала в `world.idx` — там она обращается
+   * в мусорный индекс молча, без единой ошибки. */
+  const finite = (value: unknown, fallback: number): number =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  const cell = (value: unknown): number =>
+    Math.max(0, Math.min(W - 1, Math.trunc(finite(value, 0))));
   return {
     key: input.key,
-    z: typeof input.z === 'number' ? input.z : 0,
-    zoneId: typeof input.zoneId === 'number' ? input.zoneId : -1,
-    liftX: typeof input.liftX === 'number' ? input.liftX : 0,
-    liftY: typeof input.liftY === 'number' ? input.liftY : 0,
-    startedAt: typeof input.startedAt === 'number' ? input.startedAt : 0,
-    dropAt: typeof input.dropAt === 'number' ? input.dropAt : 0,
+    z: Math.trunc(finite(input.z, 0)),
+    zoneId: Math.trunc(finite(input.zoneId, -1)),
+    liftX: cell(input.liftX),
+    liftY: cell(input.liftY),
+    startedAt: Math.max(0, finite(input.startedAt, 0)),
+    dropAt: Math.max(0, finite(input.dropAt, 0)),
     threatLevel: Math.max(1, Math.min(5, Math.round(input.threatLevel ?? 2))),
     secondWarning: input.secondWarning === true,
     direction: input.direction === 'up' || input.direction === 'down' ? input.direction : 'unknown',

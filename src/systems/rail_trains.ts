@@ -18,7 +18,7 @@ import { recordPlayerDamage } from './damage';
 import { World } from '../core/world';
 import { RUNTIME_TOPOLOGY_LIMITS } from '../data/runtime_topology';
 import { Spr } from '../entities/sprite_index';
-import { ensureEntityIndex } from './entity_index';
+import { ensureEntityIndex, getEntityIndex } from './entity_index';
 import { publishEvent } from './events';
 import { isPlayerEntity } from './player_actor';
 import { killEntity } from './entity_death';
@@ -188,6 +188,11 @@ function positionTrainEntities(
     entity.y = p.y + 0.5;
     entity.angle = 0;
     entity.alive = true;
+    /* Вагон — единственная ЕЗДЯЩАЯ статика в игре: билборд по маске статичен
+     * всегда, а полный обход статики ждёт чужой смерти. Без этой строки состав
+     * навсегда оставался в бакете точки (0, 0), где его создали, и радиусный
+     * запрос райкастера не находил его в двух шагах от игрока. */
+    getEntityIndex().restaticMovedEntity(entity);
     world.railTrainCells.set(ci, trainIndex);
     const fillOffset = train.offset - (i * SEGMENT_STRIDE + 1) * train.direction;
     world.railTrainCells.set(track.cells[offsetIndex(track, fillOffset)], trainIndex);

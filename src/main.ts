@@ -367,6 +367,7 @@ import { hladonColdMoveMultiplier, updateHladonColdPocket } from './systems/hlad
 import { tryCoverSeroburmalineSource, updateSeroburmalineExposure } from './systems/seroburmaline';
 import { updateRouteCues, resetRouteCueHud } from './systems/route_cues';
 import { resetRumorEvents } from './systems/rumor';
+import { resetDialogueState } from './systems/dialogue';
 import { updateDangerField } from './systems/danger_field';
 import {
   resetMapExploration,
@@ -4306,6 +4307,7 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   resetMonsterBaits();
   resetRouteCueHud();
   resetRumorEvents();
+  resetDialogueState();
 
   state = {
     tick: 0,
@@ -7135,6 +7137,12 @@ function loadGame(): boolean {
       resetArenaLadderRuntime();
       resetCombatStimulus();
       resetMonsterBaits();
+      /* Эти три жили ТОЛЬКО в `initGame`, хотя оба списка сбросов в остальном
+       * совпадают строка в строку. Загрузка в той же вкладке подхватывала
+       * подсказку маршрута, ленту слухов и счётчик реплик от прошлого забега. */
+      resetRouteCueHud();
+      resetRumorEvents();
+      resetDialogueState();
       const loaded = loadFloorForTarget({ entry: generatedRunEntry, instanceId: loadedInstanceId, z: savedFloor });
       const gen = loaded.generation;
 
@@ -7204,6 +7212,14 @@ function loadGame(): boolean {
       state.samosborTimer = clampNumber(dataState.samosborTimer, 120, 0, SAMOSBOR_COOLDOWN_MAX_SEC);
       state.quests = normalizedQuests.quests;
       state.nextQuestId = normalizedQuests.nextQuestId;
+      /* Выбранная цель восстанавливается ТОЛЬКО если она всё ещё выбираема:
+       * номер из сейва может указывать на закрытый, проваленный или вовсе
+       * отсутствующий квест, а стрелка на карте обязана вести к живой цели. */
+      const savedActiveQuestId = dataState.activeQuestId;
+      state.activeQuestId = typeof savedActiveQuestId === 'number'
+        && state.quests.some(q => q.id === savedActiveQuestId && isQuestSelectableAsActive(q))
+        ? savedActiveQuestId
+        : undefined;
       state.tutorialMode = dataState.tutorialMode === true;
       state.tutorialStep = typeof dataState.tutorialStep === 'number' ? dataState.tutorialStep : undefined;
       // `floor` is the generation target (theme tags of the restored entry); the

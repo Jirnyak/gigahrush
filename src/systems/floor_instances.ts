@@ -27,6 +27,7 @@ import {
   summarizeFloorRun,
 } from './procedural_floors';
 import { floorKeyForFloorInstance } from './floor_keys';
+import { FLOOR_RUN_MAX_Z, FLOOR_RUN_MIN_Z } from '../data/procedural_floors';
 import { rng } from '../core/rand';
 import { registerDebugCommand } from './debug_registry';
 
@@ -72,9 +73,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+/* `typeof === 'number'` пропускает `NaN` и `Infinity`: оба они числа. Дробное
+ * тоже пропускало — координата этажа целая по определению. Из подделанного
+ * `localStorage` такое значение уезжало прямо в ключ этажа и в маршрут. */
 function readFloor(value: unknown): number | undefined {
-  return typeof value === 'number'
-    ? value
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(FLOOR_RUN_MIN_Z, Math.min(FLOOR_RUN_MAX_Z, Math.trunc(value)))
     : undefined;
 }
 

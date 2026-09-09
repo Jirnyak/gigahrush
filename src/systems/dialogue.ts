@@ -15,6 +15,16 @@ import { routeSpeech } from './speech_router';
 
 let _dialogueInteractionCounter = 0;
 
+/** Счётчик реплик — свойство ЗАБЕГА, а не вкладки браузера.
+ *
+ *  Он входит в `repeatIndex` и решает, какую строку услышит игрок. Своего
+ *  сброса у него не было вовсе: новая игра начиналась с чужим счётчиком, и
+ *  первые разговоры выпадали не с начала списка, а с середины прошлого забега.
+ *  Ставится в общий сброс `initGame` рядом с подсказками маршрута и слухами. */
+export function resetDialogueState(): void {
+  _dialogueInteractionCounter = 0;
+}
+
 /* ── Talk text (called from NPC menu "Talk" tab) ─────────────── */
 export function generateTalkText(npc: Entity, options: ContextBuildOptions = {}): string {
   const now = options.time ?? performanceNowSeconds();

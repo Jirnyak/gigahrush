@@ -102,6 +102,7 @@ export interface SavePayload {
     samosborCount: number;
     samosborTimer: number;
     quests: Quest[];
+    activeQuestId?: number;
     nextQuestId: number;
     currentZ: GameState['currentZ'];
     tutorialMode?: boolean;
@@ -308,6 +309,12 @@ export function buildSavePayload(input: SavePayloadBuildInput): SavePayload {
       samosborCount: state.samosborCount,
       samosborTimer: state.samosborTimer,
       quests: questsForSave(state.quests),
+      /* Выбранная цель — часть состояния квестов, а не украшение HUD.
+       *
+       * Она не сохранялась вовсе, и после загрузки стрелка на карте и строка
+       * «текущая задача» показывали не то, что игрок выбрал, а первое
+       * подходящее. Число, а не объект: сам квест уже лежит рядом. */
+      activeQuestId: state.activeQuestId,
       nextQuestId: state.nextQuestId,
       currentZ: state.currentZ,
       tutorialMode: state.tutorialMode,

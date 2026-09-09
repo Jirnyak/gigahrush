@@ -756,6 +756,16 @@ function sanitizeRoomFields(raw: Record<string, unknown>, id: number): Room {
     ceilingDomeTier: typeof raw.ceilingDomeTier === 'number' && Number.isFinite(raw.ceilingDomeTier)
       ? Math.max(0, Math.min(255, Math.floor(raw.ceilingDomeTier)))
       : undefined,
+    /* `defId` — это ПОСТОЯННЫЙ адрес комнаты для квестов и событий, а `tags` —
+     * её содержательные метки. Санитайзер их ронял, и дельта-путь это скрывал:
+     * он подставляет оба поля из чистого слота базы. Полный снимок такой
+     * подстановки не имеет, а по нему ходит СЕТЬ — то есть у гостя комната
+     * приезжала без адреса, и цель квеста в ней становилась ненаходимой. */
+    defId: typeof raw.defId === 'string' && raw.defId ? raw.defId.slice(0, 64) : undefined,
+    tags: Array.isArray(raw.tags)
+      ? raw.tags.filter((tag): tag is string => typeof tag === 'string' && tag.length > 0)
+        .slice(0, 16).map(tag => tag.slice(0, 48))
+      : undefined,
   };
 }
 
