@@ -21,13 +21,22 @@ export interface SpeciesState<T extends object> {
   forget(e: Entity): void;
 }
 
-export function speciesState<T extends object>(create: () => T): SpeciesState<T> {
+/**
+ * Конструктор получает САМУ СУЩНОСТЬ.
+ *
+ * Половине видовых записей начальное значение берётся с актора: собака помнит
+ * место испуга от своих координат, сборка — свою базовую скорость, кошмарище и
+ * слизневая женщина — здоровье на момент первого обращения. Без аргумента
+ * такие семьи не могли переехать сюда вовсе и держали по рукописному
+ * `WeakMap` каждая. Конструктору без параметров аргумент не мешает.
+ */
+export function speciesState<T extends object>(create: (e: Entity) => T): SpeciesState<T> {
   const byActor = new WeakMap<Entity, T>();
   return {
     of(e: Entity): T {
       let state = byActor.get(e);
       if (!state) {
-        state = create();
+        state = create(e);
         byActor.set(e, state);
       }
       return state;

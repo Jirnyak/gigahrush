@@ -404,7 +404,7 @@ const cherviePulseQuery: Entity[] = [];
 const pomoynyRoyQuery: Entity[] = [];
 const lishennyyLightQuery: Entity[] = [];
 
-const lampPoweredRuntime = new WeakMap<Entity, boolean>();
+const lampPoweredRuntime = speciesState<{ powered: boolean }>(() => ({ powered: false }));
 
 
 
@@ -413,7 +413,7 @@ interface ZhornayaScentRuntime {
   scent: ZhornayaScentTarget | null;
 }
 
-const zhornayaScentRuntime = new WeakMap<Entity, ZhornayaScentRuntime>();
+const zhornayaScentRuntime = speciesState<ZhornayaScentRuntime>(() => ({ nextScanAt: -Infinity, scent: null }));
 
 interface SobrannyyRuntime {
   lastHp: number;
@@ -426,7 +426,16 @@ interface SobrannyyRuntime {
   isolatedUntil: number;
 }
 
-const sobrannyyRuntime = new WeakMap<Entity, SobrannyyRuntime>();
+const sobrannyyRuntime = speciesState<SobrannyyRuntime>(e => ({
+  lastHp: Math.max(1, e.hp ?? e.maxHp ?? 1),
+  baseSpeed: e.speed,
+  dormant: true,
+  hitCount: 0,
+  hitWindowUntil: 0,
+  stacks: 0,
+  stackUntil: 0,
+  isolatedUntil: 0,
+}));
 const SOBRANNYY_SLIME_TAGS = ['slime', 'toxic', 'acid', 'red_slime', 'black_slime', 'brown_slime'] as const;
 
 interface NightmareRuntime {
@@ -435,7 +444,11 @@ interface NightmareRuntime {
   lastBreakAt: number;
 }
 
-const nightmareRuntime = new WeakMap<Entity, NightmareRuntime>();
+const nightmareRuntime = speciesState<NightmareRuntime>(e => ({
+  lastHp: Math.max(1, e.hp ?? e.maxHp ?? 1),
+  pressure: 0,
+  lastBreakAt: -Infinity,
+}));
 
 interface SlimeWomanRuntime {
   lastHp: number;
@@ -443,7 +456,11 @@ interface SlimeWomanRuntime {
   lastDryEventAt: number;
 }
 
-const slimeWomanRuntime = new WeakMap<Entity, SlimeWomanRuntime>();
+const slimeWomanRuntime = speciesState<SlimeWomanRuntime>(e => ({
+  lastHp: Math.max(1, e.hp ?? e.maxHp ?? 1),
+  lastResidueAt: -Infinity,
+  lastDryEventAt: -Infinity,
+}));
 const SLIME_WOMAN_HAZARD_TAGS = ['slime', 'toxic', 'black_slime', 'green_slime', 'slime_woman'] as const;
 
 interface GreenDogRuntime {
@@ -454,14 +471,20 @@ interface GreenDogRuntime {
   lastScaryNoiseId: number;
 }
 
-const greenDogRuntime = new WeakMap<Entity, GreenDogRuntime>();
+const greenDogRuntime = speciesState<GreenDogRuntime>(e => ({
+  nextShareAt: -Infinity,
+  fearUntil: -Infinity,
+  fearX: e.x,
+  fearY: e.y,
+  lastScaryNoiseId: 0,
+}));
 
 interface FogSharkRuntime {
   nextShareAt: number;
   nextSightAt: number;
 }
 
-const fogSharkRuntime = new WeakMap<Entity, FogSharkRuntime>();
+const fogSharkRuntime = speciesState<FogSharkRuntime>(() => ({ nextShareAt: -Infinity, nextSightAt: -Infinity }));
 
 function zoneIdAt(world: World, x: number, y: number): number | undefined {
   const zid = world.zoneMap[world.idx(Math.floor(x), Math.floor(y))];
@@ -469,30 +492,11 @@ function zoneIdAt(world: World, x: number, y: number): number | undefined {
 }
 
 function greenDogState(e: Entity): GreenDogRuntime {
-  let state = greenDogRuntime.get(e);
-  if (!state) {
-    state = {
-      nextShareAt: -Infinity,
-      fearUntil: -Infinity,
-      fearX: e.x,
-      fearY: e.y,
-      lastScaryNoiseId: 0,
-    };
-    greenDogRuntime.set(e, state);
-  }
-  return state;
+  return greenDogRuntime.of(e);
 }
 
 function fogSharkState(e: Entity): FogSharkRuntime {
-  let state = fogSharkRuntime.get(e);
-  if (!state) {
-    state = {
-      nextShareAt: -Infinity,
-      nextSightAt: -Infinity,
-    };
-    fogSharkRuntime.set(e, state);
-  }
-  return state;
+  return fogSharkRuntime.of(e);
 }
 
 function fogSharkHasFogPressure(world: World, e: Entity): boolean {
@@ -1113,22 +1117,7 @@ function updateHeadSlugParasite(
 
 
 function sobrannyyState(e: Entity): SobrannyyRuntime {
-  const hp = Math.max(1, e.hp ?? e.maxHp ?? 1);
-  let state = sobrannyyRuntime.get(e);
-  if (!state) {
-    state = {
-      lastHp: hp,
-      baseSpeed: e.speed,
-      dormant: true,
-      hitCount: 0,
-      hitWindowUntil: 0,
-      stacks: 0,
-      stackUntil: 0,
-      isolatedUntil: 0,
-    };
-    sobrannyyRuntime.set(e, state);
-  }
-  return state;
+  return sobrannyyRuntime.of(e);
 }
 
 function publishSobrannyyEvent(
@@ -1235,7 +1224,7 @@ function updateSobrannyyGrowthState(
 ): void {
   if (!hasAIFlag(e, 'meatGrowth')) return;
   if (!e.alive || (e.hp ?? 1) <= 0) {
-    sobrannyyRuntime.delete(e);
+    sobrannyyRuntime.forget(e);
     return;
   }
   const runtime = sobrannyyState(e);
@@ -1682,6 +1671,42 @@ function monsterReadabilityEventData(
  * совпадал с `MonsterEcologyDef.rumorIds` обоих видов один в один, а метка —
  * это просто первый элемент `tags`, как у всех остальных видов.
  */
+/**
+ * Первый взгляд вида на цель: сказать строку один раз и объявить факт.
+ *
+ * Скелет был написан четыре раза подряд (сборка, зомби, помойный рой, нелюдь),
+ * и КАЖДАЯ копия отвечала на вопрос «кто здесь игрок» по-своему: три сравнивали
+ * `target.id === playerId`, четвёртая звала `isPlayerEntity`. В одиночной игре
+ * это одно и то же, в кооперативе — нет: пир тоже игрок, но не ЭТОТ.
+ *
+ * Различие настоящее, и потому оно теперь названо, а не унифицировано наугад:
+ *   · СТРОКА идёт в журнал ЭТОГО экрана — значит только своей цели (`playerId`);
+ *   · ВЕС события и приватность считают любого игрока стороной игрока
+ *     (`isPlayerEntity`), потому что событие принадлежит миру, а не экрану.
+ *
+ * Условие вида, его реплика, теги и полезная нагрузка остаются у вида: это
+ * контент, и сводить его нельзя. Сводится только сам порядок действий.
+ */
+function announceMonsterSighting(
+  world: World,
+  e: Entity,
+  target: Entity,
+  time: number,
+  msgs: Msg[],
+  playerId: number,
+  state: GameState | undefined,
+  cue: { line: string; color: string; tags: string[]; data?: Record<string, unknown> },
+  markSeen = true,
+): void {
+  if (markSeen && e.ai) e.ai.lastSeenTargetId = target.id;
+  if (target.id === playerId) msgs.push(msg(cue.line, time, cue.color));
+  publishMonsterReadabilityEvent(
+    state, world, e, target, 'monster_sighted',
+    isPlayerEntity(target) ? 4 : 3,
+    cue.tags, cue.data,
+  );
+}
+
 function publishMonsterReadabilityEvent(
   state: GameState | undefined,
   world: World,
@@ -1713,13 +1738,7 @@ function publishMonsterReadabilityEvent(
 }
 
 function nightmareState(e: Entity): NightmareRuntime {
-  const hp = Math.max(1, e.hp ?? e.maxHp ?? 1);
-  let state = nightmareRuntime.get(e);
-  if (!state) {
-    state = { lastHp: hp, pressure: 0, lastBreakAt: -Infinity };
-    nightmareRuntime.set(e, state);
-  }
-  return state;
+  return nightmareRuntime.of(e);
 }
 
 function nightmareSamePressureSpace(world: World, e: Entity, target: Entity): boolean {
@@ -1770,7 +1789,7 @@ function updateNightmarePressure(
 ): void {
   if (!hasAIFlag(e, 'roomPressure')) return;
   if (!e.alive || (e.hp ?? 1) <= 0) {
-    nightmareRuntime.delete(e);
+    nightmareRuntime.forget(e);
     return;
   }
 
@@ -2096,20 +2115,22 @@ function updateNelyudCloseReveal(
   target: Entity,
   time: number,
   msgs: Msg[],
+  playerId: number,
   state?: GameState,
 ): void {
   if (!hasAIFlag(e, 'closeReveal') || !e.ai) return;
   if (e.ai.lastSeenTargetId === target.id) return;
   if (world.dist2(e.x, e.y, target.x, target.y) > NELYUD_REVEAL_SQ) return;
 
-  e.ai.lastSeenTargetId = target.id;
-  if (isPlayerEntity(target)) {
-    msgs.push(msg('Сосед перестал моргать. Нелюдь раскрылась слишком близко; держите свет, свидетеля и выход.', time, '#f84'));
-  }
-  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', isPlayerEntity(target) ? 4 : 3, ['nelyud', 'close_reveal', 'mimic_threshold'], {
-    reason: 'close_distance_reveal',
-    light: Math.round(Math.max(entityLight(world, e), entityLight(world, target)) * 100) / 100,
-    counterplay: 'distance_light_witness_exit',
+  announceMonsterSighting(world, e, target, time, msgs, playerId, state, {
+    line: 'Сосед перестал моргать. Нелюдь раскрылась слишком близко; держите свет, свидетеля и выход.',
+    color: '#f84',
+    tags: ['nelyud', 'close_reveal', 'mimic_threshold'],
+    data: {
+      reason: 'close_distance_reveal',
+      light: Math.round(Math.max(entityLight(world, e), entityLight(world, target)) * 100) / 100,
+      counterplay: 'distance_light_witness_exit',
+    },
   });
 }
 
@@ -2263,6 +2284,45 @@ function cutMetalSheet(target: Entity): boolean {
  *  необязателен для вызывающего: фильтр арности 1 подходит по типу. */
 export type CombatTargetFilter = (other: Entity, hunter: Entity) => boolean;
 
+/* ── Быстрая полоса на упор ────────────────────────────────────────
+ *
+ * Секундный каданс скана хорош для «кто там вдалеке», но вплотную он читается
+ * как тупость: кто-то встал в упор, а тварь ещё полсекунды смотрит мимо.
+ * Поэтому раз в десятую долю секунды идёт отдельный дешёвый взгляд на
+ * непосредственную угрозу — и, найдя её, укорачивает общий каданс.
+ *
+ * Тело было написано ДВАЖДЫ дословно, включая оба литерала: у общего поиска
+ * цели и у помойного роя (там про это даже стоял комментарий «та же, что у
+ * общего поиска»). Два числа в двух местах — это два числа, которые однажды
+ * разойдутся.
+ */
+const IMMEDIATE_SCAN_INTERVAL_SEC = 0.1;
+/** Найдя угрозу в упор, общий каданс укорачивается до этого потолка. */
+const IMMEDIATE_HIT_SCAN_CAP_SEC = 0.15;
+
+function tryImmediateThreatFastLane(
+  world: World,
+  e: Entity,
+  dt: number,
+  rangeSq: number,
+  typeFilter: (candidate: Entity, seeker: Entity) => boolean,
+  hasTarget: boolean,
+): Entity | null {
+  const ai = e.ai!;
+  /* Счётчик убывает БЕЗУСЛОВНО, даже когда цель уже есть, — ровно как в обеих
+   * прежних копиях. Иначе он замирал бы на удержании цели, и первый взгляд
+   * после её потери откладывался бы на остаток такта. */
+  ai.immediateScanCd = (ai.immediateScanCd ?? 0) - dt;
+  if (hasTarget || (ai.combatScanCd ?? 0) <= 0 || ai.immediateScanCd > 0) return null;
+  ai.immediateScanCd = IMMEDIATE_SCAN_INTERVAL_SEC;
+  const found = findImmediateCombatTarget(world, e, Math.min(rangeSq, IMMEDIATE_THREAT_RADIUS_SQ), typeFilter);
+  if (!found) return null;
+  ai.combatTargetId = found.id;
+  ai.goal = AIGoal.HUNT;
+  ai.combatScanCd = Math.min(ai.combatScanCd ?? 0, IMMEDIATE_HIT_SCAN_CAP_SEC);
+  return found;
+}
+
 export function findCombatTarget(
   world: World, entities: Entity[], e: Entity, dt: number,
   rangeSq: number, scanCd: number,
@@ -2281,17 +2341,8 @@ export function findCombatTarget(
     if (!target) ai.combatTargetId = undefined;
   }
 
-  ai.immediateScanCd = (ai.immediateScanCd ?? 0) - dt;
-  if (!target && ai.combatScanCd! > 0 && ai.immediateScanCd <= 0) {
-    ai.immediateScanCd = 0.1; // Check for immediate threats 10 times a second, not every frame
-    target = findImmediateCombatTarget(world, e, Math.min(rangeSq, IMMEDIATE_THREAT_RADIUS_SQ), typeFilter);
-    if (target) {
-      ai.combatTargetId = target.id;
-      ai.goal = AIGoal.HUNT;
-      ai.combatScanCd = Math.min(ai.combatScanCd!, 0.15);
-      return target;
-    }
-  }
+  const immediateThreat = tryImmediateThreatFastLane(world, e, dt, rangeSq, typeFilter, target !== null);
+  if (immediateThreat) return immediateThreat;
 
   // Always rescan periodically to switch to closer targets
   if (ai.combatScanCd! <= 0) {
@@ -2754,19 +2805,8 @@ function findPomoynyRoyTarget(world: World, e: Entity, dt: number, baseSq: numbe
     if (!target) ai.combatTargetId = undefined;
   }
 
-  // Быстрая полоса на упор — та же, что у общего поиска цели: рой не ждёт
-  // секундного каданса, если кто-то встал вплотную.
-  ai.immediateScanCd = (ai.immediateScanCd ?? 0) - dt;
-  if (!target && ai.combatScanCd > 0 && ai.immediateScanCd <= 0) {
-    ai.immediateScanCd = 0.1;
-    target = findImmediateCombatTarget(world, e, Math.min(baseSq, IMMEDIATE_THREAT_RADIUS_SQ), canBeMonsterTarget);
-    if (target) {
-      ai.combatTargetId = target.id;
-      ai.goal = AIGoal.HUNT;
-      ai.combatScanCd = Math.min(ai.combatScanCd, 0.15);
-      return target;
-    }
-  }
+  const immediateThreat = tryImmediateThreatFastLane(world, e, dt, baseSq, canBeMonsterTarget, target !== null);
+  if (immediateThreat) return immediateThreat;
 
   if (target || ai.combatScanCd > 0) return target;
   ai.combatScanCd = fixedScanCd(e) ?? deterministicScanCd(e.id, 1.0, 0.5);
@@ -2922,17 +2962,14 @@ function findZhornayaCadencedScentTarget(
   target: Entity | null,
   time: number,
 ): ZhornayaScentTarget | null {
-  let runtime = zhornayaScentRuntime.get(e);
-  if (runtime && time < runtime.nextScanAt) {
-    const cached = validCachedZhornayaScent(world, e, target, runtime.scent, time);
+  const cachedRuntime = zhornayaScentRuntime.peek(e);
+  if (cachedRuntime && time < cachedRuntime.nextScanAt) {
+    const cached = validCachedZhornayaScent(world, e, target, cachedRuntime.scent, time);
     if (cached) return cached;
     return zhornayaTargetFallback(target);
   }
 
-  if (!runtime) {
-    runtime = { nextScanAt: 0, scent: null };
-    zhornayaScentRuntime.set(e, runtime);
-  }
+  const runtime = zhornayaScentRuntime.of(e);
   runtime.nextScanAt = time + zhornayaScentScanInterval(e);
   runtime.scent = findZhornayaDropTarget(world, e, target) ?? findZhornayaCarrierTarget(world, e) ?? zhornayaTargetFallback(target);
   return runtime.scent;
@@ -3057,15 +3094,10 @@ interface CarrionState {
   cell: number;
   scanCd: number;
 }
-const carrionStateByActor = new WeakMap<Entity, CarrionState>();
+const carrionStateByActor = speciesState<CarrionState>(() => ({ cell: -1, scanCd: 0 }));
 
 function carrionStateFor(e: Entity): CarrionState {
-  let state = carrionStateByActor.get(e);
-  if (!state) {
-    state = { cell: -1, scanCd: 0 };
-    carrionStateByActor.set(e, state);
-  }
-  return state;
+  return carrionStateByActor.of(e);
 }
 
 function tryConsumeMeatChunk(
@@ -3799,13 +3831,7 @@ function isSlimeWomanDryCounterCell(world: World, e: Entity): boolean {
 }
 
 function slimeWomanRuntimeState(e: Entity): SlimeWomanRuntime {
-  const hp = Math.max(1, e.hp ?? e.maxHp ?? 1);
-  let runtime = slimeWomanRuntime.get(e);
-  if (!runtime) {
-    runtime = { lastHp: hp, lastResidueAt: -Infinity, lastDryEventAt: -Infinity };
-    slimeWomanRuntime.set(e, runtime);
-  }
-  return runtime;
+  return slimeWomanRuntime.of(e);
 }
 
 function publishSlimeWomanDriedEvent(
@@ -3929,7 +3955,7 @@ function updateSlimeWomanState(
 ): void {
   if (!hasAIFlag(e, 'slimeStrider')) return;
   if (!e.alive || (e.hp ?? 1) <= 0) {
-    slimeWomanRuntime.delete(e);
+    slimeWomanRuntime.forget(e);
     return;
   }
   const runtime = slimeWomanRuntimeState(e);
@@ -4289,18 +4315,23 @@ function updateLampPoweredReadability(
   // Тот же вопрос, что у множителя урона, и задаётся он тем же поиском: вторая
   // копия «есть ли лампа в трёх клетках» стояла здесь своим `nearFeature`.
   const powered = target?.alive === true && monsterAnchored(world, e);
-  const wasPowered = lampPoweredRuntime.get(e) === true;
-  lampPoweredRuntime.set(e, powered);
+  const lampRuntime = lampPoweredRuntime.of(e);
+  const wasPowered = lampRuntime.powered;
+  lampRuntime.powered = powered;
   if (!powered || wasPowered || !target) return;
 
-  if (target.id === playerId) {
-    msgs.push(msg('Ламповый зазвенел под лампой: свет усилил удар. Отводите его на три клетки или за угол.', time, '#fd6'));
-  }
-  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', isPlayerEntity(target) ? 4 : 3, ['lampovy', 'lamp_powered', 'light', 'warning'], {
-    lampRadius: anchor.radius,
-    damageMult: anchor.dmgMult,
-    counterplay: 'leave_lamp_cluster_or_break_line',
-  });
+  /* Метку «видел» ламповый НЕ ставит: его гейт — переход «зажёгся», а не первый
+   * взгляд, и он обязан объявиться заново на каждой новой лампе. */
+  announceMonsterSighting(world, e, target, time, msgs, playerId, state, {
+    line: 'Ламповый зазвенел под лампой: свет усилил удар. Отводите его на три клетки или за угол.',
+    color: '#fd6',
+    tags: ['lampovy', 'lamp_powered', 'light', 'warning'],
+    data: {
+      lampRadius: anchor.radius,
+      damageMult: anchor.dmgMult,
+      counterplay: 'leave_lamp_cluster_or_break_line',
+    },
+  }, false);
 }
 
 /**
@@ -4572,12 +4603,11 @@ function updateSborkaReadability(
   state?: GameState,
 ): void {
   if (!hasAIFlag(e, 'firstSightCue') || !target || e.ai?.lastSeenTargetId === target.id) return;
-  e.ai!.lastSeenTargetId = target.id;
-  if (target.id === playerId) {
-    msgs.push(msg('Сборка щелкнула проволокой и пошла первой. Широкий проход и дешевый выстрел решают до касания.', time, '#f86'));
-  }
-  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', target.id === playerId ? 4 : 3, ['sborka', 'cheap_chaser', 'first_sight'], {
-    counterplay: 'wide_floor_early_shot_or_bait_before_combat_lock',
+  announceMonsterSighting(world, e, target, time, msgs, playerId, state, {
+    line: 'Сборка щелкнула проволокой и пошла первой. Широкий проход и дешевый выстрел решают до касания.',
+    color: '#f86',
+    tags: ['sborka', 'cheap_chaser', 'first_sight'],
+    data: { counterplay: 'wide_floor_early_shot_or_bait_before_combat_lock' },
   });
 }
 
@@ -4593,16 +4623,17 @@ function updateZombieCrowdReadability(
   if (!hasAIFlag(e, 'crowdPressure') || e.ai?.lastSeenTargetId === target.id) return;
   const pressure = cheapCrowdPressure(world, e, target, ZOMBIE_CROWD_PRESSURE_RADIUS, ZOMBIE_CROWD_PRESSURE_SCAN_CAP, zombieCrowdQuery);
   if (!pressure.choke && pressure.crowd <= 0) return;
-  e.ai!.lastSeenTargetId = target.id;
-  if (target.id === playerId) {
-    msgs.push(msg('Мертвяк хватил из дверной толпы. Выводи его на пустой проход до первого касания.', time, '#f87'));
-  }
-  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', target.id === playerId ? 4 : 3, ['zombie', 'crowd_chaser', 'door_pressure'], {
-    crowd: pressure.crowd,
-    capped: pressure.capped,
-    choke: pressure.choke,
-    damageCap: ZOMBIE_CROWD_DAMAGE_CAP,
-    counterplay: 'wide_floor_early_hits_before_door_or_crowd_contact',
+  announceMonsterSighting(world, e, target, time, msgs, playerId, state, {
+    line: 'Мертвяк хватил из дверной толпы. Выводи его на пустой проход до первого касания.',
+    color: '#f87',
+    tags: ['zombie', 'crowd_chaser', 'door_pressure'],
+    data: {
+      crowd: pressure.crowd,
+      capped: pressure.capped,
+      choke: pressure.choke,
+      damageCap: ZOMBIE_CROWD_DAMAGE_CAP,
+      counterplay: 'wide_floor_early_hits_before_door_or_crowd_contact',
+    },
   });
 }
 
@@ -4618,12 +4649,15 @@ function updatePomoynyRoyReadability(
   if (!hasAIFlag(e, 'garbageSurround') || target?.id !== playerId || e.ai?.lastSeenTargetId === playerId) return;
   const scent = pomoynyRoyScentScore(target);
   if (scent <= 0.2) return;
-  e.ai!.lastSeenTargetId = playerId;
-  msgs.push(msg('Помойный рой развернул край на запах еды. Закройте запас или бросайте приманку в сторону.', time, '#ca6'));
-  publishMonsterReadabilityEvent(state, world, e, target, 'monster_sighted', 4, ['pomoyny_roy', 'garbage_surround', 'food_scent'], {
-    scent: Math.round(scent * 100) / 100,
-    counterplay: 'sealed_food_side_bait_fire_lane',
-    slotRadius: POMOYNY_ROY_SLOT_RADIUS,
+  announceMonsterSighting(world, e, target, time, msgs, playerId, state, {
+    line: 'Помойный рой развернул край на запах еды. Закройте запас или бросайте приманку в сторону.',
+    color: '#ca6',
+    tags: ['pomoyny_roy', 'garbage_surround', 'food_scent'],
+    data: {
+      scent: Math.round(scent * 100) / 100,
+      counterplay: 'sealed_food_side_bait_fire_lane',
+      slotRadius: POMOYNY_ROY_SLOT_RADIUS,
+    },
   });
 }
 
@@ -4948,7 +4982,7 @@ function finishZhornayaLunge(
   ai.staggerTimer = connected ? ZHORNAYA_HIT_RECOVERY_SEC : ZHORNAYA_MISS_RECOVERY_SEC;
   e.attackCd = connected ? MONSTERS[MonsterKind.ZHORNAYA_TVAR].attackRate : ZHORNAYA_MISS_COOLDOWN_SEC;
   e.spriteScale = connected ? 1.04 : 0.88;
-  zhornayaScentRuntime.delete(e);
+  zhornayaScentRuntime.forget(e);
   playSoundAt(playGrowl, e.x, e.y);
 }
 
@@ -4988,13 +5022,13 @@ function updateZhornayaTvar(
     }
     msgs.push(msg(`${entityDisplayName(e)} сожрала приманку`, time, '#ca6'));
     ai.baitMarkerId = undefined;
-    zhornayaScentRuntime.delete(e);
+    zhornayaScentRuntime.forget(e);
     return true;
   }
   if (scent.entity?.type === EntityType.ITEM_DROP && d2 <= MONSTER_BAIT_CONSUME_RADIUS_SQ) {
     clearDeadBaitDrop(scent.entity);
     msgs.push(msg(`${entityDisplayName(e)} сожрала пахнущий сброс`, time, '#ca6'));
-    zhornayaScentRuntime.delete(e);
+    zhornayaScentRuntime.forget(e);
     return true;
   }
 
@@ -7386,7 +7420,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   ai.goal = AIGoal.HUNT;
 
   const bestDist = Math.sqrt(world.dist2(e.x, e.y, target.x, target.y));
-  updateNelyudCloseReveal(world, e, target, time, msgs, state);
+  updateNelyudCloseReveal(world, e, target, time, msgs, playerId, state);
   updateSborkaReadability(world, e, target, time, msgs, playerId, state);
   updateLampPoweredReadability(world, e, target, time, msgs, playerId, state);
   updateOlgoyReadability(world, e, target, time, msgs, playerId, state);
