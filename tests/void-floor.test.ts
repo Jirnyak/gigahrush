@@ -162,8 +162,9 @@ test('VOID story floor uses a reachable impossible graph with expanded route-sca
   }
   assert.equal(reachableRoom(gen, audit, 'Световой карман'), true);
   assert.equal(reachableRoom(gen, audit, 'Пустотный повторитель'), true);
-  assert.equal(reachableRoom(gen, audit, 'Протокольная П-46'), true);
-  assert.equal(reachableRoom(gen, audit, 'Касса заемного света'), true);
+  /* «Протокольная П-46» и «Касса заемного света» СНЯТЫ вместе с системой
+   * протоколов Пустоты (решение владельца 2026-09-09). Оставшиеся две комнаты
+   * держат тот же инвариант достижимости, ради которого строка и писалась. */
 
   const [bossX, bossY] = VOID_GEOMETRY_ANCHORS.boss;
   assert.equal(audit.reachable[gen.world.idx(bossX, bossY)], 1);

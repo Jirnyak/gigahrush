@@ -83,7 +83,7 @@ test('world event buffers cap, order newest first, and filter by zone/severity',
   for (let i = 0; i < WORLD_EVENT_RECENT_CAPACITY + 8; i++) {
     state.time = i * 5;
     publishEvent(state, {
-      type: 'npc_enter_zone',
+      type: 'npc_drop_item',
       zoneId: i % 2 === 0 ? 7 : 8,
       severity: i % 2 !== 0 ? 4 : 1,
       privacy: 'local',

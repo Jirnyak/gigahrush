@@ -100,7 +100,7 @@ test('explicit NPC log speech uses only supplied actor target and event facts', 
     isSpeech: true,
     event: {
       id: 42,
-      type: 'rumor_spread',
+      type: 'rumor_observed',
       actorId: 11,
       actorName: 'Нина',
       targetId: 12,
@@ -118,7 +118,7 @@ test('explicit NPC log speech uses only supplied actor target and event facts', 
   assert.equal(result?.intent, 'log_speech');
   assert.match(result?.text ?? '', /Нина/);
   assert.match(result?.text ?? '', /Антон/);
-  assert.match(result?.text ?? '', /rumor_spread/);
+  assert.match(result?.text ?? '', /rumor_observed/);
   assert.doesNotMatch(result?.text ?? '', /Ольга|Яков|Павел|патроны|гермодверь/);
 });
 
@@ -183,7 +183,7 @@ test('generateMarkovLogSpeech returns missing_speaker exact fallback when actor 
     isSpeech: true,
     event: {
       id: 50,
-      type: 'rumor_spread',
+      type: 'rumor_observed',
       tags: [],
     },
     exactFallback: 'Кто-то что-то сказал.',
@@ -200,7 +200,7 @@ test('generateMarkovLogSpeech returns missing_router exact fallback when routeSp
     isSpeech: true,
     event: {
       id: 51,
-      type: 'rumor_spread',
+      type: 'rumor_observed',
       actorId: 99,
       actorName: 'Скрытный',
       tags: [],
@@ -218,7 +218,7 @@ test('generateMarkovLogSpeech returns valid result when event data has npcSpeech
     isSpeech: false,
     event: {
       id: 60,
-      type: 'rumor_spread',
+      type: 'rumor_observed',
       actorId: 99,
       actorName: 'Скрытный',
       tags: [],
@@ -237,7 +237,7 @@ test('generateMarkovLogSpeech returns valid result when event data has speech fl
     isSpeech: false,
     event: {
       id: 61,
-      type: 'rumor_spread',
+      type: 'rumor_observed',
       actorId: 99,
       actorName: 'Скрытный',
       tags: [],
@@ -256,7 +256,7 @@ test('generateMarkovLogSpeech returns valid result when event tags contain npc_s
     isSpeech: false,
     event: {
       id: 62,
-      type: 'rumor_spread',
+      type: 'rumor_observed',
       actorId: 99,
       actorName: 'Скрытный',
       tags: ['npc_speech'],
@@ -274,7 +274,7 @@ test('normalizeLogMaxChars returns default if not finite', () => {
     isSpeech: true,
     event: {
       id: 70,
-      type: 'rumor_spread',
+      type: 'rumor_observed',
       actorId: 99,
       actorName: 'Скрытный',
       tags: [],
@@ -295,7 +295,7 @@ test('normalizeLogMaxChars returns max if over max', () => {
     isSpeech: true,
     event: {
       id: 71,
-      type: 'rumor_spread',
+      type: 'rumor_observed',
       actorId: 99,
       actorName: 'Скрытный',
       tags: [],
@@ -402,7 +402,7 @@ test('buildMarkovLogSpeechContext uses request overrides for actor and target', 
     isSpeech: true,
     event: {
       id: 90,
-      type: 'rumor_spread',
+      type: 'rumor_observed',
       actorId: 99,
       actorName: 'Скрытный',
       actorFaction: 'mutant',

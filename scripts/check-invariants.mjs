@@ -936,6 +936,43 @@ if (unreadFlags.length) {
   for (const f of unreadFlags) failures.push(`    ${f}`);
 }
 
+/* ── Проверка: тип события без единой ссылки вне ядра ───────────
+ *
+ * `WORLD_EVENT_TYPES` — рантайм-массив в `core/types.ts`, то есть RED-файле, и
+ * растёт он легко: объявить член дешевле, чем дописать механику. Так там
+ * накопилось семнадцать мёртвых имён — четыре события несуществующего
+ * «гоп-стопа», семь несуществующих наблюдений за жильцом, четыре крысиных и
+ * `urination_public`. Ни продюсера, ни потребителя ни у одного.
+ *
+ * Два из семнадцати были живы ТОЛЬКО в тестах: `rumor_spread` и
+ * `npc_enter_zone`. Это ровно тот случай, когда тест охраняет мёртвое —
+ * фабрикует событие, которого игра не издаёт, и делает его вечным.
+ * Поэтому ссылки считаются по `src/`, а `tests/` голосом не обладает.
+ *
+ * Событие, изданное одним модулем, мёртвым НЕ считается: общая шина потребляет
+ * его по тегам, и таких шестьдесят шесть — это замысел, а не долг.
+ */
+/* Файла может не быть: этот же скрипт гоняют на временном дереве-зонде из
+ * `tests/door-locked-key-invariant.test.ts`, где лежит одна проверяемая
+ * створка и больше ничего. Безусловное чтение роняло весь скрипт. */
+const eventTypesFile = path.join(srcRoot, 'core', 'types.ts');
+const eventTypesText = fs.existsSync(eventTypesFile) ? fs.readFileSync(eventTypesFile, 'utf8') : '';
+const eventsStart = eventTypesText.indexOf('WORLD_EVENT_TYPES');
+const eventsEnd = eventTypesText.indexOf('] as const', eventsStart);
+const eventNames = eventsStart >= 0
+  ? [...eventTypesText.slice(eventsStart, eventsEnd).matchAll(/'([a-z0-9_]+)'/g)].map(m => m[1])
+  : [];
+const nonCoreText = files
+  .filter(f => !f.endsWith(`core${path.sep}types.ts`))
+  .map(f => fs.readFileSync(f, 'utf8'))
+  .join('\n');
+const deadEventTypes = eventNames.filter(name => !new RegExp(`\\b${name}\\b`).test(nonCoreText));
+if (deadEventTypes.length) {
+  failures.push(`Типы событий без единой ссылки вне ядра: ${deadEventTypes.length}. Объявлено в core/types.ts, не издаётся и не читается никем.`);
+  failures.push('    Либо дописать механику, либо снять член: ядро — не свалка намерений.');
+  for (const n of deadEventTypes) failures.push(`    ${n}`);
+}
+
 /* ── Итог ─────────────────────────────────────────────────────── */
 if (process.argv.includes('--report')) {
   console.log('Обратные рёбра между слоями:');
@@ -955,4 +992,4 @@ if (failures.length) {
   for (const f of failures) console.error(f);
   process.exit(1);
 }
-console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), @ts-ignore (${tsIgnoreHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), смерть мимо пути (${entityDeathHits.length}), мёртвые выходы из кадра (${frameLoopDeadReturns.length}), запертая дверь без ключа (${lockedNoKeyHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0), связи между этажами (0), флаги видов без читателя (${unreadFlags.length}).`);
+console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), @ts-ignore (${tsIgnoreHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), смерть мимо пути (${entityDeathHits.length}), мёртвые выходы из кадра (${frameLoopDeadReturns.length}), запертая дверь без ключа (${lockedNoKeyHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0), связи между этажами (0), флаги видов без читателя (${unreadFlags.length}), мёртвые типы событий (${deadEventTypes.length}).`);

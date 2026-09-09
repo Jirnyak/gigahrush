@@ -662,9 +662,6 @@ const EVENT_TEXT_HANDLERS: Partial<
   collateral_damage: (e) => {
     return `Огонь испортил: ${e.itemName ?? e.itemId ?? "предмет"}.`;
   },
-  rumor_spread: (e) => {
-    return `${e.actorName ?? "Кто-то"} передал слух.`;
-  },
   faction_event: (e) => {
     return factionRelationText(e);
   },

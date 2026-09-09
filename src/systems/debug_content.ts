@@ -37,5 +37,4 @@ import './rpg';
 import './samosbor_director';
 import './samosbor_variants_runtime';
 import './samosbor_wave';
-import './void_protocols';
 import './wrong_door';
