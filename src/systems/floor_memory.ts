@@ -124,6 +124,10 @@ interface FloorMemoryWorldSave {
   baseHash?: number;
   roomPatches?: Array<[number, unknown]>;
   roomsAppended?: unknown[];
+  /** Сколько комнат было у ЖИВОГО мира. Дельта умеет чинить и дописывать,
+   *  но не умеет удалять: без этого числа усохший список комнат вернулся бы
+   *  из загрузки с хвостом фантомов, которых в сохранённом мире не было. */
+  roomCount?: number;
   doorsRemoved?: number[];
   doorsUpsert?: Array<[number, unknown]>;
 }
@@ -611,6 +615,7 @@ export function worldForSave(world: World, base?: World | null): FloorMemoryWorl
     return {
       baseDelta: true,
       baseHash: worldBaseHash(base),
+      roomCount: world.rooms.length,
       arrays: WORLD_ARRAY_FIELDS.map(def => encodeRleArrayXor(worldArray(world, def.field), worldArray(base, def.field), def.field, def.type)),
       rooms: [],
       roomPatches,
@@ -1004,6 +1009,7 @@ function sanitizedWorldSave(input: unknown): FloorMemoryWorldSave | null {
       apartmentRoomCount: finiteIntRange(input.apartmentRoomCount, 0, 32767, 0),
       roomPatches: sanitizeRoomPatches(input.roomPatches),
       roomsAppended: sanitizeRoomList(input.roomsAppended),
+      roomCount: typeof input.roomCount === 'number' ? finiteIntRange(input.roomCount, 0, 32767, 0) : undefined,
       doors: [],
       doorsRemoved: restoreNumberList(input.doorsRemoved),
       doorsUpsert: Array.isArray(input.doorsUpsert) ? input.doorsUpsert : [],
@@ -1062,6 +1068,19 @@ function worldFromDelta(
     room.id = base.rooms.length;
     base.rooms.push(room);
   }
+  /* Допущение кодировщика («комнаты только растут») сделано ЯВНЫМ.
+   *
+   * Оно верно сегодня: единственное рантайм-удаление — `samosbor_wave` снимает
+   * комнату-заплатку, которую сам же и добавил строкой выше, то есть длина
+   * возвращается к прежней. Но проверять его было нечем: базу мы регенерируем
+   * заново, и лишние слоты базы неотличимы от непропатченных. День, когда
+   * что-нибудь укоротит список, дал бы молча загруженный мир с хвостом комнат,
+   * которых в сохранённом не было, — и заметить это можно было бы только по
+   * съехавшим целям квестов. */
+  if (saved.roomCount !== undefined && base.rooms.length > saved.roomCount) {
+    base.rooms.length = saved.roomCount;
+  }
+
   base.apartmentRoomCount = Math.max(0, Math.min(base.rooms.length, saved.apartmentRoomCount));
   // 3. Zones before the lift recompute (recompute reads final zones + live zoneMap).
   base.zones = saved.zones as Zone[];

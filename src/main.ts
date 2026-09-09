@@ -501,6 +501,7 @@ import {
   type BankingState,
 } from './systems/banking';
 import { restoreCaravansFromSave } from './systems/caravans';
+import { restoreSamosborDirectorFromSave } from './systems/samosbor_director';
 import {
   ensureStockMarketState,
   normalizeGameStockMarket,
@@ -7223,6 +7224,7 @@ function loadGame(): boolean {
       (state as GameState & { banking?: BankingState }).banking = normalizeBankingState(dataState.banking);
       normalizeGameStockMarket(state, dataState.stockMarket);
       restoreCaravansFromSave(state, dataState.caravans);
+      restoreSamosborDirectorFromSave(state, dataState.samosborDirector);
       // Overlay saved faction standing onto the base matrix (initFactionRelations
       // ran above); malformed/absent data leaves the base intact. SB4.
       restoreFactionRelations(dataState.factionRelations);

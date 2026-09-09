@@ -943,6 +943,7 @@ function tickSamosborRoomSirens(world: World, entities: Entity[], state: GameSta
  *  frozen navigation cache (pinned to the discarded world, which disables the
  *  loading-screen prewarm) and stale shelter/zone bookkeeping. */
 export function abortSamosborRuntime(): void {
+  fogSampleBudget = 0;
   clearSamosborFronts();
   frontTouchedCells.clear();
   cancelSamosborWave();
@@ -2408,7 +2409,7 @@ export function updateSamosbor(
   }
 
   // ── Fog/light spread is universal ──
-  spreadFog(world);
+  spreadFog(world, dt);
   // ── Debug wave (not used during real samosbor — always full-scale fronts) ──
   if (isSamosborWaveDebugActive() && isSamosborWaveActive()) {
     tickSamosborWave(world, entities, state);
@@ -4779,16 +4780,55 @@ function trySpreadFogFromCell(world: World, ci: number, dirtyRects: WorldGridDir
   return true;
 }
 
-/* ── Spread fog one tick — cheap random-cell approach ────────── */
-function spreadFog(world: World): void {
+/* ── Spread fog one tick — cheap random-cell approach ──────────
+ *
+ * Скорость расползания — свойство МИРА, а не частоты кадров.
+ *
+ * Здесь стоял безусловный проход в `FOG_SAMPLES_PER_TICK` выборок КАЖДЫЙ кадр,
+ * без `dt` вовсе. Беды от этого две, и вторая хуже. Первая — цена: 128 бросков
+ * `rng()` шестьдесят раз в секунду, даже когда тумана на этаже нет ни клетки.
+ * Вторая — на плавном железе туман полз ВДВОЕ быстрее, чем на дёргающемся: у
+ * игрока с тридцатью кадрами была другая игра, и заметить это по симптому
+ * нельзя.
+ *
+ * Бюджет выборок копится по времени и тратится с потолком в две номинальных
+ * порции за кадр. Потолок нужен ровно затем, чтобы просевший кадр не
+ * оборачивался всплеском на тысячу бросков; отношение «две порции» — это те же
+ * `FOG_SAMPLES_PER_TICK`, а не новая ручка.
+ *
+ * Номинал сохранён дословно: при шестидесяти кадрах бюджет даёт ровно 128
+ * выборок за кадр, как и до правки. */
+const FOG_NOMINAL_FPS = 60;
+let fogSampleBudget = 0;
+
+function spreadFog(world: World, dt: number): void {
+  fogSampleBudget = Math.min(
+    fogSampleBudget + Math.max(0, dt) * FOG_SAMPLES_PER_TICK * FOG_NOMINAL_FPS,
+    FOG_SAMPLES_PER_TICK * 2,
+  );
+  const samples = Math.floor(fogSampleBudget);
+  if (samples <= 0) return;
+  fogSampleBudget -= samples;
+
   const total = W * W;
   let fogDirty = false;
   const dirtyRects: WorldGridDirtyRect[] = [];
 
-  for (let s = 0; s < FOG_SAMPLES_PER_TICK; s++) {
+  for (let s = 0; s < samples; s++) {
     fogDirty = trySpreadFogFromCell(world, (rng() * total) | 0, dirtyRects) || fogDirty;
   }
   if (fogDirty) world.markFogDirty(dirtyRects);
+}
+
+/** Такт расползания тумана для замка: он проверяет, что работа за секунду
+ *  игрового времени не зависит от частоты кадров. */
+export function spreadFogForTests(world: World, dt: number): void {
+  spreadFog(world, dt);
+}
+
+/** Сброс накопленного бюджета выборок — замку нужен чистый старт. */
+export function resetFogSpreadForTests(): void {
+  fogSampleBudget = 0;
 }
 
 function randomTransferEntity(entities: Entity[]): Entity | null {

@@ -24,6 +24,7 @@ import {
   tickCaravans,
 } from '../src/systems/caravans';
 import { ensureEconomyState, getAdjustedItemPrice, getEconomyQuote } from '../src/systems/economy';
+import { ensureSamosborDirectorState, restoreSamosborDirectorFromSave, samosborDirectorForSave } from '../src/systems/samosbor_director';
 import { createWorldEventState, getRecentEvents, publishEvent } from '../src/systems/events';
 import { addTestRoom, makeGameState, makeTestNpc, makeTestPlayer } from './helpers';
 
@@ -463,4 +464,45 @@ test('битая караванная секция сейва уходит в д
   assert.equal(after.lanes[LANE_QUEUE].runs >= 0, true);
   assert.deepEqual(after.active, {}, 'активные рейсы в сейв не идут и из мусора не берутся');
   for (const def of CARAVAN_LANES) assert.ok(after.lanes[def.id], `полоса ${def.id} обязана быть восстановлена`);
+});
+
+/* ── Память режиссёра самосбора переживает загрузку ────────────────
+ *
+ * `postrelease.md` §3, `#132`. Санитайзер (`ensureSamosborDirectorState`) был
+ * написан и работал, а ПИСАТЕЛЯ в сейв не было вовсе: состояние жило в
+ * `GameState & { samosborDirector?: … }` и обнулялось при загрузке. Следствие
+ * видел игрок — после загрузки режиссёр повторял бит, который уже отыграл.
+ *
+ * След (`traces`) в сейв не идёт намеренно: это кольцо отладочных записей.
+ */
+test('кулдауны и счётчики режиссёра самосбора переживают сохранение и загрузку', () => {
+  const state = makeGameState({ worldEvents: createWorldEventState(), time: 400 });
+  const before = ensureSamosborDirectorState(state);
+  before.cooldowns['beat_probe'] = 321;
+  before.runCounts['beat_probe'] = 2;
+  before.phaseCounts['warning'] = 5;
+  before.lastBeatId = 'beat_probe';
+  before.cycle = 7;
+
+  const saved = JSON.parse(JSON.stringify(samosborDirectorForSave(state)));
+  assert.equal('traces' in saved, false, 'отладочный след в сейв не идёт');
+
+  const loaded = makeGameState({ worldEvents: createWorldEventState(), time: 400 });
+  restoreSamosborDirectorFromSave(loaded, saved);
+  const after = ensureSamosborDirectorState(loaded);
+
+  assert.equal(after.cooldowns['beat_probe'], 321, 'кулдаун бита обязан пережить загрузку');
+  assert.equal(after.runCounts['beat_probe'], 2);
+  assert.equal(after.phaseCounts['warning'], 5);
+  assert.equal(after.lastBeatId, 'beat_probe');
+  assert.equal(after.cycle, 7);
+});
+
+test('битая секция режиссёра уходит в дефолт, а не роняет загрузку', () => {
+  const loaded = makeGameState({ worldEvents: createWorldEventState(), time: 100 });
+  restoreSamosborDirectorFromSave(loaded, { cycle: Number.NaN, cooldowns: 'мусор', traces: 'мусор' });
+  const after = ensureSamosborDirectorState(loaded);
+  assert.equal(Number.isFinite(after.cycle), true);
+  assert.deepEqual(after.cooldowns, {});
+  assert.equal(Array.isArray(after.traces), true);
 });

@@ -133,6 +133,39 @@ export function ensureSamosborDirectorState(state: GameState): SamosborDirectorS
   return host.samosborDirector as SamosborDirectorState;
 }
 
+/**
+ * Что от режиссёра самосбора переживает загрузку.
+ *
+ * ПАМЯТЬ О СЫГРАННОМ — да: кулдауны, счётчики бита за цикл и за фазу, номер
+ * цикла и последний бит. Санитайзер на всё это (`ensureSamosborDirectorState`)
+ * был написан и работал, а ПИСАТЕЛЯ в сейв не было вовсе — состояние жило в
+ * `GameState & { samosborDirector?: … }` и обнулялось при загрузке. Следствие
+ * видел игрок: после загрузки режиссёр повторял бит, который уже отыграл.
+ *
+ * СЛЕД (`traces`) — нет: это кольцо отладочных записей для `summarize`, к
+ * решениям оно не участвует и место в сейве занимало бы зря.
+ */
+export function samosborDirectorForSave(state: GameState): Omit<SamosborDirectorState, 'traces' | 'traceStart' | 'traceCount'> {
+  const director = ensureSamosborDirectorState(state);
+  return {
+    cycle: director.cycle,
+    lastTickAt: Number.isFinite(director.lastTickAt) ? director.lastTickAt : 0,
+    forceCursor: director.forceCursor,
+    cooldowns: director.cooldowns,
+    runCounts: director.runCounts,
+    phaseCounts: director.phaseCounts,
+    lastPhaseTickAt: director.lastPhaseTickAt,
+    lastBeatId: director.lastBeatId,
+  };
+}
+
+/** Санация — та же, что при обычном обращении: второй нормализатор не нужен. */
+export function restoreSamosborDirectorFromSave(state: GameState, value: unknown): void {
+  const host = state as DirectorGameState;
+  host.samosborDirector = (value && typeof value === 'object' ? value : undefined) as SamosborDirectorState | undefined;
+  ensureSamosborDirectorState(state);
+}
+
 function resetCycleIfNeeded(director: SamosborDirectorState, cycle: number): void {
   if (director.cycle === cycle) return;
   director.cycle = cycle;

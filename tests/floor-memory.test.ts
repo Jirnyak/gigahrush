@@ -815,3 +815,35 @@ test('floor memory delta survives the capture→save→restore→take pipeline',
  * W² scans inside one frame. The lock: a settled floor must come back byte-for-byte
  * identical on a repeat call and report no work, so a stale cache cannot hide a
  * lift the pass should have seen. */
+
+/* ── Дельта умеет и УКОРАЧИВАТЬ список комнат ──────────────────────
+ *
+ * `postrelease.md` §3, `#42`. Кодировщик дельты держал необъявленное допущение
+ * «комнаты только растут»: изменённые слоты базы уезжают в `roomPatches`, новые
+ * — в `roomsAppended`, а выразить исчезнувшие было НЕЧЕМ. Декодер это допущение
+ * не проверял, и лишние слоты регенерированной базы были неотличимы от
+ * непропатченных.
+ *
+ * Сегодня допущение верно — единственное рантайм-удаление снимает комнату-
+ * заплатку, которую само же и добавило. Но цена его нарушения молчалива:
+ * загруженный мир получил бы хвост комнат, которых в сохранённом не было, и
+ * заметить это можно было бы только по съехавшим целям квестов. Поэтому
+ * допущение сделано ЯВНЫМ: живой счётчик комнат едет в дельту и режет базу.
+ */
+test('усохший список комнат не возвращается из загрузки с хвостом фантомов', () => {
+  const base = buildDeltaFloor();
+  const base2 = buildDeltaFloor(); // независимая регенерация, как при загрузке
+  const live = buildDeltaFloor();
+
+  const baseRooms = base.rooms.length;
+  assert.ok(baseRooms >= 2, 'контроль: в базе есть что терять');
+  // Мир, в котором комнат стало МЕНЬШЕ, чем в базе.
+  live.rooms.length = baseRooms - 1;
+
+  const decoded = worldFromSave(JSON.parse(JSON.stringify(worldForSave(live, base))), 128.5, 128.5, base2);
+  assert.ok(decoded, 'дельта обязана раскодироваться против той же базы');
+  assert.equal(
+    decoded.rooms.length, live.rooms.length,
+    'из загрузки вернулся хвост комнат, которых в сохранённом мире не было',
+  );
+});

@@ -285,9 +285,9 @@ test('Demos feed view stores rendered rows outside the transient queue only', ()
 });
 
 /* Форма сейва растёт, и этот замок — напоминание автору правки, а не догма:
- * 28 → 29 (2026-09-09), караванная секция. Полосы поставок (пошлины,
+ * 28 → 29 → 30 (2026-09-09): караванные полосы, затем память режиссёра самосбора. Полосы поставок (пошлины,
  * открытость, устойчивость, счёт рейсов и налётов) до сих пор не уезжали в
  * сейв вовсе и молча обнулялись при загрузке. */
 test('Demos persistent social batch owns the current save shape', () => {
-  assert.equal(currentSaveShapeVersion(), 29);
+  assert.equal(currentSaveShapeVersion(), 30);
 });

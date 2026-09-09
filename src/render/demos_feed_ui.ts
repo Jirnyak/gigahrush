@@ -69,6 +69,13 @@ export function drawDemosFeedPanel(
     const textLines = wrapTextLines(ctx, post.text, rowW - 8 * sx, 3, { stable: true });
     const reactions = opts.reactionsByPostId?.[post.id] ?? [];
     const rowH = (25 + textLines.length * 9 + Math.min(2, reactions.length) * 9) * sy;
+    /* Обрыв по НИЖНЕМУ краю карточки, а не по её верху.
+     *
+     * Выше стоит `if (rowY > bottom) break`, и он смотрит на верх строки:
+     * карточка, чей верх лёг чуть выше границы, всё равно рисовалась целиком —
+     * и вылезала в футер панели. Сиблинг `demos_profile_ui.ts` эту же ленту
+     * рисует правильно и проверяет ровно это. */
+    if (rowY + rowH > bottom) break;
     if (rowY + rowH >= y + 20 * sy) {
       ctx.fillStyle = 'rgba(2,18,22,0.74)';
       ctx.fillRect(rowX, rowY, rowW, rowH);
