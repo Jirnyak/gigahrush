@@ -26,6 +26,10 @@ export type GovnyakItemId = typeof GOVNYAK_ITEM_IDS[number];
 export const GOVNYAK_ACTIVE_STATUS_CAP = 3;
 const GOVNYAK_STATUS_INTENSITY_CAP = 3;
 const GOVNYAK_STATUS_IDS: readonly PlayerStatusId[] = ['govnyak_relief', 'govnyak_cough', 'govnyak_debt'];
+/* Насколько затяжка держит руку. Половина от вклада кашля той же силы: облегчение
+ * НЕ обязано перекрывать свою же расплату, иначе сделка перестаёт быть сделкой. */
+const GOVNYAK_RELIEF_STEADY_PER_INTENSITY = 0.08;
+const GOVNYAK_RELIEF_STEADY_CAP = 0.16;
 const GOVNYAK_STATUS_DURATION_CAPS: Partial<Record<PlayerStatusId, number>> = {
   govnyak_relief: 70,
   govnyak_cough: 210,
@@ -286,11 +290,24 @@ export function useGovnyakItem(actor: Entity, defId: string, state?: GameState):
   };
 }
 
+/**
+ * Разброс от говняка: кашель и долг руку разбалтывают, свежая затяжка — держит.
+ *
+ * `govnyak_relief` до 2026-09-09 был мёртвым: он ставился, капался по времени,
+ * уезжал в сейв и не читался НИ ОДНИМ потребителем — то есть у затяжки был
+ * только счёт и не было расплаты за отказ от неё. Он ложится на ту же ось, что
+ * и две другие метки говняка: своей оси заводить незачем, и цена сделки
+ * становится видимой — семьдесят секунд твёрдой руки против трёхсот пятидесяти
+ * кашля и восьмисот долга (`GOVNYAK_STATUS_DURATION_CAPS`).
+ */
 export function govnyakAimSpreadMult(e: Entity): number {
   const cough = statusIntensity(e, 'govnyak_cough');
   const debt = statusIntensity(e, 'govnyak_debt');
-  if (cough <= 0 && debt <= 0) return 1;
-  return 1 + Math.min(0.75, cough * 0.16 + debt * 0.08);
+  const relief = statusIntensity(e, 'govnyak_relief');
+  if (cough <= 0 && debt <= 0 && relief <= 0) return 1;
+  const shake = Math.min(0.75, cough * 0.16 + debt * 0.08);
+  const steady = Math.min(GOVNYAK_RELIEF_STEADY_CAP, relief * GOVNYAK_RELIEF_STEADY_PER_INTENSITY);
+  return Math.max(1 - GOVNYAK_RELIEF_STEADY_CAP, 1 + shake - steady);
 }
 
 export function updateGovnyakConditions(e: Entity, state: GameState): void {

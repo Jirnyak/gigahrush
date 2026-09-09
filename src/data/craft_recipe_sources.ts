@@ -180,6 +180,19 @@ export const CRAFT_RECIPE_SOURCES: readonly CraftRecipeSourceDef[] = [
     tags: ['npc', 'mechanic', 'tier1', 'workbench'],
   },
   {
+    /* Учитель — единственная из «обучающих» профессий, которая ничему не учила:
+     * её `craftTags` несли метку `'lesson'`, а спрашивали источники три ДРУГИХ
+     * (`mechanic_lesson`, `lab_lesson`, `market_lesson`). Метка была единственным
+     * вхождением во всём `src/`, то есть тупиком по построению. Учит тому, чем и
+     * торгует: мел, записка, книга — письмо, а не ремесло. */
+    id: 'npc_teacher_letter_lesson',
+    kind: 'npc',
+    npcOccupations: occupationIdsWithCraftTag('lesson'),
+    recipeIds: [r('chalk'), r('note'), r('book')],
+    text: 'Учитель показывает, как пишут на стене, на бумаге и в переплёте.',
+    tags: ['npc', 'teacher', 'documents', 'tier1'],
+  },
+  {
     id: 'npc_scientist_lab_lesson',
     kind: 'npc',
     npcOccupations: occupationIdsWithCraftTag('lab_lesson'),
