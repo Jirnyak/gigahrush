@@ -10,7 +10,7 @@ test('mukhozhuk definition and ecology read correctly', () => {
   const ecology = getMonsterEcology(MonsterKind.MUKHOZHUK_HOST);
 
   assert.equal(DEF.kind, MonsterKind.MUKHOZHUK_HOST);
-  assert.deepEqual(DEF.aiFlags, ['larvaCarrier', 'foodBait']);
+  assert.deepEqual(DEF.aiFlags, ['larvaCarrier']);
   assert.equal(ecology?.rare, true);
   assert.match(DEF.counterplay ?? '', /личинк|ран|леч/i);
 });

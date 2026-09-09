@@ -3,10 +3,9 @@ import * as assert from 'node:assert/strict';
 
 import { EntityType, MonsterKind, type Entity, type Item } from '../src/core/types';
 import {
-  BAIT_ATTRACTED_MONSTER_KINDS,
   getMonsterEcology,
 } from '../src/data/monster_ecology';
-import { MONSTERS } from '../src/entities/monster';
+import { MONSTERS, isBaitAttractedMonster } from '../src/entities/monster';
 import { DEF, generateSprite } from '../src/entities/kontorshchik';
 import {
   consumeNoisyDocumentDelay,
@@ -43,7 +42,7 @@ test('kontorshchik is a standalone document-scent monster', () => {
   assert.ok(ecology, 'KONTORSHCHIK ecology must exist');
   assert.equal(DEF.kind, MonsterKind.KONTORSHCHIK);
   assert.equal(MONSTERS[MonsterKind.KONTORSHCHIK], DEF);
-  assert.deepEqual(DEF.aiFlags, ['documentScent']);
+  assert.deepEqual(DEF.aiFlags, ['documentScent', 'foodBait']);
   assert.equal(ecology.rumorIds.includes('ecology_kontorshchik_forms'), true);
   assert.match(DEF.counterplay ?? '', /бланк|бумаг|печат/);
   assert.match(ecology.counterplay, /контейнер|бланк|шкаф|стол/);
@@ -93,7 +92,7 @@ test('document scent uses document-like tags and ids for aggro and lures', () =>
   const preview = monsterBaitPreviewForItem('blank_form', 'drop', 1);
   assert.equal(preview?.kind, 'document');
   assert.equal(preview?.baitTags.includes('bait_document'), true);
-  assert.equal(BAIT_ATTRACTED_MONSTER_KINDS.includes(MonsterKind.KONTORSHCHIK), true);
+  assert.equal(isBaitAttractedMonster(MonsterKind.KONTORSHCHIK), true);
 });
 
 test('kontorshchik grab marks a document as noisy until the timer expires', () => {

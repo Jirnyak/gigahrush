@@ -1,6 +1,7 @@
 import { clamp } from '../core/math';
 import { } from '../core/types';
 import { RESOURCES } from './resources';
+import { FLOOR_RUN_MAX_Z, FLOOR_RUN_MIN_Z } from './procedural_floors';
 
 export interface ResourceStock {
   stock: number;
@@ -105,9 +106,17 @@ export function normalizeEconomyState(value: unknown): EconomyState {
   const out = createEconomyState();
   out.priceVersion = Math.max(1, Math.floor(finiteOr(src.priceVersion, 1)));
   if (src.floors) {
+    /* Границей служит САМ маршрут, а не выдуманный кап количества.
+     *
+     * Стояло `-9999..9999`, то есть двадцать тысяч допустимых ключей при
+     * фактических ста одном: сосед-`routes` рядом честно считает записи
+     * (`ECONOMY_ROUTE_STATE_CAP`), а этажи не считал никто, и подделанный
+     * `localStorage` восстанавливался целиком. Диапазон забега закрывает и то, и
+     * другое разом: он и есть верхняя граница числа этажей, и заводить под неё
+     * вторую константу нечем. */
     for (const k of Object.keys(src.floors)) {
       const floorNumber = Number(k);
-      if (!Number.isInteger(floorNumber) || floorNumber < -9999 || floorNumber > 9999) continue;
+      if (!Number.isInteger(floorNumber) || floorNumber < FLOOR_RUN_MIN_Z || floorNumber > FLOOR_RUN_MAX_Z) continue;
       const floor = floorNumber;
       const existing = src.floors[floor];
       const normalized = createEconomyFloorState(floor);
@@ -124,7 +133,10 @@ export function normalizeEconomyState(value: unknown): EconomyState {
           }
         }
       }
-      normalized.lastTickAt = existing?.lastTickAt ?? 0;
+      /* Через кламп, как ВСЕ соседние поля этой же записи: единственное, что
+       * бралось из сейва сырым, и `NaN`/`Infinity`/отрицательное время тика
+       * переживали санацию. */
+      normalized.lastTickAt = Math.max(0, finiteOr(existing?.lastTickAt, 0));
       out.floors[floor] = normalized;
     }
   }

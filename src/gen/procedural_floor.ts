@@ -66,7 +66,7 @@ import {
   type FloorGeometryDef,
 } from '../data/procedural_floors';
 import { territorySharesForProceduralSpec } from '../data/floor_territory';
-import { MONSTERS } from '../entities/monster';
+import { MONSTERS, monsterHasAIFlag } from '../entities/monster';
 import { monsterSpr, Spr } from '../entities/sprite_index';
 import { MarkType, stampMark } from '../systems/surface_marks';
 import { setDoorState } from '../systems/door_state';
@@ -107,7 +107,7 @@ import { applyProceduralAnomalyProfile } from './procedural_anomalies';
 import { applyProceduralStructureLibrary } from './procedural_structure_library';
 import { ensureZombieApocalypseQuarantineDoor } from './procedural_anomalies/zombie_apocalypse';
 import { removeNpcEntities } from './entity_filters';
-import { registerProceduralAnomalyPlacement } from './procedural_anomalies/common';
+import { registerProceduralAnomalyPlacement, randomRoomCell } from './procedural_anomalies/common';
 import { sampleNaturalPopulationCells, type NaturalPopulationProfile, type PlacementFieldAnchor } from './population_placement';
 import { measureAndRecordGeometryMetrics, type GeometryAnchor } from './geometry_metrics';
 import { type MazeGraph } from './maze_graph';
@@ -2782,12 +2782,13 @@ function placeProceduralMiniHqClusters(world: World, rooms: Room[], spec: Proced
   }
 }
 
-function randomRoomCell(room: Room): { x: number; y: number } {
-  return {
-    x: room.x + irng(1, Math.max(1, room.w - 2)),
-    y: room.y + irng(1, Math.max(1, room.h - 2)),
-  };
-}
+/* Своя копия `randomRoomCell` СНЯТА: она выбирала точку вслепую по габаритам
+ * комнаты — не глядя ни в `cells`, ни в `features` — и возвращала её ВСЕГДА.
+ * Это две реализации ОДНОГО пути «поставить сущность в комнату», то есть дубль
+ * СИСТЕМЫ, а не контента, и потому дефект. Общая версия
+ * (`procedural_anomalies/common.ts`) идёт через `WalkablePlacementMap` и честно
+ * отказывает `null`. Замерено на дереве до правки: 55 этажей со `smog`/`hladon`,
+ * 154 631 сущность, 6 внутри `WALL`/`ABYSS`. */
 
 const ITEMS_BY_ROOM = new Map<RoomType, ItemDef[]>();
 for (const def of Object.values(ITEMS)) {
@@ -3666,7 +3667,7 @@ function spawnMonsterOfKind(
     rpg: randomRPG(Math.max(1, zoneLevel)),
     phasing: kind === MonsterKind.SPIRIT,
   };
-  if (kind === MonsterKind.PAUPSINA) stampPaupsinaWebWarning(world, spawnPos.x, spawnPos.y, spec.seed ^ nextId.v);
+  if (monsterHasAIFlag({ monsterKind: kind }, 'webSpitter')) stampPaupsinaWebWarning(world, spawnPos.x, spawnPos.y, spec.seed ^ nextId.v);
   entities.push(monster);
   return kind;
 }
@@ -3917,7 +3918,12 @@ function bestSmogRoomCell(world: World, room: Room, field: SmogProxyField, spec:
 }
 
 function placeSmogSource(world: World, source: Room, spec: ProceduralFloorSpec, set: Set<number>, field: SmogProxyField): { x: number; y: number } {
-  const pos = bestSmogRoomCell(world, source, field, spec, false) ?? randomRoomCell(source);
+  /* Источник смога обязан быть где-то: у него нет ветки отказа, всю аномалию
+   * без него не построить. Поэтому последний рубеж — центр комнаты, а не
+   * случайная точка в бетоне. */
+  const pos = bestSmogRoomCell(world, source, field, spec, false)
+    ?? randomRoomCell(world, source)
+    ?? roomCenter(source);
   const ci = world.idx(pos.x, pos.y);
   world.features[ci] = Feature.APPARATUS;
   world.anomalySmogSource = ci;
@@ -4012,7 +4018,8 @@ function placeSmogFilterPockets(
 
 function spawnSmogLooter(world: World, room: Room, entities: Entity[], _nextId: { v: number }, spec: ProceduralFloorSpec): void {
   if (!canSpawnEntityType(entities, EntityType.NPC)) return;
-  const pos = randomRoomCell(room);
+  const pos = randomRoomCell(world, room);
+  if (!pos) return;
   const ci = world.idx(pos.x, pos.y);
   const zoneLevel = world.zones[world.zoneMap[ci]]?.level ?? spec.danger;
   const rpg = randomRPG(gaussianLevel(zoneLevel, 2));
@@ -4054,7 +4061,8 @@ function spawnSmogLooter(world: World, room: Room, entities: Entity[], _nextId: 
 
 function spawnSmogMonster(world: World, room: Room, entities: Entity[], nextId: { v: number }, spec: ProceduralFloorSpec): void {
   if (!canSpawnEntityType(entities, EntityType.MONSTER)) return;
-  const pos = randomRoomCell(room);
+  const pos = randomRoomCell(world, room);
+  if (!pos) return;
   const kind = pick([MonsterKind.POLZUN, MonsterKind.TVAR, MonsterKind.NELYUD, MonsterKind.SHADOW]);
   const def = MONSTERS[kind];
   const zoneLevel = world.zones[world.zoneMap[world.idx(pos.x, pos.y)]]?.level ?? spec.danger;
@@ -6647,7 +6655,13 @@ function applyVoidFillers(world: World, rooms: Room[]): void {
 
                // Only consider cells that were carved into floor/door by the corridor
                if (world.cells[bndIdx] === Cell.FLOOR || world.cells[bndIdx] === Cell.DOOR) {
-                 const d = Math.abs(bndX - nearestFloorCellX) + Math.abs(bndY - nearestFloorCellY);
+                 /* Мир — тор, и вычитать координаты напрямую здесь нельзя: обе уже
+                  * прошли `world.wrap`, поэтому пара (1023, 0) — это ОДИН шаг, а
+                  * сырая разность объявляет её 1023. Через шов ближайшая клетка
+                  * границы объявлялась самой далёкой, и дверь новой комнаты
+                  * вставала не туда, куда прокопан коридор. */
+                 const d = Math.abs(world.delta(nearestFloorCellX, bndX))
+                   + Math.abs(world.delta(nearestFloorCellY, bndY));
                  if (d < doorDist) {
                    doorDist = d;
                    doorX = bndX;
@@ -8264,12 +8278,14 @@ function applyLiquidatorMajorityProfile(
   return profile;
 }
 
-function entityNearCell(entities: readonly Entity[], x: number, y: number): boolean {
+/* Мир — тор: сырая разность координат через шов даёт 1023 вместо одного шага,
+ * и жилец, стоящий вплотную, объявлялся далёким. Клетка охранника выбирается
+ * `world.wrap`, то есть в шов попадает штатно, — караул вставал на голову
+ * соседу. Расстояние меряет мир (`world.dist2`), как и везде. */
+function entityNearCell(world: World, entities: readonly Entity[], x: number, y: number): boolean {
   for (const entity of entities) {
     if (!entity.alive || entity.type !== EntityType.NPC) continue;
-    const dx = entity.x - (x + 0.5);
-    const dy = entity.y - (y + 0.5);
-    if (dx * dx + dy * dy < 2.25) return true;
+    if (world.dist2(entity.x, entity.y, x + 0.5, y + 0.5) < 2.25) return true;
   }
   return false;
 }
@@ -8281,7 +8297,7 @@ function findLiquidatorGuardCell(world: World, entities: readonly Entity[], chec
       const x = world.wrap(checkpoint.x + Math.round(Math.cos(angle) * radius));
       const y = world.wrap(checkpoint.y + Math.round(Math.sin(angle) * radius));
       const ci = world.idx(x, y);
-      if (world.cells[ci] !== Cell.FLOOR || world.features[ci] === Feature.LIFT_BUTTON || entityNearCell(entities, x, y)) continue;
+      if (world.cells[ci] !== Cell.FLOOR || world.features[ci] === Feature.LIFT_BUTTON || entityNearCell(world, entities, x, y)) continue;
       return ci;
     }
   }
@@ -11327,7 +11343,8 @@ function seedHladonCounterplay(
 
   const kitCount = Math.min(HLADON_KIT_ITEMS.length, 2 + Math.floor(spec.danger / 2));
   for (let i = 0; i < kitCount; i++) {
-    const pos = randomRoomCell(kitRoom);
+    const pos = randomRoomCell(world, kitRoom);
+    if (!pos) continue;
     dropItem(entities, nextId, pos.x, pos.y, HLADON_KIT_ITEMS[i], 1);
   }
 }

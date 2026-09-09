@@ -613,7 +613,17 @@ for (const file of files) {
        * смотрела на литерал рядом с `z`, а тут литерал стоял рядом с именем.
        * Ловим только имена, которые сами говорят про этаж. */
       const asFloorConst = new RegExp(`\\bconst\\s+[A-Z][A-Z0-9_]*(?:FLOOR|_Z)\\s*=\\s*${key}\\b`);
+      /* Шестая форма: СПИСОК этажей под этажным именем поля. Так пережили
+       * вычистку три `sourceFloors: [60, 100]` в `data/zhelemish_defs.ts` —
+       * последний легаси-Z в дереве. Проверка смотрела на литерал рядом с `z`,
+       * а тут литералы стояли внутри массива.
+       *
+       * Имя обязано кончаться на `floors` во МНОЖЕСТВЕННОМ числе, и это не
+       * придирка: `floorTex` тоже содержит «floor», а значения `Tex` спокойно
+       * попадают в 60..200 — ловить их значило бы врать. */
+      const asFloorList = new RegExp(`\\b[A-Za-z_$][\\w$]*[Ff]loors\\s*:\\s*\\[[^\\]]*\\b${key}\\b`);
       if (asValue.test(line) || asCompare.test(line) || asTableKey.test(line) || asFloorConst.test(line)
+        || asFloorList.test(line)
         || (asSwitchCase.test(line) && switchSubjectIsFloor)) {
         legacyZHits.push(`${srcRel}:${i + 1}  ${line.trim().slice(0, 90)}`);
         break;
@@ -873,6 +883,59 @@ if (longFunctions.length > LONG_FUNCTION_BASELINE) {
   notes.push(`Длина функции: ${longFunctions.length} (было ${LONG_FUNCTION_BASELINE}). Опусти LONG_FUNCTION_BASELINE.`);
 }
 
+/* ── Проверка: объявленный флаг вида обязан иметь читателя ──────
+ *
+ * Закон владельца: свойство вида — ОДИН ФЛАГ, а не сравнение с именем вида в
+ * общем коде. Флаг без читателя означает, что закон нарушен ровно наоборот:
+ * автор объявил свойство как положено, а ядро всё равно гейтит по
+ * `monsterKind`, и новый монстр механику взять не может.
+ *
+ * Так жили шесть флагов сразу — `wetLineShot`, `meatGrowth`,
+ * `roomBoundAberration`, `wallBrace`, `webSpitter`, `drainArmor`, — и увидеть
+ * это можно было только сплошным аудитом. Теперь видно сборке.
+ *
+ * Читателем считается ЛЮБОЕ упоминание вне `entities/`: объявление union-а и
+ * дефы видов живут там и сами себя не подтверждают. Точность нарочно грубая —
+ * проверка ловит «ноль читателей», а не «правильного читателя».
+ */
+const monsterDefsFile = path.join(srcRoot, 'entities', 'monster.ts');
+/* Флаг, у которого читателя нет по УВАЖИТЕЛЬНОЙ причине. Список именной: число
+ * само по себе ничего не объясняет, а причина обязана быть написана.
+ *   · weakWallBreach — механики «пролом слабой стены» в игре НЕТ вовсе. Контекст
+ *     стены её готовит (`monster_traits.ts`, поле `weakWallNearby`), и у него
+ *     тоже ноль потребителей. Это не гейт по имени вида, а недописанная
+ *     механика: решение — реализовать или снять флаг — авторское.
+ */
+const FLAGS_WITHOUT_READER_ALLOWED = new Set(['weakWallBreach']);
+const unreadFlags = [];
+if (fs.existsSync(monsterDefsFile)) {
+  const defsText = fs.readFileSync(monsterDefsFile, 'utf8');
+  const unionStart = defsText.indexOf('export type MonsterAIFlag');
+  const unionEnd = defsText.indexOf(';', unionStart);
+  const unionBlock = unionStart >= 0 ? defsText.slice(unionStart, unionEnd) : '';
+  const flagNames = unionStart >= 0
+    ? [...unionBlock.matchAll(/'([a-zA-Z][\w]*)'/g)].map(m => m[1])
+    : [];
+  /* Из текста вычёркиваются только ОБЪЯВЛЕНИЯ: сам union и списки `aiFlags`
+   * в дефах видов. Всё остальное — читатель, где бы он ни жил: предикат вида
+   * законно стоит в `entities/monster.ts` рядом с самими флагами, и вычёркивать
+   * весь слой значило бы объявлять его мёртвым. */
+  const readerText = files
+    .map(f => fs.readFileSync(f, 'utf8'))
+    .join('\n')
+    .replace(unionBlock, '')
+    .replaceAll(/aiFlags\s*:\s*\[[^\]]*\]/g, '');
+  for (const flag of flagNames) {
+    if (FLAGS_WITHOUT_READER_ALLOWED.has(flag)) continue;
+    if (!new RegExp(`'${flag}'`).test(readerText)) unreadFlags.push(flag);
+  }
+}
+if (unreadFlags.length) {
+  failures.push(`Флаги видов без читателя: ${unreadFlags.length}. Свойство вида объявлено флагом, а ядро гейтит именем вида.`);
+  failures.push('    Чинится заменой `e.monsterKind === MonsterKind.X` на `monsterHasAIFlag(e, "flag")`.');
+  for (const f of unreadFlags) failures.push(`    ${f}`);
+}
+
 /* ── Итог ─────────────────────────────────────────────────────── */
 if (process.argv.includes('--report')) {
   console.log('Обратные рёбра между слоями:');
@@ -892,4 +955,4 @@ if (failures.length) {
   for (const f of failures) console.error(f);
   process.exit(1);
 }
-console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), @ts-ignore (${tsIgnoreHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), смерть мимо пути (${entityDeathHits.length}), мёртвые выходы из кадра (${frameLoopDeadReturns.length}), запертая дверь без ключа (${lockedNoKeyHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0), связи между этажами (0).`);
+console.log(`Инварианты в порядке: слои, цикл ${runtimeCycle}, Math.random (${randomHits.length}), @ts-ignore (${tsIgnoreHits.length}), нумерация сущностей (0), личность по alifeId (0), урон мимо двери (${damageDoorHits.length}), смерть мимо пути (${entityDeathHits.length}), мёртвые выходы из кадра (${frameLoopDeadReturns.length}), запертая дверь без ключа (${lockedNoKeyHits.length}), длина функций (${longFunctions.length} > ${MAX_FUNCTION_LINES}), мёртвые координаты этажей (0), связи между этажами (0), флаги видов без читателя (${unreadFlags.length}).`);

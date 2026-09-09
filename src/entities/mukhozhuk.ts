@@ -13,7 +13,7 @@ export const DEF: MonsterDef = {
   attackRate: 1.28,
   damageType: DamageType.BIO,
   sprite: 0,
-  aiFlags: ['larvaCarrier', 'foodBait'],
+  aiFlags: ['larvaCarrier'],
   counterplay: 'Лечите раненых при нём и себя тоже: личинка не приживается в закрытой ране. Добить своего — значит выпустить мухожука сразу.',
   lootHint: 'жирный хитин, слипшийся кокон, редкая карантинная карточка из воротника',
 };

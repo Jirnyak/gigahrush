@@ -1,10 +1,9 @@
-import { MONSTERS, MONSTER_SPRITES } from '../src/entities/monster';
+import { MONSTERS, MONSTER_SPRITES, isBaitAttractedMonster } from '../src/entities/monster';
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { MonsterKind } from '../src/core/types';
 import {
-  BAIT_ATTRACTED_MONSTER_KINDS,
   chooseFloorMonsterKind,
   getMonsterEcology,
   monsterEcologyEventData,
@@ -301,39 +300,29 @@ test('floor affinity boosts native and design-biased monsters without filtering 
 });
 
 
-test('bait-attracted monster list is narrow and backed by explicit scent AI flags', () => {
-  assert.deepEqual(BAIT_ATTRACTED_MONSTER_KINDS, [
-    MonsterKind.KRYSNOZHKA,
-    MonsterKind.POMOYNY_ROY,
-    MonsterKind.SWARM,
-    MonsterKind.SBORKA,
-    MonsterKind.TVAR,
-    MonsterKind.ZHORNAYA_TVAR,
-    MonsterKind.POLZUN,
-    MonsterKind.TUBE_EEL,
-    MonsterKind.OLGOY,
-    MonsterKind.SLIMEVIK,
-    MonsterKind.GREEN_DOG,
-    MonsterKind.PECHATEED,
-    MonsterKind.KONTORSHCHIK,
-    MonsterKind.PROTOKOLNIK,
+/* Приманка гейтится ФЛАГОМ, и состав проверяется по флагу.
+ *
+ * Прежняя редакция сверяла рукописный `BAIT_ATTRACTED_MONSTER_KINDS` и требовала,
+ * чтобы каждое имя было «подкреплено» ЛЮБЫМ из девяти флагов. Так и жил дрейф:
+ * список из четырнадцати имён, флаг `foodBait` на десяти видах, пересечение
+ * девять, и тест был зелёным, потому что у каждого нашёлся хоть какой-то флаг.
+ * Список снесён, `isBaitAttractedMonster` читает флаг. Состав тот же, что был
+ * живым до сведения, и перечислен здесь поимённо — иначе вид уйдёт молча. */
+test('приманка тянет ровно объявленные флагом виды, и контрплей у каждого назван', () => {
+  const attracted = (Object.values(MonsterKind) as unknown[])
+    .filter((k): k is MonsterKind => typeof k === 'number')
+    .filter(kind => isBaitAttractedMonster(kind));
+
+  assert.deepEqual(attracted.map(kind => MonsterKind[kind]).sort(), [
+    'GREEN_DOG', 'KONTORSHCHIK', 'KRYSNOZHKA', 'OLGOY', 'PECHATEED',
+    'POLZUN', 'POMOYNY_ROY', 'PROTOKOLNIK', 'SBORKA', 'SLIMEVIK',
+    'SWARM', 'TUBE_EEL', 'TVAR', 'ZHORNAYA_TVAR',
   ]);
 
-  for (const kind of BAIT_ATTRACTED_MONSTER_KINDS) {
-    const flags = MONSTERS[kind].aiFlags ?? [];
+  for (const kind of attracted) {
     assert.equal(
-      flags.includes('foodBait') ||
-        flags.includes('waterStrider') ||
-        flags.includes('garbageSurround') ||
-        flags.includes('scentOvercommit') ||
-        flags.includes('slimeScavenger') ||
-        flags.includes('packHowl') ||
-        flags.includes('meatWorm') ||
-        flags.includes('documentHunter') ||
-        flags.includes('documentScent') ||
-        flags.includes('protocolPressure'),
-      true,
-      `${MonsterKind[kind]} bait tag must be backed by an explicit movement/cue flag`,
+      MONSTERS[kind].aiFlags?.includes('foodBait'), true,
+      `${MonsterKind[kind]} обязан нести сам флаг, а не попадать в приманку по соседнему`,
     );
     assert.match(MONSTERS[kind].counterplay ?? '', /ед|говняк|приман|сух|кромк|вод|бланк|бумаг|фильтр|тар|металл|шум|дроб/);
   }

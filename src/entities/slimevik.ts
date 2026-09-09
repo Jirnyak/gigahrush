@@ -13,7 +13,7 @@ export const DEF: MonsterDef = {
   attackRate: 1.8,
   damageType: DamageType.BIO,
   sprite: 0,
-  aiFlags: ['slimeScavenger'],
+  aiFlags: ['slimeScavenger', 'foodBait'],
   counterplay: 'Он глотает всё брошенное на пол — этим же его и уводят: киньте приманку в сторону. Хотите своё обратно — убейте и обыщите.',
   lootHint: 'слизистый соскоб, грязная проба, редкий фильтрующий слой',
 };

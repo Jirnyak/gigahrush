@@ -133,26 +133,6 @@ const ROUTE_PRESSURE_KINDS: readonly MonsterKind[] = [
   MonsterKind.SPORE_CARPET,
 ];
 
-export const BAIT_ATTRACTED_MONSTER_KINDS: readonly MonsterKind[] = [
-  MonsterKind.KRYSNOZHKA,
-  MonsterKind.POMOYNY_ROY,
-  MonsterKind.SWARM,
-  MonsterKind.SBORKA,
-  MonsterKind.TVAR,
-  MonsterKind.ZHORNAYA_TVAR,
-  MonsterKind.POLZUN,
-  MonsterKind.TUBE_EEL,
-  MonsterKind.OLGOY,
-  MonsterKind.SLIMEVIK,
-  MonsterKind.GREEN_DOG,
-  MonsterKind.PECHATEED,
-  MonsterKind.KONTORSHCHIK,
-  MonsterKind.PROTOKOLNIK,
-];
-
-export function isBaitAttractedMonster(kind: MonsterKind | undefined): boolean {
-  return kind !== undefined && BAIT_ATTRACTED_MONSTER_KINDS.includes(kind);
-}
 
 export const MONSTER_ECOLOGY: readonly MonsterEcologyDef[] = [
   {

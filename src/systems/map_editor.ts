@@ -381,8 +381,11 @@ function normalizePatchState(input: Partial<MapEditorPatchState> | null | undefi
       const ops = src.ops.slice(0, PATCH_OP_CAP).map(normalizeMapEditorOp).filter((op): op is MapEditorOp => !!op);
       patches[key] = {
         floorKey: key,
-        z: typeof src.z === "number" ? src.z : undefined,
-        createdAt: typeof src.createdAt === 'number' ? src.createdAt : 0,
+        /* `typeof === 'number'` пропускает `NaN` и `Infinity`: оба они числа.
+         * Соседний `ops` режется капом, а этаж и время патча брались сырыми, и
+         * `NaN` из подделанного сейва ехал в редактор карты как координата. */
+        z: Number.isFinite(src.z) ? src.z : undefined,
+        createdAt: Number.isFinite(src.createdAt) ? Math.max(0, src.createdAt as number) : 0,
         opCount: ops.length,
         ops };
     }

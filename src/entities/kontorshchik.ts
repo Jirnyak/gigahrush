@@ -13,7 +13,7 @@ export const DEF: MonsterDef = {
   attackRate: 1.65,
   sprite: 0,
   detect: 28,
-  aiFlags: ['documentScent'],
+  aiFlags: ['documentScent', 'foodBait'],
   counterplay: 'Конторщик медленный без бумажного следа: сложите бланки, пропуска и печати в ящик или бросьте дешевую форму как приманку. У шкафов и столов рвите хват, пока бумага перестает шуметь.',
   lootHint: 'желтая папка, красная печать на рукаве, редкий пустой бланк',
 };

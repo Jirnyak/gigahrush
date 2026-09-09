@@ -660,6 +660,27 @@ export function monsterHasAIFlag(e: { monsterKind?: MonsterKind }, flag: Monster
   return e.monsterKind !== undefined && MONSTER_FLAG_SETS[e.monsterKind]?.has(flag) === true;
 }
 
+/**
+ * Кого тянет на приманку. СВОЙСТВО ВИДА, и спрашивается флагом.
+ *
+ * В `data/monster_ecology.ts` жил рукописный `BAIT_ATTRACTED_MONSTER_KINDS` из
+ * четырнадцати имён — при живом флаге `foodBait`, который ничего не гейтил.
+ * Списки разошлись: флаг несли десять видов, список называл четырнадцать,
+ * пересекались девять. У пяти видов авторское объявление не работало, а у
+ * носителя личинки Мухожука работало наоборот — флаг стоял, приманка не звала.
+ *
+ * Сведено ПО ПОВЕДЕНИЮ: флаг расставлен ровно по прежнему живому списку, ни
+ * один вид не начал и не перестал ходить на приманку. Исключение —
+ * `MUKHOZHUK_HOST`: флаг снят, потому что в игре он на приманку не шёл никогда.
+ * Это не правка замысла, а снятое противоречие, и вопрос автору остаётся.
+ *
+ * Живёт здесь, а не в `data/`: флаги — собственность реестра видов, а слой
+ * `data` не имеет права импортировать `entities`.
+ */
+export function isBaitAttractedMonster(kind: MonsterKind | undefined): boolean {
+  return monsterHasAIFlag({ monsterKind: kind }, 'foodBait');
+}
+
 /** Чем бьёт эта тварь. Не тварь или вид молчит — `undefined`, то есть кинетика. */
 export function monsterAttackDamageType(e: { monsterKind?: MonsterKind } | undefined): DamageType | undefined {
   return e?.monsterKind !== undefined ? MONSTERS[e.monsterKind]?.damageType : undefined;

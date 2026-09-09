@@ -72,7 +72,7 @@ function syncEntities(entities: Entity[]): void {
 test('protokolnik is a standalone ministry monster with normal rumor reachability', () => {
   assert.equal(DEF.kind, MonsterKind.PROTOKOLNIK);
   assert.equal(DEF.name, 'Протокольник');
-  assert.deepEqual(DEF.aiFlags, ['protocolPressure']);
+  assert.deepEqual(DEF.aiFlags, ['protocolPressure', 'foodBait']);
 
   const ecology = getMonsterEcology(MonsterKind.PROTOKOLNIK);
   assert.ok(ecology);

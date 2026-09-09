@@ -61,7 +61,7 @@ test('Slimevik is standalone neutral scavenger content with route leads', () => 
 
   assert.equal(DEF.kind, MonsterKind.SLIMEVIK);
   assert.equal(MONSTERS[MonsterKind.SLIMEVIK], DEF);
-  assert.deepEqual(DEF.aiFlags, ['slimeScavenger']);
+  assert.deepEqual(DEF.aiFlags, ['slimeScavenger', 'foodBait']);
   assert.deepEqual(ecology?.rumorIds, ['monster_slimevik_bargain', 'lead_maintenance_safe_slimevik']);
   assert.equal(RUMORS.some(r => r.id === 'lead_maintenance_safe_slimevik'), true);
   assert.equal(CONTRACTS.some(c => c.id === 'exp_maint_safe_slimevik_bargain'), true);

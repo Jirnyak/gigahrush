@@ -82,7 +82,7 @@ test('mukhozhuk host keeps standalone parasite registry, ecology, rumors and spr
 
   assert.equal(DEF.kind, MonsterKind.MUKHOZHUK_HOST);
   assert.equal(MONSTERS[MonsterKind.MUKHOZHUK_HOST], DEF);
-  assert.deepEqual(DEF.aiFlags, ['larvaCarrier', 'foodBait']);
+  assert.deepEqual(DEF.aiFlags, ['larvaCarrier']);
   assert.match(DEF.counterplay ?? '', /личинк|ран|леч/i);
   assert.match(DEF.lootHint ?? '', /хитин|кокон|карточка/i);
   assert.equal(ecology?.rare, true);

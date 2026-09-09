@@ -12,7 +12,7 @@ export const DEF: MonsterDef = {
   dmg: 14,
   attackRate: 1.35,
   sprite: 0,
-  aiFlags: ['waterStrider'],
+  aiFlags: ['waterStrider', 'foodBait'],
   counterplay: 'Не стойте в лотке: сухая кромка и мост режут темп угря, гарпун достает через воду, а приманка уводит с маршрута.',
   lootHint: 'ржавая слизь, манометр, обломок трубы из затопленного лотка',
 };

@@ -48,7 +48,7 @@ test('pechateed local definition stays a kiteable document hunter', () => {
 
   assert.ok(ecology, 'PECHATEED ecology must exist');
   assert.equal(DEF.kind, MonsterKind.PECHATEED);
-  assert.deepEqual(DEF.aiFlags, ['documentHunter']);
+  assert.deepEqual(DEF.aiFlags, ['documentHunter', 'foodBait']);
   assert.ok(DEF.speed < 1.8, 'PECHATEED should remain kiteable');
   assert.ok(DEF.dmg >= 10, 'PECHATEED should punish a caught paper carrier');
   assert.match(DEF.counterplay ?? '', /Сбросьте.*бумаг/);

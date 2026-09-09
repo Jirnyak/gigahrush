@@ -3,7 +3,7 @@ import * as assert from 'node:assert/strict';
 
 import { AIGoal, Cell, EntityType, MonsterKind, type Entity } from '../src/core/types';
 import { World } from '../src/core/world';
-import { isBaitAttractedMonster } from '../src/data/monster_ecology';
+import { isBaitAttractedMonster } from '../src/entities/monster';
 import {
   MONSTER_BAIT_MAX_ACTIVE,
   MONSTER_BAIT_MAX_ATTRACTIONS_CAP,

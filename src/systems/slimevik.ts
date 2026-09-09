@@ -11,7 +11,7 @@ import {
   type Msg,
 } from '../core/types';
 import { World } from '../core/world';
-import { MONSTERS, entityDisplayName } from '../entities/monster';
+import { MONSTERS, entityDisplayName, monsterHasAIFlag } from '../entities/monster';
 import { recordPlayerDamage } from './damage';
 import { ENTITY_MASK_ITEM_DROP, ensureEntityIndex, getEntityIndex, markEntityIndexDirty } from './entity_index';
 import { publishEvent, registerWorldEventObserver } from './events';
@@ -31,7 +31,7 @@ const slimevikForageQuery: Entity[] = [];
 registerWorldEventObserver((state, event) => {
   if (
     (event.type !== 'player_kill_monster' && event.type !== 'npc_kill_monster') ||
-    event.monsterKind !== MonsterKind.SLIMEVIK
+    !monsterHasAIFlag({ monsterKind: event.monsterKind }, 'slimeScavenger')
   ) return;
   publishEvent(state, {
     type: 'slimevik_killed',
@@ -200,7 +200,7 @@ export function updateSlimevikMonster(
   msgs: Msg[],
   state?: GameState,
 ): boolean {
-  if (e.monsterKind !== MonsterKind.SLIMEVIK || !e.ai) return false;
+  if (!monsterHasAIFlag(e, 'slimeScavenger') || !e.ai) return false;
 
   /* ── РЕАКЦИЯ ── ответ на угрозу, доказанную ударом.
    *

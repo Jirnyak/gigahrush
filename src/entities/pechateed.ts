@@ -13,7 +13,7 @@ export const DEF: MonsterDef = {
   attackRate: 1.45,
   sprite: 0,
   detect: 24,
-  aiFlags: ['documentHunter'],
+  aiFlags: ['documentHunter', 'foodBait'],
   counterplay: 'Чует документы как кровь: Сбросьте лишние бумаги, бланки и корешки в ящик до боя. Без бумажного запаха хуже ищет цель; держите дистанцию и теряйте его через углы.',
   lootHint: 'обглоданные бланки, кислые чернила и пустой формуляр без подписи',
 };

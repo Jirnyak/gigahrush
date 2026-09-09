@@ -4,7 +4,8 @@ import * as assert from 'node:assert/strict';
 
 import { AIGoal, Cell, EntityType, MonsterKind, RoomType, type Entity, type Msg } from '../src/core/types';
 import { World } from '../src/core/world';
-import { BAIT_ATTRACTED_MONSTER_KINDS, getMonsterEcology } from '../src/data/monster_ecology';
+import { getMonsterEcology } from '../src/data/monster_ecology';
+import { isBaitAttractedMonster } from '../src/entities/monster';
 import { RUMORS } from '../src/data/rumors';
 import { DEF, generateSprite } from '../src/entities/zhornaya_tvar';
 import { S } from '../src/core/pixutil';
@@ -80,7 +81,7 @@ test('zhornaya tvar is standalone scent-lunge monster content', () => {
   assert.equal(DEF.kind, MonsterKind.ZHORNAYA_TVAR);
   assert.equal(MONSTERS[MonsterKind.ZHORNAYA_TVAR], DEF);
   assert.deepEqual(DEF.aiFlags, ['foodBait', 'scentOvercommit']);
-  assert.equal(BAIT_ATTRACTED_MONSTER_KINDS.includes(MonsterKind.ZHORNAYA_TVAR), true);
+  assert.equal(isBaitAttractedMonster(MonsterKind.ZHORNAYA_TVAR), true);
   assert.equal(ecology?.rooms.includes(RoomType.KITCHEN), true);
   assert.equal(ecology?.rooms.includes(RoomType.STORAGE), true);
   assert.equal(ecology?.rareDrops.some(drop => drop.itemId === 'rawmeat'), true);

@@ -10,7 +10,8 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { ITEMS, ITEM_TAGS } from '../data/items';
-import { isBaitAttractedMonster, monsterEcologyTags } from '../data/monster_ecology';
+import { monsterEcologyTags } from '../data/monster_ecology';
+import { isBaitAttractedMonster } from '../entities/monster';
 import { isDocumentScentItem } from './document_scent';
 import { publishEvent } from './events';
 import { activeFloorInstanceWorldKey } from './floor_instances';

@@ -1233,7 +1233,7 @@ function updateSobrannyyGrowthState(
   msgs: Msg[],
   state: GameState | undefined,
 ): void {
-  if (e.monsterKind !== MonsterKind.SOBRANNYY) return;
+  if (!hasAIFlag(e, 'meatGrowth')) return;
   if (!e.alive || (e.hp ?? 1) <= 0) {
     sobrannyyRuntime.delete(e);
     return;
@@ -1351,7 +1351,7 @@ function updateSobrannyyTarget(
   msgs: Msg[],
   state: GameState | undefined,
 ): Entity | null {
-  if (e.monsterKind !== MonsterKind.SOBRANNYY) return target;
+  if (!hasAIFlag(e, 'meatGrowth')) return target;
   const runtime = sobrannyyState(e);
   if (runtime.dormant) {
     const noise = findNoiseInvestigationTarget(world, state, e, time);
@@ -1628,7 +1628,7 @@ function updateObzhivalshchikTarget(
   msgs: Msg[],
   state: GameState | undefined,
 ): Entity | null {
-  if (e.monsterKind !== MonsterKind.OBZHIVALSHCHIK) return target;
+  if (!hasAIFlag(e, 'roomBoundAberration')) return target;
   const room = obzhivalshchikHomeRoom(world, e);
   if (!room) return target;
 
@@ -3412,7 +3412,7 @@ const HEAD_SLUG_DETACHED_REACH = 0.95;
  * другое лежало одним `switch (kind)` на девять веток.
  */
 function monsterMeleeRange(world: World, e: Entity): number {
-  if (e.monsterKind === MonsterKind.PANELNIK) {
+  if (hasAIFlag(e, 'wallBrace')) {
     return panelnikWallBraceActive(world, e) ? PANELNIK_BRACE_REACH : PANELNIK_OPEN_REACH;
   }
   if (isHeadSlugDetached(e)) return HEAD_SLUG_DETACHED_REACH;
@@ -3977,7 +3977,7 @@ function updatePanelnikWallBrace(
   target: Entity | undefined,
   state: GameState | undefined,
 ): void {
-  if (e.monsterKind !== MonsterKind.PANELNIK || !e.ai) return;
+  if (!hasAIFlag(e, 'wallBrace') || !e.ai) return;
   const ai = e.ai;
   ai.wallBraceSlowTimer = Math.max(0, (ai.wallBraceSlowTimer ?? 0) - dt);
 
@@ -4154,8 +4154,8 @@ function updateWaterStriderState(world: World, e: Entity, dt: number, time: numb
     e.monsterArmorLastMsgAt = time;
     stampWetStriderRipple(world, e, time);
   }
-  if (e.monsterKind !== MonsterKind.LOTOCHNIK) return;
-  const maxHp = e.maxHp ?? e.hp ?? MONSTERS[MonsterKind.LOTOCHNIK].hp;
+  if (!hasAIFlag(e, 'drainArmor')) return;
+  const maxHp = e.maxHp ?? e.hp ?? MONSTERS[e.monsterKind!].hp;
   if (wet) {
     if ((e.hp ?? maxHp) < maxHp) e.hp = Math.min(maxHp, (e.hp ?? maxHp) + dt * LOTOCHNIK_WET_REGEN_PER_SEC);
     e.spriteScale = Math.max(e.spriteScale ?? 1, 1.04);
@@ -5334,7 +5334,7 @@ export function tryMonsterProjectileStagger(
   playerId: number,
 ): boolean {
   if (monster.type !== EntityType.MONSTER || !monster.ai) return false;
-  if (monster.monsterKind === MonsterKind.SOBRANNYY &&
+  if (hasAIFlag(monster, 'meatGrowth') &&
       projectile.ownerId === playerId &&
       (projectile.sprite === Spr.PELLET || projectile.projType === ProjType.FLAME)) {
     const runtime = sobrannyyState(monster);
@@ -5442,7 +5442,7 @@ function fireMonsterProjectile(
  * Обе таблицы ниже экспортированы ради замка достижимости веток
  * (`tests/monster-projectile-readability.test.ts`), а не для внешних вызовов. */
 export function monsterProjectileScale(kind: MonsterKind | undefined, sprite: number): number {
-  if (sprite === Spr.WEB_BOLT || kind === MonsterKind.PAUPSINA) return 0.42;
+  if (sprite === Spr.WEB_BOLT || monsterHasAIFlag({ monsterKind: kind }, 'webSpitter')) return 0.42;
   if (sprite === Spr.WET_LINE_BOLT) return 0.5;
   if (sprite === Spr.PARAGRAPH_BOLT) return 0.34;
   if (sprite === Spr.HOSTILE_FLAME_BOLT) return 0.52;
@@ -5452,7 +5452,7 @@ export function monsterProjectileScale(kind: MonsterKind | undefined, sprite: nu
 }
 
 export function monsterProjectileSound(kind: MonsterKind | undefined, sprite: number): () => void {
-  if (sprite === Spr.WEB_BOLT || kind === MonsterKind.PAUPSINA) return playGrowl;
+  if (sprite === Spr.WEB_BOLT || monsterHasAIFlag({ monsterKind: kind }, 'webSpitter')) return playGrowl;
   if (sprite === Spr.WET_LINE_BOLT) return playHostileEnergyShot;
   if (kind === MonsterKind.EYE || kind === MonsterKind.CHERNOSLIZ || sprite === Spr.EYE_BOLT) return playHostileEyeShot;
   if (kind === MonsterKind.PARAGRAPH || sprite === Spr.PARAGRAPH_BOLT) return playHostileParagraphShot;
@@ -5490,7 +5490,7 @@ function rangedMonsterShotRange(kind: MonsterKind | undefined): number {
 }
 
 function tryPaupsinaRangeStep(world: World, e: Entity, target: Entity, bestDist: number, dt: number): boolean {
-  if (e.monsterKind !== MonsterKind.PAUPSINA || bestDist > PAUPSINA_WEB_STRAFE_RANGE) return false;
+  if (!hasAIFlag(e, 'webSpitter') || bestDist > PAUPSINA_WEB_STRAFE_RANGE) return false;
   const dx = world.delta(target.x, e.x);
   const dy = world.delta(target.y, e.y);
   const len = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
@@ -5812,7 +5812,7 @@ export function updateTrubnyyWetLineShot(
   nextId: { v: number },
   state?: GameState,
 ): boolean {
-  if (e.monsterKind !== MonsterKind.TRUBNYY_AVTOMAT) return false;
+  if (!hasAIFlag(e, 'wetLineShot')) return false;
   const ai = e.ai!;
 
   const windup = monsterWindup(e.monsterKind)!;
@@ -6960,7 +6960,7 @@ export function tryPerformMonsterMeleeAttack(
              * этому моменту уже мог поднять его обратно — тогда и строки нет. */
             if (hitTarget.hp <= 0 && !hitTarget.alive) {
               msgs.push(msg(`${entityDisplayName(e)} убил ${entityDisplayName(hitTarget)}`, time, '#f44'));
-              if (e.monsterKind === MonsterKind.SOBRANNYY) growSobrannyy(world, e, hitTarget, time, msgs, state, 'kill');
+              if (hasAIFlag(e, 'meatGrowth')) growSobrannyy(world, e, hitTarget, time, msgs, state, 'kill');
               if (e.monsterKind === MonsterKind.HEAD_SLUG) rememberHeadSlugVictim(e, hitTarget);
             }
           }
@@ -7040,17 +7040,17 @@ const SPECIES_TICK_STEPS: readonly SpeciesTickStep[] = [
   { flag: 'larvaCarrier', run: c => { updateMukhozhukBite(c.world, c.e, c.dt, c.time, c.msgs, c.state); return false; } },
   { flag: 'strikeReveal', run: c => { updateTumannikReveal(c.world, c.e); return false; } },
   // Ковёр не воюет и не ходит: он растение, и вся его жизнь — этот вызов.
-  { kind: MonsterKind.SPORE_CARPET, run: c => updateSporeCarpetGrowth(c.world, c.entities, c.e, c.nextId, c.dt, c.time, c.msgs, c.state) },
+  { flag: 'lurkingFurniture', run: c => updateSporeCarpetGrowth(c.world, c.entities, c.e, c.nextId, c.dt, c.time, c.msgs, c.state) },
   { kind: MonsterKind.LISHENNYY, run: c => updateLishennyyBrightAvoidance(c.world, c.e, c.dt) },
   { flag: 'netPossessor', run: c => { updateChervieNetPossessor(c.world, c.e, c.dt, c.time, c.msgs, c.playerId, c.state); return false; } },
   { kind: MonsterKind.SLIMEVIK, routine: true, run: c => updateSlimevikMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.state) },
   { kind: MonsterKind.GNILUSHKA, routine: true, run: c => updateGnilushkaMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.playerId, c.state) },
   { kind: MonsterKind.HEAD_SLUG, run: c => updateHeadSlugParasite(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.nextId, c.state) },
-  { kind: MonsterKind.SOBRANNYY, run: c => { updateSobrannyyGrowthState(c.world, c.e, c.time, c.msgs, c.state); return false; } },
+  { flag: 'meatGrowth', run: c => { updateSobrannyyGrowthState(c.world, c.e, c.time, c.msgs, c.state); return false; } },
   { flag: 'noiseFear', run: c => updateGreenDogNoiseFear(c.world, c.e, c.dt, c.time, c.msgs, c.state) },
   { kind: MonsterKind.SLIME_WOMAN, run: c => { updateSlimeWomanState(c.world, c.e, c.time, c.msgs, c.state); return false; } },
   { flag: 'waterStrider', run: c => { updateWaterStriderState(c.world, c.e, c.dt, c.time); return false; } },
-  { kind: MonsterKind.PANELNIK, run: c => { updatePanelnikWallBrace(c.world, c.e, c.dt, c.time, c.msgs, c.player, c.state); return false; } },
+  { flag: 'wallBrace', run: c => { updatePanelnikWallBrace(c.world, c.e, c.dt, c.time, c.msgs, c.player, c.state); return false; } },
   { flag: 'scrapWake', run: c => updateRzhavnikScrapWake(c.world, c.e, c.dt, c.time, c.msgs, c.playerId, c.state) },
 ];
 
@@ -7299,11 +7299,11 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   if (tryConsumeMeatChunk(world, e, target, dt, time, msgs, state)) return;
 
   if (!target) {
-    if (e.monsterKind === MonsterKind.OBZHIVALSHCHIK) {
+    if (hasAIFlag(e, 'roomBoundAberration')) {
       const room = obzhivalshchikHomeRoom(world, e);
       if (room && idleObzhivalshchikInRoom(world, e, room, dt, time)) return;
     }
-    if (e.monsterKind === MonsterKind.SOBRANNYY) {
+    if (hasAIFlag(e, 'meatGrowth')) {
       const runtime = sobrannyyState(e);
       if (runtime.dormant || runtime.isolatedUntil > time) return;
     }
@@ -7380,7 +7380,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   updateOlgoyReadability(world, e, target, time, msgs, playerId, state);
   if (updateDikiyRush(world, e, target, dt, time, msgs, state)) return;
 
-  if (e.monsterKind === MonsterKind.SOBRANNYY && trySobrannyyBreakWeakDoor(world, e, target, time, msgs, state)) return;
+  if (hasAIFlag(e, 'meatGrowth') && trySobrannyyBreakWeakDoor(world, e, target, time, msgs, state)) return;
 
   if (hasAIFlag(e, 'meleeWindup')) {
     updateMeleeWindup(world, e, target, dt, time, msgs, playerId, state);
@@ -7408,7 +7408,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   }
 
   // Ranged monsters telegraph, require a clear toroidal line of fire, and can be denied by cover.
-  if (e.monsterKind === MonsterKind.TRUBNYY_AVTOMAT && def) {
+  if (hasAIFlag(e, 'wetLineShot') && def) {
     if (updateTrubnyyWetLineShot(world, entities, e, target, def, dt, time, msgs, playerId, nextId, state)) return;
   } else if (def?.isRanged && updateReadableMonsterRanged(world, entities, e, target, def, bestDist, dt, time, msgs, playerId, nextId, state)) return;
 

@@ -2,13 +2,13 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { MonsterKind } from '../src/core/types';
-import { isBaitAttractedMonster } from '../src/data/monster_ecology';
+import { isBaitAttractedMonster } from '../src/entities/monster';
 import { DEF, generateSprite } from '../src/entities/tube_eel';
 import { S } from '../src/core/pixutil';
 
 test('tube eel remains a water ambusher with dry-edge counterplay', () => {
   assert.equal(DEF.kind, MonsterKind.TUBE_EEL);
-  assert.deepEqual(DEF.aiFlags, ['waterStrider']);
+  assert.deepEqual(DEF.aiFlags, ['waterStrider', 'foodBait']);
 
   const waterSpeed = DEF.speed * 1.45;
   const drySpeed = DEF.speed * 0.72;

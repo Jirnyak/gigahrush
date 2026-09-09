@@ -3,7 +3,7 @@
 import { ArmorType, Cell, DamageType, EntityType, Feature, MonsterKind, RoomType, type Entity } from '../core/types';
 import { World } from '../core/world';
 import { armorMultiplier } from '../data/armor_matrix';
-import { MONSTERS } from '../entities/monster';
+import { MONSTERS, monsterHasAIFlag } from '../entities/monster';
 import { hasLineToCell } from '../world/line_of_sight';
 import { wetTerrainAtEntity } from './monster_terrain';
 
@@ -97,17 +97,17 @@ export function monsterWallContext(world: World, e: Entity): MonsterWallContext 
 }
 
 export function panelnikWallBraceActive(world: World, e: Entity): boolean {
-  if (e.type !== EntityType.MONSTER || e.monsterKind !== MonsterKind.PANELNIK) return false;
+  if (e.type !== EntityType.MONSTER || !monsterHasAIFlag(e, 'wallBrace')) return false;
   return monsterWallContext(world, e).adjacentWall;
 }
 
 export function panelnikOpenFloor(world: World, e: Entity): boolean {
-  if (e.type !== EntityType.MONSTER || e.monsterKind !== MonsterKind.PANELNIK) return false;
+  if (e.type !== EntityType.MONSTER || !monsterHasAIFlag(e, 'wallBrace')) return false;
   return monsterWallContext(world, e).openFloorScore >= 0.98;
 }
 
 export function lotochnikDrainArmorActive(world: World, e: Entity): boolean {
-  if (e.type !== EntityType.MONSTER || e.monsterKind !== MonsterKind.LOTOCHNIK) return false;
+  if (e.type !== EntityType.MONSTER || !monsterHasAIFlag(e, 'drainArmor')) return false;
   return wetTerrainAtEntity(world, e);
 }
 
