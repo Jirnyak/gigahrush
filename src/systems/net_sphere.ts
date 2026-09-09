@@ -1,4 +1,5 @@
 import { type Entity, type GameState } from '../core/types';
+import { secureRandom } from '../core/rand';
 import { getControlCaptureAction, matchesControlAction } from './controls';
 import { isStrictPortalMode, portalAllowsOptionalNetwork } from './platform_bridge';
 import { currentFloorRunEntry, ensureFloorRunState, floorRunEntryMapLabel, floorRunEntryRouteId } from './procedural_floors';
@@ -801,8 +802,9 @@ async function pollInvade(): Promise<void> {
 
 function addLocalSystemMessage(body: string): void {
   runtime.chat.push({
-    // net-identity exception (rand.ts policy): local chat-message id needs collision resistance, not determinism
-    id: Date.now() + Math.random(),
+    // Сетевая идентичность (исключение политики `rand.ts`): номеру локальной
+    // реплики нужна устойчивость к коллизиям, а не воспроизводимость.
+    id: Date.now() + secureRandom(),
     nickname: 'СИСТЕМА',
     body,
     createdAt: Date.now()

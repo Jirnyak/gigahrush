@@ -71,7 +71,10 @@ const BASELINE = {
    стрельба, микроцели и матка ссылаются друг на друга по существу. */
 const RUNTIME_CYCLE_BASELINE = 4;
 
-const MATH_RANDOM_BASELINE = 2; // online_client.ts, net_sphere.ts — сетевые идентификаторы
+// Ноль с 2026-09-09: оба сетевых идентификатора переведены на `secureRandom()`,
+// который для того и написан и до этого не имел ни одного потребителя. Сырой
+// `Math.random()` не даёт непредсказуемости, а коду комнаты нужна именно она.
+const MATH_RANDOM_BASELINE = 0;
 const MAX_FUNCTION_LINES = 200;
 const LONG_FUNCTION_BASELINE = 20;
 
@@ -206,7 +209,16 @@ for (const file of files) {
   if (srcRel === 'core/rand.ts') continue;
   const lines = fs.readFileSync(file, 'utf8').split('\n');
   lines.forEach((line, i) => {
-    if (/\bMath\.random\s*\(/.test(line)) randomHits.push(`${srcRel}:${i + 1}`);
+    const hit = /\bMath\.random\s*\(/.exec(line);
+    if (!hit) return;
+    /* Упоминание в комментарии — не вызов. Без этого правило само себе ловушка:
+     * baseline опущен до нуля, и любая строка документации, называющая запрет по
+     * имени, валила бы сборку. Проверяется только текст ДО совпадения, поэтому
+     * `Math.random(); // почему так` по-прежнему считается вызовом. */
+    const before = line.slice(0, hit.index);
+    const trimmed = line.trimStart();
+    if (before.includes('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+    randomHits.push(`${srcRel}:${i + 1}`);
   });
 }
 if (randomHits.length > MATH_RANDOM_BASELINE) {

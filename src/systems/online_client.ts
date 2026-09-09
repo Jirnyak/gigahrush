@@ -6,6 +6,7 @@
 // carries entity sync, per-slot actor echoes, doors, fx and cell patches.
 
 import { type Entity } from '../core/types';
+import { secureRandom } from '../core/rand';
 import { nextIntentMsg, resetOnlineProtocolState, type PeerIntent } from './online_protocol';
 
 export const ONLINE_PROTOCOL_VERSION = 2;
@@ -153,8 +154,11 @@ export function shouldSendHostSync(): boolean {
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let result = '';
-  // net-identity exception (rand.ts policy): room code must be unpredictable/collision-resistant, not deterministic
-  for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+  /* Сетевая идентичность (исключение политики `rand.ts`): код комнаты обязан быть
+   * непредсказуемым и устойчивым к коллизиям, а не воспроизводимым. Стоял сырой
+   * `Math.random()` — он ровно первого свойства и не даёт. `secureRandom()` был
+   * написан под этот случай и не имел ни одного потребителя. */
+  for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(secureRandom() * chars.length));
   return result;
 }
 
