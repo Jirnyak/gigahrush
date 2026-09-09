@@ -866,6 +866,17 @@ function playerWeaponGore(weaponId: string, pt: ProjType): number {
   return 1;
 }
 
+/**
+ * Насколько грязно рвёт ближний удар. Общая для руки игрока и руки ко-оп-пира:
+ * у пира стояла жёсткая единица, поэтому бензопила в его руках оставляла ту же
+ * лужу, что и голый кулак.
+ */
+function meleeKillGore(weaponId: string): number {
+  if (weaponId === 'chainsaw' || weaponId === 'axe') return 3;
+  if (weaponId === 'rebar' || weaponId === 'pipe') return 2;
+  return 1;
+}
+
 /** Размер снаряда в кадре у путей игрока и пира: четыре случая против двух у AI. */
 function playerProjScale(pt: ProjType): number {
   if (pt === ProjType.BFG) return 0.6;
@@ -965,7 +976,6 @@ function applyPeerFireAction(actor: Entity, slot: number, claimedTargetId?: numb
     actor.currentMag = 0;
     hostStartRemoteReload(actor);
   }
-  consumeDurability(actor, [], state.time, state, weaponId);
   const normalDmg = meleeDamage(actor.rpg, weaponId, ws.dmg);
   const range = ws.range;
   const ax = actor.x + Math.cos(actor.angle) * range;
@@ -1021,7 +1031,17 @@ function applyPeerFireAction(actor: Entity, slot: number, claimedTargetId?: numb
     if (target.hp <= 0) {
       target.hp = 0;
       killEntity(target);
-      if (!isPlayerEntity(target)) handleKill(target, true, mVx, mVy, 1, actor);
+      if (!isPlayerEntity(target)) {
+        handleKill(target, true, mVx, mVy, meleeKillGore(weaponId), actor);
+        /* Контрплей — свойство МОНСТРА, а не руки: срез корня борщевика и
+         * кровяного растения, смерть тумана в огне. Путь пира его не звал
+         * вовсе, и те же удары той же сталью давали разный мир. */
+        recordMonsterMeleeDeath(
+          world, state, target, weaponId, actor,
+          (victim, vx, vy, gore) => handleKill(victim, true, vx, vy, gore, actor),
+          entities,
+        );
+      }
     }
     hitSomething = true;
   }
@@ -1032,6 +1052,12 @@ function applyPeerFireAction(actor: Entity, slot: number, claimedTargetId?: numb
       if (damageDoor(world, world.doors.get(attackIdx)!, normalDmg)) updateWorldData(world);
     }
   }
+  /* Прочность списывается ЗА ПОПАДАНИЕ, как у руки игрока (4986) и как её
+   * считает СОБСТВЕННОЕ предсказание пира (`peerLocalMeleeWouldHit`, 5116).
+   * Стояло безусловно и выше по коду: пир, махнувший в воздух, терял ресурс на
+   * хозяине и не терял у себя — расхождение копилось всю сессию, и оружие
+   * ломалось раньше, чем показывал его собственный экран. */
+  if (hitSomething) consumeDurability(actor, [], state.time, state, weaponId);
   if (weaponId === 'chainsaw') playChainsaw(); else playAttack();
   publishWeaponNoise(state, actor, weaponId, ws);
   notifyLiftArachnaNoise(world, actor, state, weaponId);
@@ -3369,7 +3395,7 @@ function continueDeathAsAlifePopulationNpc(): boolean {
     applyDesignRouteGates(world, player, state);
     publishEvent(state, {
       type: 'floor_transition',
-      zoneId: world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))],
+      zoneId: currentPlayerZoneId(),
       x: player.x,
       y: player.y,
       actorId: player.id,
@@ -4313,6 +4339,17 @@ function msgAlreadyLogged(m: (typeof state.msgs)[number], distanceMeters: number
   return false;
 }
 
+/* ── Обращение к игроку по тексту ─────────────────────────────────
+ * Заглушка на время, пока не каждое сообщение несёт `actorId`/`targetId`;
+ * настоящий ответ — структурные поля, а не разбор строки.
+ *
+ * Стояло пять проверок ПОДСТРОКОЙ, и `'Вы'` ловило «Выстрел.», «Выбито!»,
+ * «Выход закрыт», а `'вас'` — «Квас украден»: в обучающем режиме сквозь фильтр
+ * шёл чужой огонь. Здесь границы слова заданы вручную: `\b` в JS кириллицу не
+ * знает. Заодно ловится строчное «вы», которое старый список пропускал.
+ */
+const PLAYER_ADDRESSED_RE = /(^|[^А-Яа-яЁё])(вы|вас|вам)([^А-Яа-яЁё]|$)/i;
+
 /** Sync new msgs to persistent msgLog with clock timestamps */
 function syncMsgLog(): void {
   const msgs = state.msgs;
@@ -4328,11 +4365,7 @@ function syncMsgLog(): void {
           m.actorId === pid ||
           m.targetId === 0 ||
           m.targetId === pid ||
-          m.text.includes('Вы') ||
-          m.text.includes('вас') ||
-          m.text.includes('вам') ||
-          m.text.includes('Вам') ||
-          m.text.includes('Вас');
+          PLAYER_ADDRESSED_RE.test(m.text);
         if (!isForPlayerOrSystem) continue;
       }
       // Filter out non-player item pickups from stenosvodka until NPC Markov pickup barks are ready
@@ -4951,9 +4984,7 @@ function handlePlayerAttack(_dt: number): void {
           state.msgs.push(msg(`Удар! ${entityDisplayName(e)} -${dmg}`, state.time, '#fc4'));
           if (e.hp <= 0) {
             killEntity(e);
-            const meleeGore = (weaponId === 'chainsaw' || weaponId === 'axe') ? 3
-              : (weaponId === 'rebar' || weaponId === 'pipe') ? 2 : 1;
-            handleKill(e, true, mVx, mVy, meleeGore);
+            handleKill(e, true, mVx, mVy, meleeKillGore(weaponId));
             recordMonsterMeleeDeath(
               world,
               state,
@@ -6228,7 +6259,7 @@ function switchFloor(
   }
   resolveLiftArachnaDeparture(world, player, state);
   clearPseudoliftActive(state, entities);
-  const liftZoneId = world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))];
+  const liftZoneId = currentPlayerZoneId();
   const route = (allowElevatorAnomaly && !fastTravel)
     ? resolveElevatorRoute(state, fromFloor, nextFloor, direction, liftZoneId)
     : { targetFloorZ: nextFloor, activeInstance: null, anomaly: false, leavingInstance: false, exitedInstance: null };
@@ -6397,7 +6428,7 @@ function switchFloor(
     const anomalyData = proceduralAnomalyEventData(generatedRunEntry?.spec);
     publishEvent(state, {
       type: 'floor_transition',
-      zoneId: world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))],
+      zoneId: currentPlayerZoneId(),
       x: player.x,
       y: player.y,
       actorId: player.id,
@@ -7877,7 +7908,7 @@ function closeHelpMenu(): void {
 }
 
 function useInventorySelection(): void {
-  const zoneId = world.zoneMap[world.idx(Math.floor(player.x), Math.floor(player.y))];
+  const zoneId = currentPlayerZoneId();
   const slot = player.inventory?.[state.invSel];
   if (isOnlinePeer()) {
     // Peer: optimistic local prediction + intent; the host runs the real use
