@@ -102,8 +102,11 @@ function setWeakWall(world: World, encounter: BetonoedState, wall: boolean): voi
   const ci = encounter.weakIdx;
   world.cells[ci] = wall ? Cell.WALL : Cell.FLOOR;
   world.features[ci] = Feature.NONE;
-  world.aptMask[ci] = 0;
-  world.hermoWall[ci] = wall ? 1 : 0;
+  // Замок закрыт `aptMask`, а не `hermoWall`: гермостена объявлена НЕРАЗРУШИМОЙ
+  // комнатой-убежищем, а эту стену как раз положено прогрызть. `aptMask` держит
+  // от неё генерацию — иначе связность прокладывает сквозь замок бесплатную дверь.
+  world.aptMask[ci] = wall ? 1 : 0;
+  world.hermoWall[ci] = 0;
   world.roomMap[ci] = -1;
   if (wall) {
     world.wallTex[ci] = Tex.CONCRETE;
@@ -377,7 +380,11 @@ export function generateBetonoedShortcut(ctx: MaintContentCtx): void {
   ctx.world.cells[weakIdx] = Cell.WALL;
   ctx.world.wallTex[weakIdx] = Tex.CONCRETE;
   ctx.world.features[weakIdx] = Feature.NONE;
-  ctx.world.aptMask[weakIdx] = 0;
+  // Встреча ставится ДО `ensureConnectivity`, поэтому слабая стена для связности —
+  // обычный бетон, и она прокладывала сквозь неё коридор с дверью: замок обходился
+  // бесплатно и незаметно (сид 61061, замерено). `aptMask` — общая метка «генерация,
+  // руки прочь»; `hermoWall` здесь неверен, эту стену положено прогрызть.
+  ctx.world.aptMask[weakIdx] = 1;
   ctx.world.hermoWall[weakIdx] = 0;
   ctx.world.roomMap[weakIdx] = -1;
 

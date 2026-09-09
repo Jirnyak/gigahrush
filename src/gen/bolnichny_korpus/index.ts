@@ -680,7 +680,10 @@ function buildRooms(world: World): BolnichnyRooms {
   const blackWard = addRoom(world, RoomType.MEDICAL, CX + 178, CY + 126, 94, 58, BOLNICHNY_ROOM_NAMES.blackWard, Tex.HERMO_WALL, Tex.F_TILE, true);
   const papers = addRoom(world, RoomType.OFFICE, CX - 96, CY + 146, 70, 40, BOLNICHNY_ROOM_NAMES.papers, Tex.MARBLE, Tex.F_PARQUET);
   const ventilationIntake = addRoom(world, RoomType.CORRIDOR, CX - 176, CY + 202, 48, 22, BOLNICHNY_ROOM_NAMES.ventilationIntake, Tex.PIPE, Tex.F_CONCRETE);
-  const ventilationSpine = addRoom(world, RoomType.CORRIDOR, CX - 286, CY + 42, 30, 190, BOLNICHNY_ROOM_NAMES.ventilationSpine, Tex.PIPE, Tex.F_CONCRETE);
+  // Позвоночник стоит ЗАПАДНЕЕ красной палаты, а не поверх неё: при x = CX - 286 их
+  // прямоугольники пересекались на 14x58 клеток, и штамп коридора съедал кусок
+  // гермооболочки палаты — единственным входом туда оказывалась эта пробоина.
+  const ventilationSpine = addRoom(world, RoomType.CORRIDOR, CX - 302, CY + 42, 30, 190, BOLNICHNY_ROOM_NAMES.ventilationSpine, Tex.PIPE, Tex.F_CONCRETE);
   const ventilationOutlet = addRoom(world, RoomType.CORRIDOR, CX - 260, CY - 132, 82, 24, BOLNICHNY_ROOM_NAMES.ventilationOutlet, Tex.PIPE, Tex.F_CONCRETE);
   return {
     triageEntrance,
@@ -727,7 +730,10 @@ function connectRoomsGraph(world: World, rooms: BolnichnyRooms): void {
   connectRooms(world, rooms.ventilationIntake, 'west', rooms.ventilationSpine, 'south', DoorState.CLOSED);
   connectRooms(world, rooms.ventilationSpine, 'north', rooms.ventilationOutlet, 'west', DoorState.CLOSED);
   connectRooms(world, rooms.ventilationOutlet, 'east', rooms.lowerLift, 'west', DoorState.CLOSED);
-  connectRooms(world, rooms.ventilationSpine, 'east', rooms.feverWard, 'west', DoorState.CLOSED);
+  // Обход через вентиляцию ведёт в мокрую палату, к которой позвоночник примыкает
+  // стеной. Прежняя связка «позвоночник → жёлтая палата» лежала через 140 клеток и
+  // две гермооболочки: прямой линии между их створками не существует.
+  connectRooms(world, rooms.ventilationSpine, 'east', rooms.redWard, 'west', DoorState.CLOSED);
   connectRooms(world, rooms.ventilationOutlet, 'east', rooms.pharmacy, 'north', DoorState.LOCKED, 'forged_quarantine_clearance');
 }
 
@@ -1307,9 +1313,43 @@ function placeGateLine(
   if (!room.doors.includes(doorIdx)) room.doors.push(doorIdx);
 }
 
-function connectRooms(world: World, a: Room, sideA: DoorSide, b: Room, sideB: DoorSide, state: DoorState, keyId = ''): void {
+const OPPOSITE_SIDE: Record<DoorSide, DoorSide> = {
+  north: 'south',
+  south: 'north',
+  east: 'west',
+  west: 'east',
+};
+
+/**
+ * doorSite ставит створку по центру СВОЕЙ стены, поэтому у комнат разной ширины
+ * створки расходятся: жёлтая палата шириной 90 даёт x = CX-221, красная шириной 94 —
+ * CX-223. Г-образная прорезка идёт между внутренними клетками, промахивается мимо
+ * одной из створок и упирается в гермостену, которую openTile резать не вправе, —
+ * дверь остаётся, прохода за ней нет.
+ *
+ * Если стены смотрят друг на друга и пролёты пересекаются, обе створки снимаются на
+ * общую координату: коридор становится прямым и проходит ровно через обе. Стены,
+ * стоящие боком или мимо друг друга, режутся как раньше.
+ */
+function alignDoorSites(a: Room, sideA: DoorSide, b: Room, sideB: DoorSide): [DoorSite, DoorSite] {
   const da = doorSite(a, sideA);
   const db = doorSite(b, sideB);
+  if (OPPOSITE_SIDE[sideA] !== sideB) return [da, db];
+  const vertical = sideA === 'north' || sideA === 'south';
+  const aFrom = vertical ? a.x : a.y;
+  const bFrom = vertical ? b.x : b.y;
+  const lo = Math.max(aFrom, bFrom);
+  const hi = Math.min(aFrom + (vertical ? a.w : a.h) - 1, bFrom + (vertical ? b.w : b.h) - 1);
+  if (lo > hi) return [da, db];
+  const at = (lo + hi) >> 1;
+  const snap = (site: DoorSite): DoorSite => (vertical
+    ? { x: at, y: site.y, ox: at, oy: site.oy }
+    : { x: site.x, y: at, ox: site.ox, oy: at });
+  return [snap(da), snap(db)];
+}
+
+function connectRooms(world: World, a: Room, sideA: DoorSide, b: Room, sideB: DoorSide, state: DoorState, keyId = ''): void {
+  const [da, db] = alignDoorSites(a, sideA, b, sideB);
   const ai = addDoorAt(world, a, da.x, da.y, state, keyId);
   const bi = addDoorAt(world, b, db.x, db.y, state, keyId);
   const ad = world.doors.get(ai);

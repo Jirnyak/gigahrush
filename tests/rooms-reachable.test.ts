@@ -9,8 +9,10 @@
  * Замуровать комнату умеют четыре разные дороги, и общая починка не спасает ни
  * от одной:
  *
- * 1. `connectProtectedRoom` (`src/gen/shared.ts:596`) пробивает РОВНО ОДИН
- *    проём и ищет коридор не дальше 30 клеток. Не нашла — молча возвращается.
+ * 1. `connectProtectedRoom` (`src/gen/shared.ts`) пробивает РОВНО ОДИН проём и
+ *    ищет коридор не дальше 30 клеток. Не нашла — молча возвращается. С
+ *    2026-09-09 щупает весь периметр, а не середину каждой стороны, но остаётся
+ *    молчаливой: тридцати клеток может не хватить.
  * 2. `protectRoom` ставит `aptMask=1` на всю комнату с рамкой, а
  *    `carveCorridor` (`src/gen/shared.ts:836`) через `aptMask` не роет вообще.
  *    Поэтому `ensureConnectivity` — единственная общая починка связности —
@@ -134,25 +136,37 @@ interface FloorCeiling {
   why: string;
 }
 
+/* Потолки пересняты 2026-09-09 после трёх правок связности: `carveCorridor` больше не
+ * режет гермостену (решение владельца: гермокомната — неразрушимое убежище),
+ * `ensureConnectivity` перестала объявлять успех не проверив линию и перебирает до 32
+ * пар «остров → материк», а `connectProtectedRoom` щупает периметр целиком, а не одну
+ * середину каждой стороны. Числа — МАКСИМУМ по сидам 1·7·4242·99991, снятый прогоном на
+ * обеих ветках; было → стало по тем же сидам: архив 51·45·50·54 → 6·5·2·8, жилой
+ * 8·15·11·9 → 10·0·4·2, крыша 7·3·7·6 → 1·1·1·1, квартиры 1·5·1·2 → 1·0·2·1, морг 194
+ * (потолок устарел, фактически уже 0) → 0, коллекторы 0·0·3·0 → 0. Замурованных
+ * комнат-ЦЕЛЕЙ по четырём сидам 5 → 3.
+ * Отдельные сиды местами меняются местами (поток `rng()` сдвинулся): Ад и Антенный двор
+ * получили по одной замурованной там, где её не было, Министерство и Квартиры — по одной
+ * на сиде 4242. Это законно: запертая комната — часть мира, в неё ведёт ПСИ-дефазинг. */
 const CEILINGS: Readonly<Record<string, FloorCeiling>> = {
   // Расширение районов идёт ПОСЛЕ связности, и второй раз её никто не считает:
   // всё, что дорыто расширением, остаётся отдельными компонентами.
-  registry_morgue: { sealed: 194, withDefId: 0, referenced: 0, why: 'expandRegistryMorgueGeometry без повторной ensureConnectivity' },
-  floor_69: { sealed: 130, withDefId: 0, referenced: 0, why: 'expandFloor69FullFloor после ensureConnectivity' },
-  raionsovet_archive: { sealed: 58, withDefId: 0, referenced: 0, why: 'expandRaionsovetArchiveGeometry после ensureConnectivity' },
+  floor_69: { sealed: 141, withDefId: 0, referenced: 0, why: 'expandFloor69FullFloor после ensureConnectivity; квартиры под aptMask связность не вскрывает вовсе' },
+  raionsovet_archive: { sealed: 8, withDefId: 0, referenced: 0, why: 'expandRaionsovetArchiveGeometry после ensureConnectivity' },
   // Защищённые POI: connectProtectedRoom не нашла коридор, а carveCorridor
   // через aptMask не роет, поэтому ensureConnectivity их не спасает.
-  living: { sealed: 44, withDefId: 1, referenced: 3, why: 'защищённые POI + прокоп зала пролога сдвинул раскладку зон; владелец решил 2026-08-20 не чинить замурованность как класс — в игре есть ПСИ-дефазинг, см. problems.md. Потолок взят по максимуму сидов, а не по SEED' },
-  maintenance: { sealed: 0, withDefId: 0, referenced: 0, why: 'Закрыто 2026-08-24: этаж не звал ensurePermanentRoomAccess — единственный шаг, который вскрывает ЗАЩИЩЁННУЮ комнату дверью. Связности одной мало: carveCorridor не роет сквозь aptMask, и запертая protectRoom оставалась запертой на всех четырёх проходах. Так висел карман в 1049 клеток (Насосная Матка 43×25 и четыре комнаты внутри). Потолок был 3 и прикрывал дефект, который плавал по сидам: замурованных 0·2·1·5·3 на сидах 1·61061·777·90210·4242, теперь 0·0·1·1·0. Дробные координаты из findMaintArea закрыты раньше, 2026-08-23' },
-  roof: { sealed: 7, withDefId: 0, referenced: 0, why: 'острова архипелага за ABYSS: carveCorridor роет только по WALL' },
-  ministry: { sealed: 4, withDefId: 0, referenced: 2, why: 'createAdminRoom: единственный проём от connectProtectedRoom' },
+  living: { sealed: 10, withDefId: 0, referenced: 1, why: 'защищённые POI; владелец решил 2026-08-20 не чинить замурованность как класс — в игре есть ПСИ-дефазинг, см. problems.md. Потолок взят по максимуму сидов, а не по SEED' },
+  roof: { sealed: 1, withDefId: 0, referenced: 0, why: 'острова архипелага за ABYSS: carveCorridor роет только по WALL' },
+  ministry: { sealed: 1, withDefId: 0, referenced: 1, why: 'createAdminRoom: единственный проём от connectProtectedRoom' },
   kvartiry: { sealed: 2, withDefId: 0, referenced: 1, why: 'social_helpers: connectProtectedRoom' },
-  liquidatorbase: { sealed: 2, withDefId: 0, referenced: 0, why: 'коридор не прорыл собственную стену штаба; в другой сел маршрутный лифт' },
+  liquidatorbase: { sealed: 1, withDefId: 0, referenced: 0, why: 'в комнату сел маршрутный лифт' },
   antenna_court: { sealed: 1, withDefId: 0, referenced: 0, why: 'гермокапсула НИИ' },
-  outer_district: { sealed: 1, withDefId: 0, referenced: 0, why: 'домик за периметром' },
-  horrorfloor: { sealed: 1, withDefId: 0, referenced: 0, why: 'лабиринтная камера' },
+  hell: { sealed: 1, withDefId: 0, referenced: 0, why: 'защищённый POI на сиде 99991; сюжетные комнаты Ада держит tests/hell-plot-rooms-delivery.test.ts' },
   // Чистые этажи — контрольная группа: здесь замурованных быть не должно.
-  hell: { sealed: 0, withDefId: 0, referenced: 0, why: '' },
+  registry_morgue: { sealed: 0, withDefId: 0, referenced: 0, why: '' },
+  maintenance: { sealed: 0, withDefId: 0, referenced: 0, why: 'Закрыто 2026-08-24: этаж не звал ensurePermanentRoomAccess — единственный шаг, который вскрывает ЗАЩИЩЁННУЮ комнату дверью. Так висел карман в 1049 клеток (Насосная Матка 43×25 и четыре комнаты внутри)' },
+  outer_district: { sealed: 0, withDefId: 0, referenced: 0, why: '' },
+  horrorfloor: { sealed: 0, withDefId: 0, referenced: 0, why: '' },
   service_floor: { sealed: 0, withDefId: 0, referenced: 0, why: '' },
   underhell: { sealed: 0, withDefId: 0, referenced: 0, why: '' },
 };

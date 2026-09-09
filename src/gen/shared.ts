@@ -634,12 +634,18 @@ export function connectProtectedRoom(world: World, rx: number, ry: number, w: nu
     return;
   }
 
-  // Phase 2: walk outward from each side until hitting maze floor
-  const midX = rx + Math.floor(w / 2), midY = ry + Math.floor(h / 2);
-  const probes: [number, number, number, number][] = [
-    [midX, ry - 1, 0, -1], [midX, ry + h, 0, 1],
-    [rx - 1, midY, -1, 0], [rx + w, midY, 1, 0],
-  ];
+  // Phase 2: walk outward from the whole perimeter until hitting maze floor.
+  // Зонд от ОДНОЙ середины каждой стороны молчал, когда именно эта середина упиралась
+  // в тридцать клеток бетона: комната оставалась без входа вовсе, и достижимость
+  // сюжетного помещения решал жребий размещения («Обожжённая сторожка» на сиде 4242 —
+  // ноль проёмов в кольце). Стороны прощупываются целиком, берётся кратчайший путь.
+  const probes: [number, number, number, number][] = [];
+  for (let dx = 0; dx < w; dx++) {
+    probes.push([rx + dx, ry - 1, 0, -1], [rx + dx, ry + h, 0, 1]);
+  }
+  for (let dy = 0; dy < h; dy++) {
+    probes.push([rx - 1, ry + dy, -1, 0], [rx + w, ry + dy, 1, 0]);
+  }
   let bestPath: number[] = [], bestLen = Infinity;
   for (const [sx, sy, ddx, ddy] of probes) {
     const path: number[] = [];
@@ -836,24 +842,91 @@ export function carveOrganicCorridor(world: World, ax: number, ay: number, bx: n
   carveSegment(ax, ay, bx, by, 0);
 }
 
-/* ── 1-wide L-corridor with auto-doors at room walls ─────────── */
-export function carveCorridor(world: World, ax: number, ay: number, bx: number, by: number): void {
+/**
+ * Обход Г-образной линии между двумя точками. Тело шага передаётся снаружи, потому
+ * что прокладка и сухая проверка обязаны идти по ОДНОЙ линии: разъехавшись, они
+ * начинают отвечать на разные вопросы. Возврат `false` из шага прерывает обход.
+ */
+function walkCorridorPath(
+  world: World,
+  ax: number, ay: number, bx: number, by: number,
+  horizFirst: boolean,
+  step: (x: number, y: number, dirX: number, dirY: number) => boolean,
+): boolean {
   const ddx = world.delta(ax, bx);
   const ddy = world.delta(ay, by);
   const stepX = ddx > 0 ? 1 : -1;
   const stepY = ddy > 0 ? 1 : -1;
-  const horizFirst = irand(0, 1000) < 500;
   let cx = ax, cy = ay;
+
+  const legX = (): boolean => {
+    for (let i = 0; i <= Math.abs(ddx); i++) {
+      if (!step(cx, cy, stepX, 0)) return false;
+      if (i < Math.abs(ddx)) cx = world.wrap(cx + stepX);
+    }
+    return true;
+  };
+  const legY = (): boolean => {
+    for (let i = 0; i <= Math.abs(ddy); i++) {
+      if (!step(cx, cy, 0, stepY)) return false;
+      if (i < Math.abs(ddy)) cy = world.wrap(cy + stepY);
+    }
+    return true;
+  };
+
+  return horizFirst ? (legX() && legY()) : (legY() && legX());
+}
+
+/**
+ * Станет ли клетка проходимой после прокладки коридора. Уже проходимая — да;
+ * обычная стена — да, её прорежут; стена под защитой квартир или гермооболочкой,
+ * пропасть, шахта лифта — нет, шаг прокладки на них молча ничего не делает.
+ */
+function corridorCellPassable(world: World, i: number): boolean {
+  const cell = world.cells[i];
+  if (cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER) return true;
+  if (cell !== Cell.WALL) return false;
+  return !world.aptMask[i] && !world.hermoWall[i];
+}
+
+/**
+ * Сухая проверка: пройдёт ли коридор целиком. Прокладка на защищённой клетке молча
+ * ничего не делает, поэтому вызывающая сторона, объявляющая успех по факту вызова
+ * `carveCorridor`, лжёт — линия остаётся с дырой, а остров считается присоединённым.
+ */
+export function corridorPathClear(
+  world: World,
+  ax: number, ay: number, bx: number, by: number,
+  horizFirst: boolean,
+): boolean {
+  return walkCorridorPath(world, ax, ay, bx, by, horizFirst,
+    (x, y) => corridorCellPassable(world, world.idx(x, y)));
+}
+
+/* ── 1-wide L-corridor with auto-doors at room walls ─────────── */
+export function carveCorridor(
+  world: World,
+  ax: number, ay: number, bx: number, by: number,
+  forceHorizFirst?: boolean,
+): void {
+  // Жребий бросается ВСЕГДА, даже когда ориентацию задали снаружи: пропущенный
+  // `irand` сдвигает весь поток `rng()` ниже по течению, и содержимое этажа уезжает.
+  const rolledHorizFirst = irand(0, 1000) < 500;
+  const horizFirst = forceHorizFirst ?? rolledHorizFirst;
 
   // dirX/dirY: current movement direction of the corridor leg.
   // Used to distinguish "crossing" a room wall (perpendicular entry)
   // from "running alongside" a room wall (parallel), which previously
   // created the repeating door-wall-door-wall "comb" pattern.
-  function step(x: number, y: number, dirX: number, dirY: number): void {
+  function step(x: number, y: number, dirX: number, dirY: number): boolean {
     const i = world.idx(x, y);
-    if (world.aptMask[i]) return;  // never carve through apartment cells
-    if (world.cells[i] === Cell.FLOOR || world.cells[i] === Cell.DOOR) return;
-    if (world.cells[i] !== Cell.WALL) return;
+    if (world.aptMask[i]) return true;  // never carve through apartment cells
+    // Гермостена объявлена неломаемой везде: её не берут ни инструмент игрока, ни
+    // подрывной заряд. Связность — не исключение: убежище, вскрытое коридором,
+    // перестаёт быть убежищем в самосборе, а отпущенная тварь выходит наружу.
+    if (world.hermoWall[i]) return true;
+    if (world.cells[i] === Cell.FLOOR || world.cells[i] === Cell.DOOR) return true;
+    if (world.cells[i] !== Cell.WALL) return true;
 
     // Find adjacent rooms, distinguishing crossing vs alongside
     let crossingRoom = -1;   // room in movement direction (corridor enters room)
@@ -929,27 +1002,10 @@ export function carveCorridor(world: World, ax: number, ay: number, bx: number, 
     } else {
       world.cells[i] = Cell.FLOOR;
     }
+    return true;
   }
 
-  if (horizFirst) {
-    for (let i = 0; i <= Math.abs(ddx); i++) {
-      step(cx, cy, stepX, 0);
-      if (i < Math.abs(ddx)) cx = world.wrap(cx + stepX);
-    }
-    for (let i = 0; i <= Math.abs(ddy); i++) {
-      step(cx, cy, 0, stepY);
-      if (i < Math.abs(ddy)) cy = world.wrap(cy + stepY);
-    }
-  } else {
-    for (let i = 0; i <= Math.abs(ddy); i++) {
-      step(cx, cy, 0, stepY);
-      if (i < Math.abs(ddy)) cy = world.wrap(cy + stepY);
-    }
-    for (let i = 0; i <= Math.abs(ddx); i++) {
-      step(cx, cy, stepX, 0);
-      if (i < Math.abs(ddx)) cx = world.wrap(cx + stepX);
-    }
-  }
+  walkCorridorPath(world, ax, ay, bx, by, horizFirst, step);
 }
 
 /* ── Find exit point from room wall toward a target ──────────── */
@@ -1392,6 +1448,57 @@ export function isConnectivityWalkable(world: World, idx: number): boolean {
   return cell === Cell.FLOOR || cell === Cell.DOOR || cell === Cell.WATER;
 }
 
+/** Сколько пар «остров → материк» пробуется, прежде чем остров признан запечатанным. */
+const CONNECT_CANDIDATE_PAIRS = 32;
+
+/**
+ * Присоединить остров к материку первой линией, которая проходит целиком. Ближайшая
+ * пара точек часто упирается в чужую защиту, поэтому кандидатов набирается до
+ * `CONNECT_CANDIDATE_PAIRS`, и каждый пробуется в обеих ориентациях Г-линии.
+ * Кандидаты набираются вставкой в короткий список: сортировать тысячи пар ради
+ * тридцати двух дороже самой прокладки.
+ */
+function connectComponentToMainland(
+  world: World,
+  comp: number[],
+  mainCells: [number, number][],
+): { srcX: number; srcY: number; dstX: number; dstY: number } | null {
+  const best: { d: number; srcX: number; srcY: number; dstX: number; dstY: number }[] = [];
+  const step = Math.max(1, comp.length >> 5);
+  for (let c = 0; c < comp.length; c += step) {
+    const cx = comp[c] % W, cy = (comp[c] / W) | 0;
+    let bd = Infinity, bx = 0, by = 0;
+    for (const [mx, my] of mainCells) {
+      const d = Math.abs(world.delta(cx, mx)) + Math.abs(world.delta(cy, my));
+      if (d < bd) { bd = d; bx = mx; by = my; }
+    }
+    if (bd === Infinity) continue;
+    if (best.length >= CONNECT_CANDIDATE_PAIRS && bd >= best[best.length - 1]!.d) continue;
+    let at = best.length;
+    while (at > 0 && best[at - 1]!.d > bd) at--;
+    best.splice(at, 0, { d: bd, srcX: cx, srcY: cy, dstX: bx, dstY: by });
+    if (best.length > CONNECT_CANDIDATE_PAIRS) best.pop();
+  }
+
+  for (const cand of best) {
+    for (const horizFirst of [true, false]) {
+      if (!corridorPathClear(world, cand.srcX, cand.srcY, cand.dstX, cand.dstY, horizFirst)) continue;
+      carveCorridor(world, cand.srcX, cand.srcY, cand.dstX, cand.dstY, horizFirst);
+      return { srcX: cand.srcX, srcY: cand.srcY, dstX: cand.dstX, dstY: cand.dstY };
+    }
+  }
+
+  // Чистой линии нет. Ближайшую пару всё равно прокладываем: на этаже, изрезанном
+  // пропастью, ЧАСТИЧНАЯ прокладка делает работу — она вскрывает перемычку между
+  // островом и соседним карманом, и следующий проход достраивает остальное.
+  // Замерено на фрактальном поле: отказ без запасного хода стоил +2..+6 недостижимых
+  // комнат на каждом из четырёх сидов. Успех при этом НЕ объявляется — метку
+  // «присоединён» ставит только вызывающая сторона и только по чистой линии.
+  const fallback = best[0];
+  if (fallback) carveCorridor(world, fallback.srcX, fallback.srcY, fallback.dstX, fallback.dstY);
+  return null;
+}
+
 /* ── Percolation: ensure entire world is one connected graph ── */
 export function ensureConnectivity(world: World, spawnX: number, spawnY: number): void {
   const N = W * W;
@@ -1444,17 +1551,12 @@ export function ensureConnectivity(world: World, spawnX: number, spawnY: number)
       }
       compId++;
 
-      let bestD = Infinity, srcX = 0, srcY = 0, dstX = 0, dstY = 0;
-      const step = Math.max(1, comp.length >> 2);
-      for (let c = 0; c < comp.length; c += step) {
-        const cx = comp[c] % W, cy = (comp[c] / W) | 0;
-        for (const [mx, my] of mainCells) {
-          const d = Math.abs(world.delta(cx, mx)) + Math.abs(world.delta(cy, my));
-          if (d < bestD) { bestD = d; srcX = cx; srcY = cy; dstX = mx; dstY = my; }
-        }
-      }
-
-      carveCorridor(world, srcX, srcY, dstX, dstY);
+      const carved = connectComponentToMainland(world, comp, mainCells);
+      // Остров, к которому нет ни одной чистой линии, остаётся островом. Прежний код
+      // объявлял успех по факту вызова прокладки, и запечатанный компаунд считался
+      // присоединённым, а на карте оставался шрам-полукоридор.
+      if (!carved) continue;
+      const { srcX, srcY, dstX, dstY } = carved;
 
       for (const ci of comp) label[ci] = 0;
       const re: number[] = [world.idx(srcX, srcY), world.idx(dstX, dstY)];
