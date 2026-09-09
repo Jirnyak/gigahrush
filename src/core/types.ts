@@ -474,7 +474,6 @@ export interface AIState {
   combatLootCd?: number;      // cooldown until next combat loot grab scan
   windupTimer?: number;       // generic readable attack windup countdown
   windupTargetId?: number;    // target locked by current windup
-  windupStartHp?: number;     // HP snapshot for interruptible windups
   staggerTimer?: number;      // temporary interrupt / stagger lockout
   lastSeenTargetId?: number;  // event throttle for first sight / escape beats
   lastSeenUrinationId?: number;

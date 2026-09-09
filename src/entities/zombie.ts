@@ -13,6 +13,7 @@ export const DEF: MonsterDef = {
   dmg: 8,
   attackRate: 1.5,
   sprite: 0,   // auto-assigned by generateSprites()
+  aiFlags: ['crowdPressure'],
   counterplay: 'Опасен толпой и дверью: вытяните из кухни, очереди или палаты в пустой проход и добейте до первого хвата.',
   lootHint: 'карманный бытовой хлам, чужая записка, редкие сигареты',
 };

@@ -19,6 +19,7 @@ export const DEF: MonsterDef = {
   isRanged: true,
   projSpeed: 9,
   projSprite: 0,   // ноль-заглушка: спрайт раздаёт MONSTER_VISUALS -> Spr.HOSTILE_PLASMA_BOLT
+  aiFlags: ['wetShotRisk'],
   counterplay: 'Сойдите с прямой линии плазмы, дождитесь залпа и заходите в паузу перезарядки. Стена, дверь или аппарат срывают наведение.',
   lootHint: 'электронный лом, плата, проводка, редкая энергоячейка',
   /* Строка семьи замаха: числа и тексты один в один прежние `switch`-и в `ai/monster.ts`. */

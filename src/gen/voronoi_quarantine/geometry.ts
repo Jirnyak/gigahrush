@@ -1550,7 +1550,7 @@ export function spawnMonster(
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: point.x, ty: point.y, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
   });
 }
 

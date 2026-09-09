@@ -135,7 +135,7 @@ export function generateHorrorFloorDesignFloor(): FloorGeneration {
         alive: true,
         speed: kind === MonsterKind.SCULPTURE ? 8.5 : 1.5,
         sprite: monsterSpr(kind),
-        phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+        phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
         ai: { goal: AIGoal.WANDER, tx: cx, ty: cy, path: [], pi: 0, stuck: 0, timer: 0 },
         rpg: randomRPG(10),
       });

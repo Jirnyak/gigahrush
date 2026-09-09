@@ -502,7 +502,7 @@ function spawnPanelThreat(
       attackCd: 0,
       ai: { goal: AIGoal.HUNT, tx: player.x, ty: player.y, path: [], pi: 0, stuck: 0, timer: 0, combatTargetId: player.id },
       rpg: randomRPG(Math.max(1, zoneLevel)),
-      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
     };
     entities.push(monster);
     return 1;

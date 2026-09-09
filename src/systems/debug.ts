@@ -445,7 +445,7 @@ function findDebugMonsterSpot(
 const DEBUG_FOG_SHARK_FOG_CAP = 40;
 
 function seedDebugFogSharkPatch(world: World, kind: MonsterKind, x: number, y: number): number {
-  if (kind !== MonsterKind.FOG_SHARK) return 0;
+  if (!monsterHasAIFlag({ monsterKind: kind }, 'fogSwimmer')) return 0;
   const cx = Math.floor(x);
   const cy = Math.floor(y);
   let cells = 0;
@@ -466,7 +466,7 @@ function seedDebugFogSharkPatch(world: World, kind: MonsterKind, x: number, y: n
 }
 
 function seedDebugLishennyyLight(world: World, player: Entity, kind: MonsterKind): number {
-  if (kind !== MonsterKind.LISHENNYY) return 0;
+  if (!monsterHasAIFlag({ monsterKind: kind }, 'lightFollower')) return 0;
   for (const dist of [2, 3, 4]) {
     const x = world.wrap(Math.floor(player.x + Math.cos(player.angle) * dist));
     const y = world.wrap(Math.floor(player.y + Math.sin(player.angle) * dist));
@@ -511,7 +511,7 @@ function spawnDebugMonsterPack(
       attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: spot.x, ty: spot.y, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: randomRPG(player.rpg?.level ?? 1),
-      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase') };
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip') };
     entities.push(monster);
     const debugFogCells = seedDebugFogSharkPatch(world, kind, spot.x, spot.y);
     const debugLightCells = seedDebugLishennyyLight(world, player, kind);
@@ -1142,7 +1142,7 @@ registerDebugCommand({
         monsterKind: k, attackCd: 0,
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
         rpg: randomRPG(player.rpg?.level ?? 1),
-        phasing: monsterHasAIFlag({ monsterKind: k }, 'wallPhase') };
+        phasing: monsterHasAIFlag({ monsterKind: k }, 'noclip') };
       entities.push(monster);
       seedDebugFogSharkPatch(world, k, monster.x, monster.y);
     }

@@ -15,6 +15,7 @@ export const DEF: MonsterDef = {
   attackRate: 1.0,
   damageType: DamageType.PSI,
   sprite: 0,   // auto-assigned by generateSprites()
+  aiFlags: ['lightShy'],
   counterplay: 'Темный рывок читается паузой силуэта: шагните в свет, включите фонарь или разорвите дистанцию до первого удара.',
   lootHint: 'темный след, холодная пыль, редкий странный сгусток',
 };

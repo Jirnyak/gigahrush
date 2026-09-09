@@ -442,7 +442,7 @@ export function spawnUnderhellMonster(
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
     spriteScale: kind === MonsterKind.IDOL ? 1.25 : undefined,
   });
   return id;

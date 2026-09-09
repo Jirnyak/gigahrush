@@ -3665,7 +3665,7 @@ function spawnMonsterOfKind(
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: spawnPos.x, ty: spawnPos.y, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(Math.max(1, zoneLevel)),
-    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
   };
   if (monsterHasAIFlag({ monsterKind: kind }, 'webSpitter')) stampPaupsinaWebWarning(world, spawnPos.x, spawnPos.y, spec.seed ^ nextId.v);
   entities.push(monster);
@@ -4083,7 +4083,7 @@ function spawnSmogMonster(world: World, room: Room, entities: Entity[], nextId: 
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: pos.x, ty: pos.y, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(Math.max(1, zoneLevel)),
-    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
   };
   entities.push(monster);
 }

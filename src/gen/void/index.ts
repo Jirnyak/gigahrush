@@ -130,7 +130,7 @@ export function generateVoid(): { world: World; entities: Entity[]; spawnX: numb
       monsterKind: kind, attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: mRpg,
-      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
     });
   }
 

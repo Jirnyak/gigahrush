@@ -352,7 +352,7 @@ function spawnCacheBranchBacklash(
       attackCd: def.attackRate,
       ai: { goal: player ? AIGoal.HUNT : AIGoal.WANDER, tx: player?.x ?? site.x, ty: player?.y ?? site.y, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: randomRPG(level),
-      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
     };
     entities.push(monster);
     site.backlashSpawned++;
@@ -741,7 +741,7 @@ function spawnMonsterPressure(
       attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: cx, ty: cy, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: randomRPG(zoneLevel + 1),
-      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
     });
   }
 }

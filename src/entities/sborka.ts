@@ -14,7 +14,7 @@ export const DEF: MonsterDef = {
   attackRate: 0.65,
   sprite: 0,   // auto-assigned by generateSprites()
   scanSec: 0.55,
-  aiFlags: ['foodBait'],
+  aiFlags: ['foodBait', 'firstSightCue'],
   counterplay: 'Быстрая и слабая: принимайте в широком проходе, гасите дешевым выстрелом до касания и не тратьте последний магазин на первую.',
   lootHint: 'проволока, кладовой мусор, редкая изолента из треснувшего узла',
 };

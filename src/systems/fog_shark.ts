@@ -8,7 +8,7 @@ import {
   type GameState,
 } from '../core/types';
 import { World } from '../core/world';
-import { entityDisplayName } from '../entities/monster';
+import { monsterHasAIFlag, entityDisplayName } from '../entities/monster';
 import { MarkType, stampMark } from './surface_marks';
 import { playExplosion, playSoundAt } from './audio';
 import { getEntityIndex, ENTITY_MASK_ACTOR } from './entity_index';
@@ -96,7 +96,7 @@ export function recordFogSharkIgnited(
     });
     hitCount++;
     hitIds.push(target.id);
-    if (target.monsterKind === MonsterKind.FOG_SHARK) sharkHits++;
+    if (monsterHasAIFlag(target, 'fogSwimmer')) sharkHits++;
 
     const dx = world.delta(shark.x, target.x);
     const dy = world.delta(shark.y, target.y);
@@ -119,11 +119,11 @@ export function recordFogSharkIgnited(
   };
 
   for (const target of fogSharkIgnitionQuery) {
-    if (target.monsterKind === MonsterKind.FOG_SHARK) continue;
+    if (monsterHasAIFlag(target, 'fogSwimmer')) continue;
     hitTarget(target);
   }
   for (const target of fogSharkIgnitionQuery) {
-    if (target.monsterKind !== MonsterKind.FOG_SHARK) continue;
+    if (!monsterHasAIFlag(target, 'fogSwimmer')) continue;
     hitTarget(target);
   }
 

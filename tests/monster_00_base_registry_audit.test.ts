@@ -112,7 +112,7 @@ test('uncovered common monsters keep their tactical counterplay roles', () => {
     {
       kind: MonsterKind.SBORKA,
       rare: false,
-      aiFlags: ['foodBait'],
+      aiFlags: ['foodBait', 'firstSightCue'],
       defCounterplay: /широк|еда|говняк|дроб/,
       ecologyCounterplay: /широк|приман|сборк/,
       statGuard: def => {

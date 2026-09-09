@@ -15,7 +15,7 @@ export const DEF: MonsterDef = {
   attackRate: 1.5,
   damageType: DamageType.PSI,
   sprite: 0,   // auto-assigned by generateSprites()
-  aiFlags: ['flying', 'wallPhase'],
+  aiFlags: ['flying', 'noclip'],
   /* Единственный, кого луч сносит СКВОЗЬ плотное: `flying` уже объявил, что он
    * там ходит, и второй колонки на это не нужно. */
   uv: { effect: 'spirit_stagger', attackCd: 1.6, daze: 1.0, push: 0.6 },

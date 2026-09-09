@@ -598,7 +598,7 @@ function spawnAftershockMonster(
     attackCd: def.attackRate,
     ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg,
-    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
   };
   entities.push(monster);
   return 1;

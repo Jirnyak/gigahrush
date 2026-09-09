@@ -17,6 +17,7 @@ export const DEF: MonsterDef = {
   attackRate: 1.15,
   damageType: DamageType.PSI,
   sprite: 0,   // auto-assigned by generateSprites()
+  aiFlags: ['roomPressure'],
   counterplay: 'Не играйте в длинный бой: либо сразу вливайте тяжелый урон с выходом за спиной, либо уходите из комнаты до давления.',
   lootHint: 'психический налет, ПСИ-пыль, редкий антидепрессант из мокрой памяти',
 };

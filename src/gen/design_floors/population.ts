@@ -207,7 +207,7 @@ function makeMonster(
     // only for territorial packs so the AI leash (monster.ts WANDER branch) engages.
     ai: { goal: AIGoal.WANDER, tx: centerX, ty: centerY, path: [], pi: 0, stuck: 0, timer: 0, homeRoomId },
     rpg: randomRPG(level),
-    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
   };
 }
 

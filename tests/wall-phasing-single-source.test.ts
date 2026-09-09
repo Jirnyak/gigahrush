@@ -1,18 +1,19 @@
-/* ── Кто проходит сквозь стены — решает ФЛАГ, а не этаж ────────────
+/* ── Сквозь материю ходит бесплотное, и это ОДИН флаг ──────────────
  *
  * Было: тридцать одно место в двадцати семи файлах писало свой список «кто
  * проходит стены», и ответы РАСХОДИЛИСЬ. Дух проходил везде; теневик — на шести
  * этажах и не на остальных; тонкая тень — на двух; глубинная тень — на двух.
  * То есть проходимость сквозь материю зависела от того, на каком этаже вид
- * заспавнили, а не от самого вида.
+ * заспавнили, а не от самого вида. Флаг `noclip` при этом существовал и стоял
+ * на Ложном духе, которого ни один из этих списков не упоминал.
  *
- * Решение владельца 2026-09-09: сквозь стены ходит ТОЛЬКО дух.
+ * Решение владельца 2026-09-09: сквозь стены ходят духи, и флаг на это ОДИН.
+ * Первая редакция правки развела мебель и стены по двум флагам — владелец это
+ * отменил: «духи ходят сквозь стены, своди в один». `noclip` теперь значит
+ * «бесплотен» целиком: и мебель, и стены, и взгляд.
  *
- * Флагов два, и путать их нельзя — они про разное:
- *   · `wallPhase` — проходит сквозь СТЕНЫ (поле сущности `phasing`);
- *   · `noclip` — не клипается о мебель и видит сквозь стены, но стены для него
- *     твёрдые. Его несёт Ложный дух, и это НЕ тронуто: у него стены твёрдые и
- *     были, он просто не застревал в тумбочках.
+ * Следствие, названное прямо: Ложный дух ПОЛУЧИЛ хождение сквозь стены, которого
+ * у него не было. Это не побочный эффект, а решение — он дух.
  */
 
 import { test } from 'node:test';
@@ -20,34 +21,42 @@ import * as assert from 'node:assert/strict';
 
 import { MonsterKind } from '../src/core/types';
 import { MONSTERS, monsterHasAIFlag } from '../src/entities/monster';
+import { entityIgnoresFineBlockers } from '../src/systems/movement_collision';
+import { EntityType } from '../src/core/types';
 import '../src/content';
 
-function kindsWithFlag(flag: 'wallPhase' | 'noclip'): string[] {
+function bodilessKinds(): string[] {
   return (Object.values(MonsterKind) as unknown[])
     .filter((k): k is MonsterKind => typeof k === 'number')
-    .filter(kind => monsterHasAIFlag({ monsterKind: kind }, flag))
+    .filter(kind => monsterHasAIFlag({ monsterKind: kind }, 'noclip'))
     .map(kind => MonsterKind[kind])
     .sort();
 }
 
-test('сквозь стены проходит ровно один вид, и это дух', () => {
-  assert.deepEqual(kindsWithFlag('wallPhase'), ['SPIRIT']);
-  assert.equal(MONSTERS[MonsterKind.SPIRIT].aiFlags?.includes('wallPhase'), true);
+test('бесплотных ровно двое, и оба — духи', () => {
+  assert.deepEqual(bodilessKinds(), ['LOZHNYY_DUKH', 'SPIRIT']);
+  assert.equal(MONSTERS[MonsterKind.SPIRIT].aiFlags?.includes('noclip'), true);
+  assert.equal(MONSTERS[MonsterKind.LOZHNYY_DUKH].aiFlags?.includes('noclip'), true);
 });
 
-test('noclip — про мебель и взгляд, а не про стены, и остался у Ложного духа', () => {
-  assert.deepEqual(kindsWithFlag('noclip'), ['LOZHNYY_DUKH']);
-  assert.equal(
-    monsterHasAIFlag({ monsterKind: MonsterKind.LOZHNYY_DUKH }, 'wallPhase'), false,
-    'Ложный дух сквозь стены не ходил и не должен начать',
-  );
-});
-
-test('тени сквозь стены больше не ходят ни на одном этаже', () => {
+test('тени сквозь стены не ходят ни на одном этаже', () => {
   for (const kind of [MonsterKind.SHADOW, MonsterKind.TONKAYA_TEN, MonsterKind.GLUBINNAYA_TEN]) {
     assert.equal(
-      monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'), false,
+      monsterHasAIFlag({ monsterKind: kind }, 'noclip'), false,
       `${MonsterKind[kind]} проходил стены только на части этажей — это и был разнобой`,
     );
   }
+});
+
+test('один флаг снимает и мебель, и стены — второй половине взяться неоткуда', () => {
+  for (const kind of [MonsterKind.SPIRIT, MonsterKind.LOZHNYY_DUKH]) {
+    assert.equal(
+      entityIgnoresFineBlockers({ type: EntityType.MONSTER, monsterKind: kind }), true,
+      `${MonsterKind[kind]} обязан игнорировать мебель тем же флагом`,
+    );
+  }
+  assert.equal(
+    entityIgnoresFineBlockers({ type: EntityType.MONSTER, monsterKind: MonsterKind.SHADOW }), false,
+    'теневик телесен и о мебель клипается',
+  );
 });

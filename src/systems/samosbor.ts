@@ -3543,7 +3543,7 @@ function createMonster(world: World, nextId: { v: number }, kind: MonsterKind, x
     attackCd: def.attackRate,
     ai: { goal, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg,
-    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'noclip'),
   };
   return monster;
 }
@@ -3689,7 +3689,7 @@ function rewriteMonsterAsRandom(world: World, entity: Entity, z: number, samosbo
   entity.attackCd = def.attackRate;
   entity.rpg = rpg;
   entity.ai = { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 };
-  entity.phasing = monsterHasAIFlag({ monsterKind: kind }, 'wallPhase');
+  entity.phasing = monsterHasAIFlag({ monsterKind: kind }, 'noclip');
   entity.isFogBoss = false;
   entity.fogBossZone = undefined;
   const ci = world.idx(Math.floor(entity.x), Math.floor(entity.y));

@@ -4,7 +4,7 @@ import { DamageType, MonsterKind, type Entity, type GameState } from '../core/ty
 import { World } from '../core/world';
 import { WEAPON_STATS } from '../data/catalog';
 import { projTypeDamageType } from '../data/weapons';
-import { monsterDamageFloor } from '../entities/monster';
+import { monsterHasAIFlag, monsterDamageFloor } from '../entities/monster';
 import {
   isBorshchevikCuttingWeapon,
   recordBorshchevikBurned,
@@ -91,5 +91,5 @@ function recordMonsterFireDeath(
 ): void {
   if (target.monsterKind === MonsterKind.BORSHCHEVIK) recordBorshchevikBurned(world, state, target, actor);
   if (target.monsterKind === MonsterKind.BLOOD_PLANT) recordBloodPlantBurned(world, state, target, actor);
-  if (target.monsterKind === MonsterKind.FOG_SHARK) recordFogSharkIgnited(world, state, target, actor, onKill);
+  if (monsterHasAIFlag(target, 'fogSwimmer')) recordFogSharkIgnited(world, state, target, actor, onKill);
 }

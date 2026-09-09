@@ -518,7 +518,7 @@ function angleDelta(to: number, from: number): number {
 }
 
 function updateFogSharkTurn(world: World, e: Entity, target: Entity, dt: number): void {
-  if (e.monsterKind !== MonsterKind.FOG_SHARK) return;
+  if (!hasAIFlag(e, 'fogSwimmer')) return;
   const desired = Math.atan2(world.delta(e.y, target.y), world.delta(e.x, target.x));
   const rate = fogSharkHasFogPressure(world, e) ? FOG_SHARK_FOG_TURN_RATE : FOG_SHARK_DRY_TURN_RATE;
   const delta = angleDelta(desired, e.angle);
@@ -549,7 +549,7 @@ function fogSharkChaseCell(world: World, e: Entity, target: Entity): { x: number
 }
 
 function fogSharkPackMember(candidate: Entity): boolean {
-  return candidate.monsterKind === MonsterKind.FOG_SHARK;
+  return hasAIFlag(candidate, 'fogSwimmer');
 }
 
 function updateFogSharkPack(
@@ -826,7 +826,7 @@ const headSlugState = speciesState<{ rehostCd: number; quarantineCd: number; vic
 );
 
 function isHeadSlugDetached(e: Entity): boolean {
-  return e.monsterKind === MonsterKind.HEAD_SLUG && e.monsterStage === HEAD_SLUG_DETACHED_STAGE;
+  return hasAIFlag(e, 'hostParasite') && e.monsterStage === HEAD_SLUG_DETACHED_STAGE;
 }
 
 function headSlugHostSkill(host: Entity): number {
@@ -1064,7 +1064,7 @@ function updateHeadSlugParasite(
   nextId: { v: number },
   state?: GameState,
 ): boolean {
-  if (slug.monsterKind !== MonsterKind.HEAD_SLUG || !slug.ai) return false;
+  if (!hasAIFlag(slug, 'hostParasite') || !slug.ai) return false;
   const ai = slug.ai;
   if (slug.monsterStage === undefined) slug.monsterStage = HEAD_SLUG_HOSTED_STAGE;
   const own = headSlugState.of(slug);
@@ -1768,7 +1768,7 @@ function updateNightmarePressure(
   playerId: number,
   state?: GameState,
 ): void {
-  if (e.monsterKind !== MonsterKind.NIGHTMARE) return;
+  if (!hasAIFlag(e, 'roomPressure')) return;
   if (!e.alive || (e.hp ?? 1) <= 0) {
     nightmareRuntime.delete(e);
     return;
@@ -3176,7 +3176,7 @@ function findMeatWormTarget(world: World, e: Entity, dt: number): Entity | null 
 
 
 function updateOlgoyReadability(world: World, e: Entity, target: Entity, time: number, msgs: Msg[], playerId: number, state?: GameState): void {
-  if (e.monsterKind !== MonsterKind.OLGOY || target.id !== playerId || e.ai?.lastSeenTargetId === playerId) return;
+  if (!hasAIFlag(e, 'meatWorm') || target.id !== playerId || e.ai?.lastSeenTargetId === playerId) return;
   if (!olgoyNearAmbushTerrain(world, e)) return;
   e.ai!.lastSeenTargetId = playerId;
   msgs.push(msg('Олгой-Хорхой поднялся из трубы. Сухой пол и мясная приманка сейчас важнее геройства.', time, '#fa6'));
@@ -3202,7 +3202,7 @@ function updateOlgoyReadability(world: World, e: Entity, target: Entity, time: n
 }
 
 function tryOlgoyDragTarget(world: World, e: Entity, target: Entity, time: number, msgs: Msg[], state?: GameState): void {
-  if (e.monsterKind !== MonsterKind.OLGOY || !target.alive || !olgoyNearAmbushTerrain(world, e)) return;
+  if (!hasAIFlag(e, 'meatWorm') || !target.alive || !olgoyNearAmbushTerrain(world, e)) return;
   const dx = world.delta(target.x, e.x);
   const dy = world.delta(target.y, e.y);
   const dist = Math.sqrt(dx * dx + dy * dy);
@@ -3689,7 +3689,7 @@ function updateLishennyyBrightAvoidance(
   e: Entity,
   dt: number,
 ): boolean {
-  if (e.monsterKind !== MonsterKind.LISHENNYY || !e.ai) return false;
+  if (!hasAIFlag(e, 'lightFollower') || !e.ai) return false;
   const ai = e.ai;
   const light = lishennyyState.of(e);
   light.avoidTimer = Math.max(0, light.avoidTimer - dt);
@@ -3719,7 +3719,7 @@ function updateLishennyyBrightAvoidance(
 }
 
 function followLishennyyLightTarget(world: World, e: Entity, target: LishennyyLightTarget, dt: number): boolean {
-  if (e.monsterKind !== MonsterKind.LISHENNYY || target.source === 'actor' || !e.ai) return false;
+  if (!hasAIFlag(e, 'lightFollower') || target.source === 'actor' || !e.ai) return false;
   const ai = e.ai;
   ai.goal = AIGoal.HUNT;
   ai.combatTargetId = undefined;
@@ -3745,7 +3745,7 @@ function applyLishennyyContactDecay(
   msgs: Msg[],
   playerId: number,
 ): void {
-  if (e.monsterKind !== MonsterKind.LISHENNYY) return;
+  if (!hasAIFlag(e, 'lightFollower')) return;
   let needDrain = 0;
   if (target.needs) {
     const before = target.needs.food + target.needs.water + target.needs.sleep;
@@ -3863,7 +3863,7 @@ function dropSlimeWomanResidue(
   state: GameState | undefined,
   reason: string,
 ): void {
-  if (e.monsterKind !== MonsterKind.SLIME_WOMAN) return;
+  if (!hasAIFlag(e, 'slimeStrider')) return;
   const runtime = slimeWomanRuntimeState(e);
   if (time - runtime.lastResidueAt < SLIME_WOMAN_RESIDUE_COOLDOWN_SEC) return;
   const cells = slimeWomanResidueCells(world, e, target);
@@ -3925,7 +3925,7 @@ function updateSlimeWomanState(
   msgs: Msg[],
   state: GameState | undefined,
 ): void {
-  if (e.monsterKind !== MonsterKind.SLIME_WOMAN) return;
+  if (!hasAIFlag(e, 'slimeStrider')) return;
   if (!e.alive || (e.hp ?? 1) <= 0) {
     slimeWomanRuntime.delete(e);
     return;
@@ -4036,7 +4036,7 @@ function isBlackWaterWakeCell(world: World, e: Entity): boolean {
 }
 
 export function isChernoSlizHidden(world: World, e: Entity, target?: Entity): boolean {
-  if (e.monsterKind !== MonsterKind.CHERNOSLIZ) return false;
+  if (!hasAIFlag(e, 'blackWaterWake')) return false;
   if (e.monsterStage === 1) return false;
   if (!isBlackWaterWakeCell(world, e)) return false;
   const maxHp = e.maxHp ?? e.hp ?? 1;
@@ -4095,7 +4095,7 @@ function tryRevealChernoSlizByNoise(
   msgs: Msg[],
   state?: GameState,
 ): boolean {
-  if (e.monsterKind !== MonsterKind.CHERNOSLIZ || e.monsterStage === 1) return false;
+  if (!hasAIFlag(e, 'blackWaterWake') || e.monsterStage === 1) return false;
   if (!isChernoSlizHidden(world, e)) return false;
   const noise = findNoiseForActor(world, state, e, time, { minSeverity: 2, scanInterval: 0.65, hearingMult: 1.24 });
   if (!noise || !chernoslizRevealNoise(noise) || !takeFreshNoise(e, noise.id)) return false;
@@ -4180,27 +4180,28 @@ function monsterMoveMult(world: World, e: Entity, target?: Entity): number {
     return strength > 0 ? Math.min(1.78, 1.2 + strength * 0.08) : 0.68;
   }
   if (hasAIFlag(e, 'fogSwimmer')) return fogSharkMoveMultiplierForTests(world, e);
-  switch (e.monsterKind) {
-    case MonsterKind.SHADOW: {
-      const light = entityLight(world, e);
-      if (light >= SHADOW_LIGHT_SAFE) return 0.78;
-      if (light <= SHADOW_DARK_LIGHT) return 1.08;
-      return 1;
-    }
-    case MonsterKind.TVAR:
-      return monsterWallContext(world, e).adjacentWall ? 1.12 : 0.96;
-    case MonsterKind.CHERNOSLIZ:
-      return isBlackWaterWakeCell(world, e) ? 1.0 : 0.46;
-    case MonsterKind.HEAD_SLUG:
-      return isHeadSlugDetached(e) ? 1.14 : 1;
-	    case MonsterKind.OLGOY:
-	      return olgoyTerrainMoveMult(world, e);
-	    case MonsterKind.PANELNIK:
-	      if ((e.ai?.wallBraceSlowTimer ?? 0) > 0) return PANELNIK_OPEN_SLOW_MULT;
-	      return panelnikWallBraceActive(world, e) ? 1.02 : 0.9;
-	    default:
-	      break;
-	  }
+  if (hasAIFlag(e, 'lightShy')) {
+    const light = entityLight(world, e);
+    if (light >= SHADOW_LIGHT_SAFE) return 0.78;
+    if (light <= SHADOW_DARK_LIGHT) return 1.08;
+    return 1;
+  }
+  if (hasAIFlag(e, 'blackWaterWake')) return isBlackWaterWakeCell(world, e) ? 1.0 : 0.46;
+  if (hasAIFlag(e, 'hostParasite')) return isHeadSlugDetached(e) ? 1.14 : 1;
+  if (hasAIFlag(e, 'meatWorm')) return olgoyTerrainMoveMult(world, e);
+  if (hasAIFlag(e, 'wallBrace')) {
+    if ((e.ai?.wallBraceSlowTimer ?? 0) > 0) return PANELNIK_OPEN_SLOW_MULT;
+    return panelnikWallBraceActive(world, e) ? 1.02 : 0.9;
+  }
+  /* Тварь СПЕЦИАЛЬНО стоит выше общего `wallBias` и до самого его конца.
+   *
+   * Флаг она носит вместе с арматурой, шовником и бетоноедом, но числа у неё
+   * свои: 1.12/0.96 против общих 1.18/0.92. Это авторская настройка вида, а не
+   * ворота по имени, и снять её можно только вместе с переносом чисел в
+   * `MonsterDef` — то есть авторским решением, а не заменой сравнения. */
+  if (e.monsterKind === MonsterKind.TVAR) {
+    return monsterWallContext(world, e).adjacentWall ? 1.12 : 0.96;
+  }
   if (hasAIFlag(e, 'wallBias')) {
     const ctx = monsterWallContext(world, e);
     return ctx.adjacentWall || ctx.narrowDoorOrCorner ? 1.18 : 0.92;
@@ -4224,38 +4225,32 @@ function monsterDmgMult(world: World, e: Entity, target?: Entity): number {
     return monsterAnchored(world, e) ? anchor.dmgMult : (anchor.cutDmgMult ?? 1);
   }
   if (hasAIFlag(e, 'debrisLurker')) return inDebrisCover(world, e) ? 1.25 : 0.75;
-  switch (e.monsterKind) {
-    case MonsterKind.SHADOW: {
-      const light = entityLight(world, e);
-      if (light >= SHADOW_LIGHT_SAFE) return 0.72;
-      if (light <= SHADOW_DARK_LIGHT) return 1.1;
-      return 1;
-    }
-    case MonsterKind.TVAR:
-      return wallTerrainPressureActive(world, e, target) ? 1.22 : 1;
-    case MonsterKind.ZOMBIE: {
-      if (!target) return 1;
-      const pressure = cheapCrowdPressure(world, e, target, ZOMBIE_CROWD_PRESSURE_RADIUS, ZOMBIE_CROWD_PRESSURE_SCAN_CAP, zombieCrowdQuery);
-      const bonus = Math.min(
-        ZOMBIE_CROWD_DAMAGE_CAP - 1,
-        pressure.crowd * ZOMBIE_CROWD_DAMAGE_BONUS + (pressure.choke ? ZOMBIE_DOOR_DAMAGE_BONUS : 0),
-      );
-      return 1 + Math.max(0, bonus);
-    }
-    case MonsterKind.POLZUN:
-      return inPolzunKillCell(world, e) || (target !== undefined && inPolzunKillCell(world, target)) ? 1.35 : 1;
-    case MonsterKind.CHERNOSLIZ:
-      return isBlackWaterWakeCell(world, e) ? 1.28 : 0.62;
-    case MonsterKind.BEZEKHIY:
-      return target !== undefined && targetBackTurned(world, e, target) ? 1.55 : 0.72;
-    case MonsterKind.HEAD_SLUG:
-      return isHeadSlugDetached(e) ? 0.55 : 1;
-    case MonsterKind.OLGOY:
-      return olgoyTerrainDmgMult(world, e, target);
-    case MonsterKind.ROBOT:
-      return robotPlasmaWetRiskMult(world, e, target);
-    default:
-      break;
+  if (hasAIFlag(e, 'lightShy')) {
+    const light = entityLight(world, e);
+    if (light >= SHADOW_LIGHT_SAFE) return 0.72;
+    if (light <= SHADOW_DARK_LIGHT) return 1.1;
+    return 1;
+  }
+  if (hasAIFlag(e, 'crowdPressure')) {
+    if (!target) return 1;
+    const pressure = cheapCrowdPressure(world, e, target, ZOMBIE_CROWD_PRESSURE_RADIUS, ZOMBIE_CROWD_PRESSURE_SCAN_CAP, zombieCrowdQuery);
+    const bonus = Math.min(
+      ZOMBIE_CROWD_DAMAGE_CAP - 1,
+      pressure.crowd * ZOMBIE_CROWD_DAMAGE_BONUS + (pressure.choke ? ZOMBIE_DOOR_DAMAGE_BONUS : 0),
+    );
+    return 1 + Math.max(0, bonus);
+  }
+  if (hasAIFlag(e, 'killCellPressure')) {
+    return inPolzunKillCell(world, e) || (target !== undefined && inPolzunKillCell(world, target)) ? 1.35 : 1;
+  }
+  if (hasAIFlag(e, 'blackWaterWake')) return isBlackWaterWakeCell(world, e) ? 1.28 : 0.62;
+  if (hasAIFlag(e, 'backstab')) return target !== undefined && targetBackTurned(world, e, target) ? 1.55 : 0.72;
+  if (hasAIFlag(e, 'hostParasite')) return isHeadSlugDetached(e) ? 0.55 : 1;
+  if (hasAIFlag(e, 'meatWorm')) return olgoyTerrainDmgMult(world, e, target);
+  if (hasAIFlag(e, 'wetShotRisk')) return robotPlasmaWetRiskMult(world, e, target);
+  // Тварь: см. разбор в `monsterMoveMult` — свои числа поверх общего `wallBias`.
+  if (e.monsterKind === MonsterKind.TVAR) {
+    return wallTerrainPressureActive(world, e, target) ? 1.22 : 1;
   }
   if (hasAIFlag(e, 'wallBias')) return wallTerrainPressureActive(world, e, target) ? 1.2 : 1;
   if (hasAIFlag(e, 'documentScent')) return documentScentStrength(target) > 0 ? 1.14 : 0.82;
@@ -4482,7 +4477,7 @@ function tryFollowMonsterBait(
   msgs: Msg[],
   state?: GameState,
 ): boolean {
-  const combatLockSq = e.monsterKind === MonsterKind.OLGOY ? OLGOY_COMBAT_LOCK_SQ : MONSTER_BAIT_COMBAT_LOCK_SQ;
+  const combatLockSq = hasAIFlag(e, 'meatWorm') ? OLGOY_COMBAT_LOCK_SQ : MONSTER_BAIT_COMBAT_LOCK_SQ;
   if (target && !hasAIFlag(e, 'garbageSurround') && !hasAIFlag(e, 'sourceSwarm') && world.dist2(e.x, e.y, target.x, target.y) <= combatLockSq) {
     if (!isDocumentPressureHunter(e) || hasDocumentLikeItem(target)) return false;
   }
@@ -4501,7 +4496,7 @@ function tryFollowMonsterBait(
     }
     ai.path = [];
     ai.pi = 0;
-    if (e.monsterKind === MonsterKind.OLGOY) {
+    if (hasAIFlag(e, 'meatWorm')) {
       publishOlgoyFed(state, world, e, undefined, time, 'bait', {
         baitId: bait.id,
         itemId: bait.itemId,
@@ -4511,7 +4506,7 @@ function tryFollowMonsterBait(
       });
     }
     msgs.push(msg(
-      e.monsterKind === MonsterKind.OLGOY
+      hasAIFlag(e, 'meatWorm')
         ? `${entityDisplayName(e)} ушел на мясную приманку`
         : `${entityDisplayName(e)} сожрал приманку`,
       time,
@@ -4574,7 +4569,7 @@ function updateSborkaReadability(
   playerId: number,
   state?: GameState,
 ): void {
-  if (e.monsterKind !== MonsterKind.SBORKA || !target || e.ai?.lastSeenTargetId === target.id) return;
+  if (!hasAIFlag(e, 'firstSightCue') || !target || e.ai?.lastSeenTargetId === target.id) return;
   e.ai!.lastSeenTargetId = target.id;
   if (target.id === playerId) {
     msgs.push(msg('Сборка щелкнула проволокой и пошла первой. Широкий проход и дешевый выстрел решают до касания.', time, '#f86'));
@@ -4593,7 +4588,7 @@ function updateZombieCrowdReadability(
   playerId: number,
   state?: GameState,
 ): void {
-  if (e.monsterKind !== MonsterKind.ZOMBIE || e.ai?.lastSeenTargetId === target.id) return;
+  if (!hasAIFlag(e, 'crowdPressure') || e.ai?.lastSeenTargetId === target.id) return;
   const pressure = cheapCrowdPressure(world, e, target, ZOMBIE_CROWD_PRESSURE_RADIUS, ZOMBIE_CROWD_PRESSURE_SCAN_CAP, zombieCrowdQuery);
   if (!pressure.choke && pressure.crowd <= 0) return;
   e.ai!.lastSeenTargetId = target.id;
@@ -5072,7 +5067,7 @@ function applyKontorshchikGrab(
   time: number,
   msgs: Msg[],
 ): void {
-  if (e.monsterKind !== MonsterKind.KONTORSHCHIK || documentScentStrength(target) <= 0) return;
+  if (!hasAIFlag(e, 'documentScent') || documentScentStrength(target) <= 0) return;
   const mark = markNoisyDocument(target, time, e.id);
   if (!mark) return;
   const targetIsPlayer = isPlayerEntity(target);
@@ -5352,7 +5347,7 @@ export function tryMonsterProjectileStagger(
     ));
     return true;
   }
-  if (monster.monsterKind === MonsterKind.TRESKOTNIK &&
+  if (hasAIFlag(monster, 'fractureSprint') &&
       projectile.ownerId !== monster.id &&
       (monster.hp ?? 1) > 0 &&
       (monster.ai.windupTimer ?? 0) > 0) {
@@ -5454,7 +5449,7 @@ export function monsterProjectileScale(kind: MonsterKind | undefined, sprite: nu
 export function monsterProjectileSound(kind: MonsterKind | undefined, sprite: number): () => void {
   if (sprite === Spr.WEB_BOLT || monsterHasAIFlag({ monsterKind: kind }, 'webSpitter')) return playGrowl;
   if (sprite === Spr.WET_LINE_BOLT) return playHostileEnergyShot;
-  if (kind === MonsterKind.EYE || kind === MonsterKind.CHERNOSLIZ || sprite === Spr.EYE_BOLT) return playHostileEyeShot;
+  if (kind === MonsterKind.EYE || monsterHasAIFlag({ monsterKind: kind }, 'blackWaterWake') || sprite === Spr.EYE_BOLT) return playHostileEyeShot;
   if (kind === MonsterKind.PARAGRAPH || sprite === Spr.PARAGRAPH_BOLT) return playHostileParagraphShot;
   if (sprite === Spr.HOSTILE_FLAME_BOLT) return playHostileFlame;
   if (sprite === Spr.HOSTILE_PLASMA_BOLT) return playHostileEnergyShot;
@@ -5679,7 +5674,7 @@ export function updateVodyanoyWaterPressureLine(
   playerId: number,
   state?: GameState,
 ): boolean {
-  if (e.monsterKind !== MonsterKind.VODYANOY_KOSHMAR) return false;
+  if (!hasAIFlag(e, 'waterPressureLine')) return false;
   const ai = e.ai!;
   const wet = vodyanoyLineState.of(e);
   if (wet.targetId !== undefined && wet.targetId !== target.id) {
@@ -6044,7 +6039,7 @@ function updateReadableMonsterRanged(
 
   if ((e.attackCd ?? 0) <= 0) {
     armWindup(e, target, windupSec, 1.14);
-    if (e.monsterKind === MonsterKind.CHERNOSLIZ) stampChernoSlizWake(world, e, time);
+    if (hasAIFlag(e, 'blackWaterWake')) stampChernoSlizWake(world, e, time);
     if (target.id === playerId) {
       msgs.push(msg(rangedMonsterWindupMessage(e.monsterKind, entityDisplayName(e)), time, rangedMonsterColor(e.monsterKind)));
       playSoundAt(playGrowl, e.x, e.y);
@@ -6223,7 +6218,7 @@ function updateSlepoglaz(
   playerId: number,
   state?: GameState,
 ): boolean {
-  if (e.monsterKind !== MonsterKind.SLEPOGLAZ) return false;
+  if (!hasAIFlag(e, 'lastSoundBeam')) return false;
   const ai = e.ai!;
   const def = MONSTERS[MonsterKind.SLEPOGLAZ];
 
@@ -6615,11 +6610,23 @@ function updateTonkayaTenBaitLine(
   return true;
 }
 
+/**
+ * Здоровье на момент замаха. Живёт РЯДОМ С ВИДОМ, а не в `AIState`.
+ *
+ * Поле `windupStartHp` в `core/types.ts` было последним в своей семье и несло
+ * ровно один вид — трескотника: общие `armWindup`/`clearWindup` его не трогали
+ * вовсе. Строку `AIState` носит каждая сущность мира, включая предметы на полу;
+ * за одно поле ради одного вида платили все. Тот же перенос, что у
+ * `sprintDx/Dy/Timer` в `ai/dash.ts`. В сейв поле не шло, так что форма сейва
+ * от переноса не двигается.
+ */
+const _treskotnikWindup = speciesState<{ startHp?: number }>(() => ({}));
+
 function clearTreskotnikBurst(e: Entity): void {
   const ai = e.ai!;
   ai.windupTimer = undefined;
   ai.windupTargetId = undefined;
-  ai.windupStartHp = undefined;
+  _treskotnikWindup.forget(e);
   endDashRun(e);
   e.spriteScale = undefined;
 }
@@ -6699,7 +6706,7 @@ function updateTreskotnikFractureSprint(
    * не доводил уже начатый рывок — статуя на всю длину стаггера. Новый замах
    * закрыт откатом атаки ниже, а откат держит на остатке боли общий обработчик в
    * начале `updateMonster`; сам замах срывается отдельно, по потере здоровья
-   * (`windupStartHp`). Плоские 0.25 к длине стаггера отношения не имели.
+   * (`_treskotnikWindup`). Плоские 0.25 к длине стаггера отношения не имели.
    * Осталась читаемая поза — она и так считалась от остатка боли. */
   if ((ai.staggerTimer ?? 0) > 0) {
     e.spriteScale = 0.82 + Math.max(0, (ai.staggerTimer ?? 0) / TRESKOTNIK_STAGGER_SEC) * 0.08;
@@ -6736,7 +6743,8 @@ function updateTreskotnikFractureSprint(
   }
 
   if ((ai.windupTimer ?? 0) > 0) {
-    if (e.hp !== undefined && ai.windupStartHp !== undefined && e.hp < ai.windupStartHp - 0.001) {
+    const startHp = _treskotnikWindup.peek(e)?.startHp;
+    if (e.hp !== undefined && startHp !== undefined && e.hp < startHp - 0.001) {
       interruptTreskotnikWindup(world, e, target ?? undefined, time, msgs, 'hit', state);
       return true;
     }
@@ -6755,7 +6763,7 @@ function updateTreskotnikFractureSprint(
     if (ai.windupTimer <= 0) {
       startDashRun(e, dx / dist, dy / dist, dash);
       ai.windupTimer = undefined;
-      ai.windupStartHp = undefined;
+      _treskotnikWindup.forget(e);
       e.spriteScale = 1.2;
     }
     return true;
@@ -6772,7 +6780,7 @@ function updateTreskotnikFractureSprint(
     const dy = world.delta(e.y, target.y);
     ai.windupTimer = TRESKOTNIK_WINDUP_SEC;
     ai.windupTargetId = target.id;
-    ai.windupStartHp = e.hp;
+    _treskotnikWindup.of(e).startHp = e.hp;
     ai.path = [];
     ai.pi = 0;
     e.angle = Math.atan2(dy, dx);
@@ -6914,7 +6922,7 @@ export function tryPerformMonsterMeleeAttack(
         if (tryZombieApocalypseInfection(world, e, hitTarget, state, msgs, time)) {
           const hitAng = Math.atan2(world.delta(e.y, hitTarget.y), world.delta(e.x, hitTarget.x));
           spawnBloodHit(world, hitTarget.x, hitTarget.y, hitAng, Math.max(2, Math.round(dmg * 0.35)), false);
-          playSoundAt(e.monsterKind === MonsterKind.FOG_SHARK ? playFogSharkBite : playGrowl, e.x, e.y);
+          playSoundAt(hasAIFlag(e, 'fogSwimmer') ? playFogSharkBite : playGrowl, e.x, e.y);
           e.attackCd = (def?.attackRate ?? 1) * 1.5;
           return true;
         }
@@ -6944,11 +6952,11 @@ export function tryPerformMonsterMeleeAttack(
             applyKontorshchikGrab(state, world, e, hitTarget, time, msgs);
             dropSlimeWomanResidue(world, e, hitTarget, time, state, 'grab');
             if (hitTarget.id === playerId) {
-              const verb = e.monsterKind === MonsterKind.KONTORSHCHIK
+              const verb = hasAIFlag(e, 'documentScent')
                 ? 'схватил за бумаги'
-                : e.monsterKind === MonsterKind.SLIME_WOMAN
+                : hasAIFlag(e, 'slimeStrider')
                   ? 'схватила жижевой рукой'
-                  : e.monsterKind === MonsterKind.LISHENNYY
+                  : hasAIFlag(e, 'lightFollower')
                     ? 'коснулся распадом'
                     : 'задел';
               recordPlayerDamage(state, e, dmg, `${entityDisplayName(e)} ${verb} тебя: -${dmg}`);
@@ -6961,11 +6969,11 @@ export function tryPerformMonsterMeleeAttack(
             if (hitTarget.hp <= 0 && !hitTarget.alive) {
               msgs.push(msg(`${entityDisplayName(e)} убил ${entityDisplayName(hitTarget)}`, time, '#f44'));
               if (hasAIFlag(e, 'meatGrowth')) growSobrannyy(world, e, hitTarget, time, msgs, state, 'kill');
-              if (e.monsterKind === MonsterKind.HEAD_SLUG) rememberHeadSlugVictim(e, hitTarget);
+              if (hasAIFlag(e, 'hostParasite')) rememberHeadSlugVictim(e, hitTarget);
             }
           }
         }
-        playSoundAt(e.monsterKind === MonsterKind.FOG_SHARK ? playFogSharkBite : playGrowl, e.x, e.y);
+        playSoundAt(hasAIFlag(e, 'fogSwimmer') ? playFogSharkBite : playGrowl, e.x, e.y);
         tryOlgoyDragTarget(world, e, hitTarget, time, msgs, state);
         e.attackCd = def?.attackRate ?? 1;
       }
@@ -7041,14 +7049,14 @@ const SPECIES_TICK_STEPS: readonly SpeciesTickStep[] = [
   { flag: 'strikeReveal', run: c => { updateTumannikReveal(c.world, c.e); return false; } },
   // Ковёр не воюет и не ходит: он растение, и вся его жизнь — этот вызов.
   { flag: 'lurkingFurniture', run: c => updateSporeCarpetGrowth(c.world, c.entities, c.e, c.nextId, c.dt, c.time, c.msgs, c.state) },
-  { kind: MonsterKind.LISHENNYY, run: c => updateLishennyyBrightAvoidance(c.world, c.e, c.dt) },
+  { flag: 'lightFollower', run: c => updateLishennyyBrightAvoidance(c.world, c.e, c.dt) },
   { flag: 'netPossessor', run: c => { updateChervieNetPossessor(c.world, c.e, c.dt, c.time, c.msgs, c.playerId, c.state); return false; } },
-  { kind: MonsterKind.SLIMEVIK, routine: true, run: c => updateSlimevikMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.state) },
-  { kind: MonsterKind.GNILUSHKA, routine: true, run: c => updateGnilushkaMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.playerId, c.state) },
-  { kind: MonsterKind.HEAD_SLUG, run: c => updateHeadSlugParasite(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.nextId, c.state) },
+  { flag: 'slimeScavenger', routine: true, run: c => updateSlimevikMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.state) },
+  { flag: 'defensiveNeutral', routine: true, run: c => updateGnilushkaMonster(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.playerId, c.state) },
+  { flag: 'hostParasite', run: c => updateHeadSlugParasite(c.world, c.entities, c.e, c.dt, c.time, c.msgs, c.nextId, c.state) },
   { flag: 'meatGrowth', run: c => { updateSobrannyyGrowthState(c.world, c.e, c.time, c.msgs, c.state); return false; } },
   { flag: 'noiseFear', run: c => updateGreenDogNoiseFear(c.world, c.e, c.dt, c.time, c.msgs, c.state) },
-  { kind: MonsterKind.SLIME_WOMAN, run: c => { updateSlimeWomanState(c.world, c.e, c.time, c.msgs, c.state); return false; } },
+  { flag: 'slimeStrider', run: c => { updateSlimeWomanState(c.world, c.e, c.time, c.msgs, c.state); return false; } },
   { flag: 'waterStrider', run: c => { updateWaterStriderState(c.world, c.e, c.dt, c.time); return false; } },
   { flag: 'wallBrace', run: c => { updatePanelnikWallBrace(c.world, c.e, c.dt, c.time, c.msgs, c.player, c.state); return false; } },
   { flag: 'scrapWake', run: c => updateRzhavnikScrapWake(c.world, c.e, c.dt, c.time, c.msgs, c.playerId, c.state) },
@@ -7158,16 +7166,16 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
    * из немногих веток, которую общий такт звал безусловно, то есть 796 монстров
    * × 60 кадров = ~48 тысяч вызовов в секунду ради вида, которого на этаже может
    * не быть вовсе. */
-  if (e.monsterKind === MonsterKind.ZAKALENNAYA_ARMATURA) updateZakalennayaArmorStagger(e);
+  if (hasAIFlag(e, 'temperedArmor')) updateZakalennayaArmorStagger(e);
 
   evaluateMicroStimuli(world, e, time, msgs);
   if (tickMicroGoal(world, e, dt, time, msgs)) return;
 
-  if (e.monsterKind === MonsterKind.KHOROVAYA_MATKA) {
+  if (hasAIFlag(e, 'choirLead')) {
     updateKhorovayaMatka(world, entities, e, dt, time, msgs, playerId, nextId, _entityById, state);
   }
 
-  if (e.monsterKind === MonsterKind.MATKA) {
+  if (hasAIFlag(e, 'broodSource')) {
     if (!e.alive) return;
     updateMatkaSource(world, entities, e, dt, time, msgs, nextId, _entityById, state);
   }
@@ -7181,16 +7189,16 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   let detectSq = monsterDetectSq(world, e, baseDetectSq, time);
   let target: Entity | null;
   let lishennyyLightTarget: LishennyyLightTarget | null = null;
-  const zombieApocalypse = e.monsterKind === MonsterKind.ZOMBIE && isZombieApocalypseActive(state);
+  const zombieApocalypse = hasAIFlag(e, 'crowdPressure') && isZombieApocalypseActive(state);
   if (zombieApocalypse) {
     target = findZombieApocalypseTarget(world, entities, e, dt, detectSq);
-  } else if (e.monsterKind === MonsterKind.LISHENNYY) {
+  } else if (hasAIFlag(e, 'lightFollower')) {
     detectSq = LISHENNYY_DETECT_SQ;
     lishennyyLightTarget = findLishennyyLightTarget(world, e, dt, time, state);
     target = lishennyyLightTarget?.source === 'actor' && lishennyyLightTarget.entity
       ? lishennyyLightTarget.entity
       : null;
-  } else if (e.monsterKind === MonsterKind.CHERNOSLIZ) {
+  } else if (hasAIFlag(e, 'blackWaterWake')) {
     target = findChernoSlizTarget(world, e, dt);
   } else if (hasAIFlag(e, 'meatWorm')) {
     target = findMeatWormTarget(world, e, dt);
@@ -7206,7 +7214,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
      * ближнего боя слово в слово — от них осталась только эта строка. */
     detectSq = MONSTER_MELEE_DETECT_SQ;
     target = findCombatTarget(world, entities, e, dt, detectSq, deterministicScanCd(e.id, 0.7, 0.3), monsterTargetFilter(e));
-  } else if (e.monsterKind === MonsterKind.TRESKOTNIK) {
+  } else if (hasAIFlag(e, 'fractureSprint')) {
     detectSq = TRESKOTNIK_DETECT_SQ;
     target = findCombatTarget(world, entities, e, dt, detectSq, 0.45, monsterTargetFilter(e));
   } else {
@@ -7309,7 +7317,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     }
     /* Наблюдателя тут нет: цели не нашлось, значит никто рядом его не вскрыл —
      * близость и фонарь любого носителя уже проверил `chernoslizCanTarget`. */
-    if (e.monsterKind === MonsterKind.CHERNOSLIZ && isChernoSlizHidden(world, e)) {
+    if (hasAIFlag(e, 'blackWaterWake') && isChernoSlizHidden(world, e)) {
       const revealedByNoise = tryRevealChernoSlizByNoise(world, e, time, msgs, state);
       if (revealedByNoise) {
         if (tryFollowNoise(world, e, dt, time, msgs, state)) return;
@@ -7387,22 +7395,22 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     return;
   }
 
-  if (e.monsterKind === MonsterKind.TONKAYA_TEN &&
+  if (hasAIFlag(e, 'baitLine') &&
       updateTonkayaTenBaitLine(world, e, target, dt, time, msgs, playerId, state)) {
     return;
   }
 
-  if (e.monsterKind === MonsterKind.SHADOW &&
+  if (hasAIFlag(e, 'lightShy') &&
       updateShadowAmbushReadability(world, e, target, bestDist, dt, time, msgs, playerId, state)) {
     return;
   }
 
-  if (e.monsterKind === MonsterKind.FOG_SHARK) {
+  if (hasAIFlag(e, 'fogSwimmer')) {
     updateFogSharkTurn(world, e, target, dt);
     updateFogSharkPack(world, e, target, time, msgs, playerId, state);
   }
 
-  if (e.monsterKind === MonsterKind.LAMPOGLAZ && def) {
+  if (hasAIFlag(e, 'lightLock') && def) {
     updateLampoglazLightLock(world, entities, e, target, def, bestDist, dt, time, msgs, playerId, nextId, state);
     return;
   }
@@ -7425,9 +7433,9 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   // Hunt: pathfind to target
   ai.timer -= dt;
   if (monsterRepathDue(world, e)) {
-    const chase = e.monsterKind === MonsterKind.VODYANOY_KOSHMAR
+    const chase = hasAIFlag(e, 'waterPressureLine')
       ? vodyanoyChaseCell(world, e, target)
-      : e.monsterKind === MonsterKind.FOG_SHARK
+      : hasAIFlag(e, 'fogSwimmer')
         ? fogSharkChaseCell(world, e, target)
         : greenDogChaseCell(world, e, target);
     assignMonsterPath(world, e, chase.x, chase.y, 2);

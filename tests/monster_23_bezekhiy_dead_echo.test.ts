@@ -88,7 +88,7 @@ test('Bezekhiy is standalone door-threshold content, not silent_polzun', () => {
 
   assert.equal(DEF.kind, MonsterKind.BEZEKHIY);
   assert.equal(MONSTERS[MonsterKind.BEZEKHIY], DEF);
-  assert.deepEqual(DEF.aiFlags, ['silent']);
+  assert.deepEqual(DEF.aiFlags, ['silent', 'backstab']);
   assert.equal(DEF.hp < MONSTERS[MonsterKind.POLZUN].hp, true);
   assert.equal(DEF.dmg <= MONSTERS[MonsterKind.POLZUN].dmg, true);
   assert.match(DEF.counterplay ?? '', /слыш|угол|виде/);

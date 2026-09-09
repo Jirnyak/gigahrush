@@ -13,7 +13,7 @@ export const DEF: MonsterDef = {
   attackRate: 1.45,
   sprite: 0,
   detect: 7.5,
-  aiFlags: ['silent'],
+  aiFlags: ['silent', 'backstab'],
   counterplay: 'Он не слышит: выстрел, крик и приманка его не сдвинут. Но и вас он не слышит — уйдите за угол, и он потеряет вас насовсем.',
   lootHint: 'серый налёт, белая ногтевая крошка, редкий глухой крючок',
 };
