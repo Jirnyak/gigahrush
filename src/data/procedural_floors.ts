@@ -74,6 +74,9 @@ export interface FloorGeometryDef {
   roomTypes: readonly RoomType[];
   tags: readonly string[];
   recipePool: readonly ProceduralRecipeId[];
+  /** Семейства раздела плоскости, которыми геометрия вправе резать тор.
+   *  Раздел решает ФОРМУ этажа, рецепт — начинку области. */
+  partitionPool: readonly PartitionId[];
 }
 
 export interface FloorMajorityDef {
@@ -220,6 +223,19 @@ function makeProceduralFloorZs(): readonly number[] {
 export const PROCEDURAL_FLOOR_ZS = makeProceduralFloorZs();
 export const PROCEDURAL_FLOOR_COUNT = PROCEDURAL_FLOOR_ZS.length;
 
+/* Словарь семейств раздела плоскости живёт в ДАННЫХ, а не у генератора: его
+ * читает объявление геометрии, а порядок слоёв запрещает `data → gen`.
+ * Реализация каждого семейства — в `gen/procedural_partitions.ts`. */
+export type PartitionId =
+  | 'grid'
+  | 'bsp'
+  | 'voronoi'
+  | 'radial'
+  | 'strips'
+  | 'quadtree';
+
+export const PARTITION_IDS: readonly PartitionId[] = ['grid', 'bsp', 'voronoi', 'radial', 'strips', 'quadtree'];
+
 export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
   {
     id: 'living_blocks',
@@ -234,6 +250,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     roomTypes: [RoomType.LIVING, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.STORAGE, RoomType.COMMON],
     tags: ['residential', 'civil'],
     recipePool: ['smart_quarter_infill', 'concentric_rings', 'voronoi_partition', 'manhattan_grid', 'dense_room_scatter', 'attractor_courtyards'],
+    partitionPool: ['grid', 'quadtree', 'strips'],
   },
   {
     id: 'apartment_pressure',
@@ -248,6 +265,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     roomTypes: [RoomType.LIVING, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.COMMON, RoomType.STORAGE, RoomType.SMOKING],
     tags: ['residential', 'crowd', 'riot'],
     recipePool: ['smart_quarter_infill', 'voronoi_partition', 'concentric_rings', 'organic_braid', 'manhattan_grid', 'dense_room_scatter'],
+    partitionPool: ['grid', 'bsp'],
   },
   {
     id: 'communal_knots',
@@ -262,6 +280,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     roomTypes: [RoomType.COMMON, RoomType.COMMON, RoomType.KITCHEN, RoomType.BATHROOM, RoomType.LIVING, RoomType.STORAGE, RoomType.SMOKING, RoomType.CORRIDOR],
     tags: ['residential', 'crowd', 'queue', 'canteen', 'civil'],
     recipePool: ['concentric_rings', 'smart_quarter_infill', 'voronoi_partition', 'organic_braid', 'attractor_courtyards', 'dense_room_scatter'],
+    partitionPool: ['voronoi', 'radial', 'bsp'],
   },
   {
     id: 'attic_weatherworks',
@@ -276,6 +295,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     roomTypes: [RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.OFFICE, RoomType.COMMON],
     tags: ['admin', 'roofline', 'antenna', 'wind', 'documents'],
     recipePool: ['organic_braid', 'hilbert_fill', 'dark_tunnel_web', 'attractor_courtyards', 'production_islands', 'dense_room_scatter'],
+    partitionPool: ['strips', 'bsp'],
   },
   {
     id: 'archive_warrens',
@@ -290,6 +310,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     roomTypes: [RoomType.OFFICE, RoomType.STORAGE, RoomType.STORAGE, RoomType.CORRIDOR, RoomType.COMMON, RoomType.SMOKING],
     tags: ['admin', 'documents', 'archive', 'paper_dust', 'maze'],
     recipePool: ['hilbert_fill', 'manhattan_grid', 'smart_quarter_infill', 'voronoi_partition', 'organic_braid', 'dense_room_scatter'],
+    partitionPool: ['quadtree', 'bsp'],
   },
   {
     id: 'collectors',
@@ -304,6 +325,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     roomTypes: [RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.COMMON],
     tags: ['industrial', 'water', 'pipes', 'maintenance', 'emergency_panels'],
     recipePool: ['dark_tunnel_web', 'production_islands', 'organic_braid', 'voronoi_partition', 'hilbert_fill', 'dense_room_scatter'],
+    partitionPool: ['strips', 'voronoi'],
   },
   {
     id: 'workshops',
@@ -318,6 +340,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     roomTypes: [RoomType.PRODUCTION, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.OFFICE, RoomType.CORRIDOR],
     tags: ['industrial', 'workshop', 'machines', 'maintenance', 'emergency_panels'],
     recipePool: ['production_islands', 'manhattan_grid', 'dark_tunnel_web', 'attractor_courtyards', 'hilbert_fill', 'dense_room_scatter'],
+    partitionPool: ['grid', 'bsp', 'quadtree'],
   },
   {
     id: 'service_spines',
@@ -332,6 +355,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     roomTypes: [RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.OFFICE, RoomType.COMMON],
     tags: ['industrial', 'service', 'transit', 'power', 'pressure', 'maintenance', 'emergency_panels'],
     recipePool: ['dark_tunnel_web', 'manhattan_grid', 'production_islands', 'organic_braid', 'hilbert_fill', 'dense_room_scatter'],
+    partitionPool: ['strips', 'radial'],
   },
   {
     id: 'sump_causeways',
@@ -346,6 +370,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     roomTypes: [RoomType.CORRIDOR, RoomType.CORRIDOR, RoomType.PRODUCTION, RoomType.STORAGE, RoomType.COMMON],
     tags: ['industrial', 'water', 'sump', 'blackwater', 'transit', 'abyss'],
     recipePool: ['dark_tunnel_web', 'organic_braid', 'production_islands', 'voronoi_partition', 'attractor_courtyards', 'dense_room_scatter'],
+    partitionPool: ['voronoi', 'radial'],
   },
   {
     id: 'admin_pockets',
@@ -360,6 +385,7 @@ export const FLOOR_GEOMETRIES: readonly FloorGeometryDef[] = [
     roomTypes: [RoomType.OFFICE, RoomType.OFFICE, RoomType.COMMON, RoomType.STORAGE, RoomType.STORAGE, RoomType.SMOKING, RoomType.CORRIDOR, RoomType.BATHROOM, RoomType.KITCHEN, RoomType.MEDICAL],
     tags: ['admin', 'documents'],
     recipePool: ['manhattan_grid', 'hilbert_fill', 'smart_quarter_infill', 'concentric_rings', 'voronoi_partition', 'dense_room_scatter'],
+    partitionPool: ['quadtree', 'grid'],
   },
 ];
 

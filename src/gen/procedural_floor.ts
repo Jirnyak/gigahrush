@@ -120,10 +120,9 @@ import {
   worldToProxy,
   type ProxyGrid,
 } from './proxy_grid';
+import { partitionTorus, pickPartition } from './procedural_partitions';
 import {
   executeRecipe,
-  divideTorus,
-  pickSectorStrategy,
   type RecipeContext,
   type ProceduralRecipeId,
   type RecipeRegion,
@@ -1876,8 +1875,7 @@ function fillVoidGaps(
 /*  different geometry recipe from the FloorGeometryDef's pool.  */
 /*  This produces heterogeneous, dense, non-repetitive floors.  */
 
-function pickRecipesForSpec(
-  _spec: ProceduralFloorSpec,
+export function pickRecipesForSpec(
   geom: { recipePool: readonly ProceduralRecipeId[] },
   sectorCount: number,
   seed: number,
@@ -1888,14 +1886,20 @@ function pickRecipesForSpec(
   let st = seed >>> 0;
   const used = new Set<number>();
   for (let i = 0; i < sectorCount; i++) {
-    // Prefer variety — avoid repeats when pool allows
-    let pickIdx: number;
+    /* Отбор разнообразия: соседним областям достаются РАЗНЫЕ рецепты, пока пул
+     * это позволяет. Иначе половина формы теряется — раздел режет тор на десять
+     * кусков, а начинка у них одна.
+     *
+     * Стоявший ниже пересчёт `pickIdx` после цикла снят как лишний, а не как
+     * дефект: поток `st` после выхода из цикла не двигается, и пересчёт давал
+     * ТО ЖЕ число. Проверено негативным контролем — с ним замок остаётся
+     * зелёным. */
+    let pickIdx = 0;
     for (let attempt = 0; attempt < 20; attempt++) {
       st ^= st << 13; st ^= st >>> 17; st ^= st << 5; st = st >>> 0;
       pickIdx = (st & 0x7FFFFFFF) % pool.length;
       if (!used.has(pickIdx) || used.size >= pool.length) break;
     }
-    pickIdx = (st & 0x7FFFFFFF) % pool.length;
     used.add(pickIdx);
     result.push(pool[pickIdx]);
   }
@@ -1919,9 +1923,13 @@ function buildCompositeRooms(world: World, spec: ProceduralFloorSpec): { rooms: 
   }
 
   // Phase 2: Composite recipe-based sector generation
-  const strategy = pickSectorStrategy(spec.seed);
-  const sectors = divideTorus(strategy, spec.seed);
-  const recipes = pickRecipesForSpec(spec, geom, sectors.length, spec.seed ^ 0xC0DE);
+  /* Форма этажа = РАЗДЕЛ × РЕЦЕПТ. Раздел был один — равномерная сетка, — и
+   * поэтому все нечётные этажи читались одной вафлей. Теперь семейство раздела
+   * объявляет сама геометрия (`partitionPool`), а числа внутри семейства берёт
+   * сид этажа: число областей плавает, границы бывают кривыми. */
+  const partition = pickPartition(geom.partitionPool, spec.seed);
+  const sectors = partitionTorus(partition, spec.seed);
+  const recipes = pickRecipesForSpec(geom, sectors.length, spec.seed ^ 0xC0DE);
 
   for (let si = 0; si < sectors.length; si++) {
     const sector = sectors[si];
@@ -14015,9 +14023,25 @@ function applyCultistMajorityProfile(
   }
 
   const markerRoom = ritualRooms[0];
-  const targetRoom = candidates.find(room => !ritualRooms.includes(room) && room.doors.length > 0) ?? ritualRooms[ritualRooms.length - 1];
-  const marker = roomCell(world, markerRoom, Math.max(1, Math.floor(markerRoom.w / 2) - 1), Math.floor(markerRoom.h / 2));
-  const target = roomCell(world, targetRoom, Math.floor(targetRoom.w / 2), Math.floor(targetRoom.h / 2));
+  /* Ход дани держался на двух жребиях сразу: годной обязана была оказаться
+   * середина комнаты и ПЕРВАЯ ЖЕ комната с дверью. Промах любого — и чаша дани
+   * вместе со всей веткой необязательного хода молча не рождалась. Оба сняты:
+   * середина осталась предпочтением, а цель ищется до первой пригодной. */
+  const cellIn = (room: Room, salt: number): { x: number; y: number } | null =>
+    roomCell(world, room, Math.floor(room.w / 2), Math.floor(room.h / 2))
+    ?? findFreeRoomCell(world, room, (spec.seed ^ salt ^ room.id * 131) >>> 0);
+  const marker = roomCell(world, markerRoom, Math.max(1, Math.floor(markerRoom.w / 2) - 1), Math.floor(markerRoom.h / 2))
+    ?? findFreeRoomCell(world, markerRoom, (spec.seed ^ 0x7C1B) >>> 0);
+  let targetRoom = ritualRooms[ritualRooms.length - 1];
+  let target = cellIn(targetRoom, 0x2D55);
+  for (const room of candidates) {
+    if (ritualRooms.includes(room) || room.doors.length === 0) continue;
+    const cell = cellIn(room, 0x2D55);
+    if (!cell || !reachable[world.idx(cell.x, cell.y)]) continue;
+    targetRoom = room;
+    target = cell;
+    break;
+  }
   if (marker && target && reachable[world.idx(marker.x, marker.y)] && reachable[world.idx(target.x, target.y)]) {
     placeCultRoomFeature(world, markerRoom, Feature.CANDLE, marker.x, marker.y);
     stampMark(world, marker.x, marker.y, 0.5, 0.5, 0.46, MarkType.BLACK_HAND, spec.seed ^ 0x4718, 5, 4, 4, 220, false);

@@ -22,6 +22,7 @@ import {
 } from '../core/types';
 import { World } from '../core/world';
 import { hashSeed } from '../core/rand';
+import { regionContains, type RecipeRegion } from './procedural_partitions';
 import {
   canPlaceRoom,
   carveCorridor,
@@ -45,13 +46,6 @@ export type ProceduralRecipeId =
   | 'attractor_courtyards';
 
 /* ── Shared types ───────────────────────────────────────────── */
-
-export interface RecipeRegion {
-  x0: number;
-  y0: number;
-  w: number;
-  h: number;
-}
 
 export interface RecipeTexKit {
   wallTex: Tex;
@@ -97,14 +91,21 @@ function xshPick<T>(state: number, items: readonly T[]): [number, T] {
   return [next, items[idx]];
 }
 
+/* Маска области спрашивается ЗДЕСЬ, в двух воронках на весь файл — прорезке
+ * клетки и штампе комнаты. Поэтому ни один из десяти рецептов не знает, что
+ * область бывает не прямоугольной, и знать не должен: рецепт по-прежнему ходит
+ * по рамке, а границу формы держит раздел. */
+
 /** Check if region cell is safe for carving (no protected content). */
-function canCarve(world: World, x: number, y: number): boolean {
+function canCarve(world: World, region: RecipeRegion, x: number, y: number): boolean {
+  if (!regionContains(region, x, y)) return false;
   const i = world.idx(x, y);
   return !world.aptMask[i] && !world.hermoWall[i] && world.cells[i] !== Cell.LIFT;
 }
 
 /** Carve a single floor cell without room ownership. */
-function carveFloor(world: World, x: number, y: number, wallTex: Tex, floorTex: Tex): boolean {
+function carveFloor(world: World, region: RecipeRegion, x: number, y: number, wallTex: Tex, floorTex: Tex): boolean {
+  if (!regionContains(region, x, y)) return false;
   const i = world.idx(x, y);
   if (world.aptMask[i] || world.hermoWall[i] || world.cells[i] === Cell.LIFT) return false;
   if (world.cells[i] === Cell.DOOR) return false;
@@ -120,7 +121,7 @@ function carveFloor(world: World, x: number, y: number, wallTex: Tex, floorTex: 
 
 /** Carve a corridor with organic jitter — wobbles perpendicular to travel. */
 function carveWideCorridor(
-  world: World, ax: number, ay: number, bx: number, by: number,
+  world: World, region: RecipeRegion, ax: number, ay: number, bx: number, by: number,
   halfWidth: number, wallTex: Tex, floorTex: Tex, featureStep: number, featureType: Feature, _seed: number,
 ): void {
   const ddx = world.delta(ax, bx);
@@ -145,7 +146,7 @@ function carveWideCorridor(
     for (let side = -halfWidth; side <= halfWidth; side++) {
       const wx = horizontal ? cx : cx + side + drift;
       const wy = horizontal ? cy + side + drift : cy;
-      carveFloor(world, wx, wy, wallTex, floorTex);
+      carveFloor(world, region, wx, wy, wallTex, floorTex);
       if (side === 0 && featureStep > 0 && stepCount > 0 && stepCount % featureStep === 0) {
         const fi = world.idx(wx, wy);
         if (world.cells[fi] === Cell.FLOOR && world.features[fi] === Feature.NONE) {
@@ -169,6 +170,16 @@ function tryStampRoomInRegion(
   const wx = world.wrap(x);
   const wy = world.wrap(y);
   if (!canPlaceRoom(world, wx, wy, rw, rh)) return null;
+  /* Комната целиком внутри области: четыре угла и середина. Полный обход
+   * прямоугольника здесь не нужен — области выпуклы или почти выпуклы у всех
+   * шести семейств, а вырожденный случай снимет заполнитель пустот. */
+  if (ctx.region.contains && !(
+    regionContains(ctx.region, wx, wy) &&
+    regionContains(ctx.region, wx + rw - 1, wy) &&
+    regionContains(ctx.region, wx, wy + rh - 1) &&
+    regionContains(ctx.region, wx + rw - 1, wy + rh - 1) &&
+    regionContains(ctx.region, wx + (rw >> 1), wy + (rh >> 1))
+  )) return null;
   const room = stampRoom(world, ctx.nextRoomId.v++, type, wx, wy, rw, rh, -1);
   room.name = name;
   // Apply textures
@@ -258,11 +269,11 @@ function recipeVoronoiPartition(ctx: RecipeContext): RecipeResult {
         const ni = world.idx(wx + ddx, wy + ddy);
         if (owner[ni] >= 0 && owner[ni] !== owner[idx]) { isBoundary = true; break; }
       }
-      if (isBoundary && canCarve(world, wx, wy)) {
+      if (isBoundary && canCarve(world, region, wx, wy)) {
         world.cells[idx] = Cell.WALL;
         world.wallTex[idx] = tex.wallTex;
         world.roomMap[idx] = -1;
-      } else if (canCarve(world, wx, wy)) {
+      } else if (canCarve(world, region, wx, wy)) {
         world.cells[idx] = Cell.FLOOR;
         world.floorTex[idx] = tex.floorTex;
         world.roomMap[idx] = -1;
@@ -385,7 +396,7 @@ function recipeManhattanGrid(ctx: RecipeContext): RecipeResult {
     const ay = region.y0 + i * hSpacing + Math.floor(hSpacing / 2);
     for (let dx = 0; dx < region.w; dx++) {
       for (let dw = -avenueWidth; dw <= avenueWidth; dw++) {
-        carveFloor(world, region.x0 + dx, ay + dw, tex.wallTex, tex.floorTex);
+        carveFloor(world, region, region.x0 + dx, ay + dw, tex.wallTex, tex.floorTex);
       }
     }
     // Place features along avenue center
@@ -404,7 +415,7 @@ function recipeManhattanGrid(ctx: RecipeContext): RecipeResult {
     const ax = region.x0 + i * vSpacing + Math.floor(vSpacing / 2);
     for (let dy = 0; dy < region.h; dy++) {
       for (let dw = -avenueWidth; dw <= avenueWidth; dw++) {
-        carveFloor(world, ax + dw, region.y0 + dy, tex.wallTex, tex.floorTex);
+        carveFloor(world, region, ax + dw, region.y0 + dy, tex.wallTex, tex.floorTex);
       }
     }
   }
@@ -417,7 +428,7 @@ function recipeManhattanGrid(ctx: RecipeContext): RecipeResult {
       const plazaRadius = 6 + (((seed + hi * 3 + vi * 7) >>> 0) & 3);
       for (let dy = -plazaRadius; dy <= plazaRadius; dy++) {
         for (let dx = -plazaRadius; dx <= plazaRadius; dx++) {
-          carveFloor(world, ax + dx, ay + dy, tex.wallTex, tex.floorTex);
+          carveFloor(world, region, ax + dx, ay + dy, tex.wallTex, tex.floorTex);
         }
       }
       // Center feature
@@ -487,7 +498,7 @@ function recipeHilbertFill(ctx: RecipeContext): RecipeResult {
   const corridorWidth = 2;
   for (let i = 0; i < points.length - 1; i++) {
     carveWideCorridor(
-      world, points[i].x, points[i].y, points[i + 1].x, points[i + 1].y,
+      world, region, points[i].x, points[i].y, points[i + 1].x, points[i + 1].y,
       corridorWidth, tex.wallTex, tex.floorTex, 11, Feature.LAMP, seed + i,
     );
   }
@@ -561,13 +572,13 @@ function recipeConcentricRings(ctx: RecipeContext): RecipeResult {
     for (let t = 0; t <= radius * 2; t++) {
       for (let w = 0; w < ringWidth; w++) {
         // Top side
-        carveFloor(world, x0 + t, y0 - w, tex.wallTex, tex.floorTex);
+        carveFloor(world, region, x0 + t, y0 - w, tex.wallTex, tex.floorTex);
         // Bottom side
-        carveFloor(world, x0 + t, y1 + w, tex.wallTex, tex.floorTex);
+        carveFloor(world, region, x0 + t, y1 + w, tex.wallTex, tex.floorTex);
         // Left side
-        carveFloor(world, x0 - w, y0 + t, tex.wallTex, tex.floorTex);
+        carveFloor(world, region, x0 - w, y0 + t, tex.wallTex, tex.floorTex);
         // Right side
-        carveFloor(world, x1 + w, y0 + t, tex.wallTex, tex.floorTex);
+        carveFloor(world, region, x1 + w, y0 + t, tex.wallTex, tex.floorTex);
       }
     }
 
@@ -608,7 +619,7 @@ function recipeConcentricRings(ctx: RecipeContext): RecipeResult {
     const y0 = cy + Math.floor(Math.sin(angle) * innerR);
     const x1 = cx + Math.floor(Math.cos(angle) * outerR);
     const y1 = cy + Math.floor(Math.sin(angle) * outerR);
-    carveWideCorridor(world, x0, y0, x1, y1, 1, tex.wallTex, tex.floorTex, 13, Feature.LAMP, seed + i);
+    carveWideCorridor(world, region, x0, y0, x1, y1, 1, tex.wallTex, tex.floorTex, 13, Feature.LAMP, seed + i);
   }
 
   // Fill gaps between rings with scattered rooms
@@ -713,8 +724,8 @@ function recipeOrganicBraid(ctx: RecipeContext): RecipeResult {
 
     let corridorWidth: number;
     [st, corridorWidth] = xshInt(st, 1, 3);
-    carveWideCorridor(world, a.x, a.y, midX, midY, corridorWidth, tex.wallTex, tex.floorTex, 15, Feature.LAMP, st);
-    carveWideCorridor(world, midX, midY, b.x, b.y, corridorWidth, tex.wallTex, tex.floorTex, 15, Feature.LAMP, st + 1);
+    carveWideCorridor(world, region, a.x, a.y, midX, midY, corridorWidth, tex.wallTex, tex.floorTex, 15, Feature.LAMP, st);
+    carveWideCorridor(world, region, midX, midY, b.x, b.y, corridorWidth, tex.wallTex, tex.floorTex, 15, Feature.LAMP, st + 1);
   }
 
   // Place rooms at waypoints
@@ -880,7 +891,7 @@ function recipeProductionIslands(ctx: RecipeContext): RecipeResult {
       const a = rooms[i];
       const b = rooms[i + 1];
       carveWideCorridor(
-        world,
+        world, region,
         a.x + Math.floor(a.w / 2), a.y + Math.floor(a.h / 2),
         b.x + Math.floor(b.w / 2), b.y + Math.floor(b.h / 2),
         2, tex.wallTex, tex.floorTex, 19, Feature.LAMP, st + i,
@@ -923,7 +934,7 @@ function recipeDarkTunnelWeb(ctx: RecipeContext): RecipeResult {
       by = region.y0 + region.h - 1;
     }
     lines.push({ ax, ay, bx, by });
-    carveWideCorridor(world, ax, ay, bx, by, tunnelWidth, tex.wallTex, tex.floorTex, 13, Feature.LAMP, st + i);
+    carveWideCorridor(world, region, ax, ay, bx, by, tunnelWidth, tex.wallTex, tex.floorTex, 13, Feature.LAMP, st + i);
   }
 
   // Platform rooms along tunnels
@@ -1054,7 +1065,7 @@ function recipeAttractorCourtyards(ctx: RecipeContext): RecipeResult {
     for (let dy = -attr.radius; dy <= attr.radius; dy++) {
       for (let dx = -attr.radius; dx <= attr.radius; dx++) {
         if (dx * dx + dy * dy > attr.radius * attr.radius) continue;
-        carveFloor(world, attr.x + dx, attr.y + dy, tex.wallTex, tex.floorTex);
+        carveFloor(world, region, attr.x + dx, attr.y + dy, tex.wallTex, tex.floorTex);
       }
     }
 
@@ -1100,7 +1111,7 @@ function recipeAttractorCourtyards(ctx: RecipeContext): RecipeResult {
   for (let i = 0; i < attractors.length; i++) {
     const next = attractors[(i + 1) % attractors.length];
     carveWideCorridor(
-      world, attractors[i].x, attractors[i].y, next.x, next.y,
+      world, region, attractors[i].x, attractors[i].y, next.x, next.y,
       2, tex.wallTex, tex.floorTex, 17, Feature.LAMP, st + i,
     );
   }
@@ -1109,7 +1120,7 @@ function recipeAttractorCourtyards(ctx: RecipeContext): RecipeResult {
     for (let i = 0; i < Math.min(3, attractors.length); i++) {
       const a = attractors[i];
       const b = attractors[(i + Math.floor(attractors.length / 2)) % attractors.length];
-      carveWideCorridor(world, a.x, a.y, b.x, b.y, 1, tex.wallTex, tex.floorTex, 21, Feature.LAMP, st + i + 100);
+      carveWideCorridor(world, region, a.x, a.y, b.x, b.y, 1, tex.wallTex, tex.floorTex, 21, Feature.LAMP, st + i + 100);
     }
   }
 
@@ -1143,31 +1154,4 @@ export function executeRecipe(id: ProceduralRecipeId, ctx: RecipeContext): Recip
 /*  Sector division strategies                                    */
 /* ═══════════════════════════════════════════════════════════════ */
 
-export type SectorStrategy = 'grid_4x4' | 'grid_4x3' | 'grid_3x4' | 'grid_3x3';
-
-export function divideTorus(strategy: SectorStrategy, _seed: number): RecipeRegion[] {
-  let cols: number;
-  let rows: number;
-  switch (strategy) {
-    case 'grid_4x4': cols = 4; rows = 4; break;
-    case 'grid_4x3': cols = 4; rows = 3; break;
-    case 'grid_3x4': cols = 3; rows = 4; break;
-    case 'grid_3x3': cols = 3; rows = 3; break;
-  }
-  const regions: RecipeRegion[] = [];
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const x0 = Math.floor(col * W / cols);
-      const y0 = Math.floor(row * W / rows);
-      const x1 = Math.floor((col + 1) * W / cols);
-      const y1 = Math.floor((row + 1) * W / rows);
-      regions.push({ x0, y0, w: x1 - x0, h: y1 - y0 });
-    }
-  }
-  return regions;
-}
-
-export function pickSectorStrategy(seed: number): SectorStrategy {
-  const strategies: SectorStrategy[] = ['grid_4x4', 'grid_4x4', 'grid_4x3', 'grid_3x4', 'grid_3x3'];
-  return strategies[((seed >>> 12) & 7) % strategies.length];
-}
+export type { RecipeRegion };
