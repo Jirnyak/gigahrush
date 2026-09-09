@@ -144,6 +144,17 @@ These are the rules every new module must preserve.
 - **One floor coordinate space.** Floor `z` is the number in `DESIGN_FLOOR_ROUTES`; a theme's base comes from `designFloorBaseZ()` / `DESIGN_FLOOR_THEME_BASES`, never a retyped literal. The removed 30/60/100/140/180/200 scheme ascended with depth while this one descends, so a legacy key is not a cosmetic wart: it silently addresses a floor that does not exist, and a legacy RANGE (`z < N`) matches the wrong floors instead of none. `scripts/check-invariants.mjs` fails the build on any `z` assigned to or compared against 60/100/140/180/200.
 - **One room id space, and it is the index.** `world.rooms` is addressed by room id: `stampRoom` writes `rooms[id]`, `roomAt()` reads `rooms[roomMap[i]]`, and floor-memory restore re-forces `room.id = idx` because a patch must land in the room it was taken from. So a floor counter starts at 0 and never skips: a hole makes `for...of` yield `undefined` (unlike `forEach`/`map`/`filter`, which skip holes and keep floor tests green) and kills every one of the ~110 room walks — that is how `systems/target_guide.ts` crashed the frame loop on Стенка, база ликвидаторов and horrorfloor. Room ids are also NOT entity ids: `roomMap` is `Int16Array` and the entity counter starts at 10000, so borrowing it (outer_district did) puts every id past the end of the array and `roomAt()` returns null for the whole floor — silently, with no crash at all. Locked by `tests/rooms-dense.test.ts`.
 - No generator that seals a room without proving it is reachable.
+- **`hermoWall` is indestructible, and generation obeys that too (owner, 2026-09-09).** A
+  hermetic wall is a shelter that stays safe through samosbor; neither the player's tool
+  (`main.ts`) nor a breach charge (`systems/breach_charge.ts`) takes it. `carveCorridor`
+  therefore skips it exactly as it skips `aptMask` — a shelter opened by a connectivity
+  corridor is not a shelter, and a creature released in a sealed lab chamber walks out into the
+  gallery. `Room.sealed` is NOT this flag: it means «hermetically sealed DURING samosbor»
+  (`core/types.ts`) and every live reader treats it that way, so geometry decisions read
+  `hermoWall` and «this room has a way in» is expressed by an authored door. Content that needs
+  generation to keep its hands off an ORDINARY wall marks it `aptMask` — that is the generic
+  «hands off» mark, and `hermoWall` must not be borrowed for it (the betonoed's chewable wall
+  did, and a chewable wall is not indestructible). Lock — `tests/connectivity-hermetic.test.ts`.
 - **Universal systems outrank puzzles.** Two systems are invariants of this world and every
   authored lock must yield to them: **PSI dephasing walks through walls**, and **the world is
   fully destructible** — anyone willing can break their own way in or out. Therefore
@@ -154,11 +165,21 @@ These are the rules every new module must preserve.
   player strolls around through open corridors and never learns a lock existed. That is not a
   bypass, it is the absence of a lock. Reference point named by the owner: Caves of Qud — doors
   exist, and nothing stops you from smashing one or phasing past it.
-  - Corollary for measurement: the honest defect metric is reachability **by ordinary walking**
-    over passable cells with no locked door in the way. PSI and demolition are lawful bypasses
-    and must stay OUT of that metric.
-  - Corollary for tests: never assert «room is unreachable without X». Unreachability is
-    guaranteed by nothing here.
+  - Corollary for measurement: the metric of a LOCK is whether its bypass is free and
+    accidental. Reachability **by ordinary walking** measures that — PSI and demolition are
+    lawful bypasses and stay OUT of it. **But a room unreachable on foot is NOT by itself a
+    defect.** Owner's decision 2026-08-20 (`problems.md`, «Замурованные комнаты — не блокер»):
+    a walled room is a lawful part of the world, PSI dephasing leads inside, and the class is
+    not a debt. The corollary as first written («the honest DEFECT metric is walking
+    reachability») was an agent's own inference added 2026-08-24 — four days AFTER that
+    decision — and it directly contradicts it; on 2026-09-09 it cost a finished, measured
+    connectivity fix a full revert. Fix reachability where it is cheap, never treat it as a
+    contract the world owes.
+  - Corollary for tests: never assert «room is unreachable without X» — unreachability is
+    guaranteed by nothing here. And never assert «room IS reachable on foot» unless some step
+    of generation actually promises it: such a lock holds a placement LOTTERY, not a contract,
+    and flips colour with the `rng()` stream. `tests/hell-plot-rooms-delivery.test.ts` was
+    exactly that until `connectProtectedRoom` was made to probe the whole perimeter.
   - Live case (2026-08-23): `cayley_byuro` measured 200/200 floors with all six graph windows
     reachable from spawn without a single locked door — `carveCayleyGraphField` cuts an open
     lattice of through-corridors and the macro graph between campuses is locked on 0.1% of
