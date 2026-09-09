@@ -13,7 +13,7 @@ import * as assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { EntityType, Faction, Occupation, type Entity } from '../src/core/types';
-import { RUMORS, UNBUILT_LEAD_ROOM_NAMES } from '../src/data/rumors';
+import { RUMORS } from '../src/data/rumors';
 import { generateTalkText } from '../src/systems/dialogue';
 import { getRecentRumorLead } from '../src/systems/npc_memory';
 import { describeRumorReveal, recordRumorEvent, resetRumorEvents } from '../src/systems/rumor';
@@ -94,49 +94,33 @@ test('отбор слуха вызывается из живого кода, а 
 
 /* ── 3. Отсев наводок в никуда ────────────────────────────────── */
 
-test('список непостроенных комнат честен в обе стороны', () => {
-  const blob = sourceFiles()
-    .filter(path => path !== 'src/data/rumors.ts')
-    .map(path => readFileSync(path, 'utf8'))
-    .join('\n');
-
-  /* Сторона первая: помеченная комната действительно нигде не строится.
-   * Как только её построят, тест краснеет и заставляет снять строку. */
-  const built = UNBUILT_LEAD_ROOM_NAMES.filter(name => blob.includes(name));
-  assert.deepEqual(built, [], 'комната построена — убери её из UNBUILT_LEAD_ROOMS');
-
-  /* Сторона вторая: новая наводка не может указать на комнату, которой нет. */
-  const unlisted: string[] = [];
-  const anchorless: string[] = [];
-  for (const rumor of RUMORS) {
-    const room = rumor.lead?.roomDefId;
-    if (room === undefined) continue;
-    if (!UNBUILT_LEAD_ROOM_NAMES.includes(room)) {
-      if (!blob.includes(room)) unlisted.push(`${rumor.id}: ${room}`);
-      continue;
-    }
-    /* У помеченной наводки обязан остаться другой адрес, иначе снятие имени
-     * оставит слух вообще без места и он станет наводкой в пустоту. */
-    const lead = rumor.lead!;
-    const hasAnchor = lead.z !== undefined
-      || lead.zoneHint !== undefined
-      || lead.roomType !== undefined
-      || lead.itemId !== undefined
-      || lead.monsterKind !== undefined;
-    if (!hasAnchor) anchorless.push(rumor.id);
-  }
-  assert.deepEqual(unlisted, [], 'наводка на комнату, которой нет ни в одном генераторе');
-  assert.deepEqual(anchorless, [], 'у наводки не осталось адреса после снятия непостроенной комнаты');
+/* Честность самого списка `UNBUILT_LEAD_ROOMS` держит НЕ этот файл, а
+ * `tests/rumor-lead-rooms-built.test.ts`: там оракул — генерация этажа, который
+ * наводка называет. Текстовый оракул («имя встречается где-то в `src/`»), стоявший
+ * здесь до 2026-09-09, врал в ОБЕ стороны и это замерено: «Бетоноед: шумная
+ * кладовая у слабой стены» была помечена непостроенной при живой комнате на всех
+ * четырёх сидах (имя собирается из шаблона), а «Курительная» и «Цех металла»
+ * считались построенными по совпадению подстроки, хотя комнаты зовутся
+ * «Курительная #203» и «Цех металла: линия восстановления».
+ *
+ * Здесь остаётся только то, что генерации не требует: каждая наводка обязана
+ * называть этаж. Без него сверять её не с чем, и она проваливается мимо ОБОИХ
+ * замков. */
+test('каждая наводка с комнатой называет свой этаж', () => {
+  const floorless = RUMORS
+    .filter(rumor => rumor.lead?.roomDefId !== undefined && rumor.lead?.z === undefined)
+    .map(rumor => rumor.id);
+  assert.deepEqual(floorless, [], 'наводка называет комнату, но не называет этаж: сверять не с чем');
 });
 
 /* ── 4. Ловушка локализации ───────────────────────────────────── */
 
 /* Замеряется то, что видит игрок, а не словарь: `humanizeTag` собирает имя по
- * словам и непереведённое слово пропускает как есть, поэтому словарь дырявый
- * всегда, а вот до игрока сырое слово доходить не должно никогда. На 2026-09-01
- * непереведёнными остаются 72 из 109 отображаемых тегов — их подсказка молча
- * гаснет; чинится это пополнением TAG_WORDS в `data/rumor_tag_names.ts`, и
- * каждое пополнение само по себе включает подсказку обратно. */
+ * словам и непереведённое слово пропускает как есть, поэтому запасной ход
+ * дырявый всегда, а вот до игрока сырое слово доходить не должно никогда.
+ * С 2026-09-09 все 159 тегов предупреждений названы поимённо в
+ * `WARNING_TAG_NAMES`, то есть гасить больше нечего — но фильтр остаётся
+ * страховкой на следующий забытый тег. */
 test('слух не печатает игроку сырые латинские id тегов', () => {
   const leaked: string[] = [];
   for (const rumor of RUMORS) {
@@ -160,8 +144,10 @@ test('слух не печатает игроку сырые латинские 
 
 test('фильтр латиницы гасит подсказку, а не пропускает её мимо себя', () => {
   /* Негативный контроль самого фильтра: непереведённый тег обязан исчезнуть,
-   * переведённый — остаться. */
-  assert.equal(describeRumorReveal({ kind: 'warning', tag: 'hack_error', confidence: 5 }), '');
+   * переведённый — остаться. Имя взято заведомо отсутствующим в словаре:
+   * прежний образец `hack_error` с 2026-09-09 переведён и контроль на нём
+   * стал бы проверять пустоту пустотой. */
+  assert.equal(describeRumorReveal({ kind: 'warning', tag: 'tag_that_nobody_named', confidence: 5 }), '');
   assert.equal(describeRumorReveal({ kind: 'warning', tag: 'samosbor_warning', confidence: 5 }), 'риск самосбора');
 });
 

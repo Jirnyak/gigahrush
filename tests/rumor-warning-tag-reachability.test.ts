@@ -6,7 +6,12 @@
  * (`samosbor_veretar_photo_taken`) живут в других пространствах, и написанные на
  * них авторские ветки не срабатывали никогда: слух о фото раскрывает предмет, а
  * не предупреждение. Три такие ветки были сняты; чтобы четвёртую не написали
- * снова, каждая метка `case` обязана быть настоящим тегом предупреждения. */
+ * снова, каждое имя в словаре обязано быть настоящим тегом предупреждения.
+ *
+ * С 2026-09-09 словарь — таблица `WARNING_TAG_NAMES`, а не `switch`: имя пишется
+ * целиком на тег, потому что пословная сборка давала подстрочник. Замок читает
+ * таблицу; ловушка та же самая и цена ошибки та же — ненайденное имя молча
+ * гаснет у игрока. */
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -28,22 +33,25 @@ function warningRevealTags(): Set<string> {
   return tags;
 }
 
-function warningSwitchCaseTags(): string[] {
+function warningDictionaryTags(): string[] {
   const source = readFileSync(new URL('../src/data/rumor_tag_names.ts', import.meta.url), 'utf8');
-  const start = source.indexOf('export function warningTagName');
-  assert.ok(start > 0, 'warningTagName не найдена в исходнике');
-  const body = source.slice(start, source.indexOf('\n}', start));
-  return [...body.matchAll(/case '([a-z0-9_]+)':/g)].map(match => match[1]);
+  const start = source.indexOf('const WARNING_TAG_NAMES');
+  assert.ok(start > 0, 'WARNING_TAG_NAMES не найдена в исходнике');
+  const body = source.slice(start, source.indexOf('\n};', start));
+  return [...body.matchAll(/^ {2}([a-z0-9_]+): '/gm)].map(match => match[1]);
 }
 
-test('каждая ветка warningTagName отвечает на настоящий тег предупреждения', () => {
+test('каждое имя в словаре предупреждений отвечает на настоящий тег', () => {
   const live = warningRevealTags();
   assert.ok(live.size > 20, 'предупреждающих слухов не осталось — замок стал бессмысленным');
 
-  const cases = warningSwitchCaseTags();
-  assert.ok(cases.length > 0, 'словарь предупреждений разобран неверно: ветки не найдены');
+  const named = warningDictionaryTags();
+  assert.ok(named.length > 20, 'словарь предупреждений разобран неверно: имена не найдены');
 
-  const dead = cases.filter(tag => !live.has(tag));
+  const dead = named.filter(tag => !live.has(tag));
   assert.deepEqual(dead, [],
     `эти имена не из пространства тегов предупреждения и не будут напечатаны: ${dead.join(', ')}`);
+
+  const duplicated = named.filter((tag, i) => named.indexOf(tag) !== i);
+  assert.deepEqual(duplicated, [], 'имя тега написано дважды: второе молча побеждает');
 });

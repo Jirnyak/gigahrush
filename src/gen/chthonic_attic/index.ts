@@ -18,12 +18,14 @@ import { lightChthonicAttic } from './lighting';
 import { applyChthonicAtticTerritory } from './territory';
 import { type ChthonicAtticRootChoice, type ChthonicAtticGeneration, type ChthonicAtticLayout, type ChthonicAtticRootState, type ChthonicAtticExit, type ChthonicAtticShelterCost, DESIGN_FLOOR_ID, DESIGN_FLOOR_Z } from './meta';
 import { firstRuntimeEntityId } from '../entity_ids';
+import { bindChthonicAtticRootState } from './arrival';
 
 export * from './meta';
 export * from './geometry';
 export * from './npcs';
 export * from './islands';
 export * from './territory';
+export * from './arrival';
 
 export function generateChthonicAtticDesignFloor(
   rootChoice: ChthonicAtticRootChoice = 'cut',
@@ -174,6 +176,7 @@ export function generateChthonicAtticDesignFloor(
   lightChthonicAttic(world);
   world.bakeLights();
 
+  bindChthonicAtticRootState(world, rootState);
   return generation;
 }
 

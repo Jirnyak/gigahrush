@@ -664,7 +664,28 @@ export function connectProtectedRoom(world: World, rx: number, ry: number, w: nu
   for (const ci of bestPath) { world.cells[ci] = Cell.FLOOR; world.aptMask[ci] = 0; }
 }
 
-/* ── Find clear rectangular area (all WALL, no aptMask) ──────── */
+/* ── Find clear rectangular area (all WALL, no aptMask) ────────
+ *
+ * Жребий, а не поиск: 400 случайных проб по миллиону клеток. Пока этаж рыхлый,
+ * он попадает; на плотном промахивается ПОЧТИ ВСЕГДА, и авторская комната молча
+ * не рождается. Замерено на жилом (4 сида): три написанных POI не встали НИ
+ * РАЗУ — «Потерянная ячейка Гнилушки», «Кладовая висячего ковра», «Ламповая
+ * линия: жёлтый коридор», вместе со своими тварями, ящиками и целями слухов.
+ *
+ * Причин у промаха две, и обе замерены:
+ *   1. проба требует поля в клетку вокруг, то есть под комнату 15×10 нужен
+ *      СПЛОШНОЙ блок 17×12 — таких на жилом ноль (сплошных 15×10 при этом 34);
+ *   2. даже когда годных мест десятки, 400 дротиков по 1 048 576 клеткам их не
+ *      находят: вероятность попадания в каждую пробу порядка 3·10⁻⁵.
+ *
+ * Поэтому после жребия идёт СИСТЕМНЫЙ обход, и только он. Порядок такой:
+ * сперва с полем (комната стоит отдельно), потом без него (внешнее кольцо
+ * комнаты и есть её стена — поле было удобством, а не контрактом). Берётся
+ * ближайшее к якорю место, чтобы POI не уезжал в другой конец мира.
+ *
+ * Обход законен по «Iron Law»: он идёт на ПОСТРОЕНИИ этажа, не в кадре, и
+ * только когда жребий уже провалился.
+ */
 export function findClearArea(
   world: World, cx: number, cy: number, w: number, h: number,
   minDist: number, maxDist: number,
@@ -676,13 +697,76 @@ export function findClearArea(
     const dist = lo + (irand(0, 10000) / 10000) * (hi - lo);
     const tx = (cx + Math.round(Math.cos(angle) * dist) + W) % W;
     const ty = (cy + Math.round(Math.sin(angle) * dist) + W) % W;
-    let ok = true;
-    for (let dy = -1; dy <= h && ok; dy++)
-      for (let dx = -1; dx <= w && ok; dx++) {
-        const ci = world.idx((tx + dx + W) % W, (ty + dy + W) % W);
-        if (world.cells[ci] !== Cell.WALL || world.aptMask[ci]) ok = false;
+    if (clearAreaFits(world, tx, ty, w, h, 1)) return { x: tx, y: ty };
+  }
+  const run = clearRunTable(world);
+  return scanClearArea(run, world, cx, cy, w, h, 1) ?? scanClearArea(run, world, cx, cy, w, h, 0);
+}
+
+/* Обход идёт коробками вокруг якоря, а не по всему миру сразу: место обычно
+ * находится рядом, и тогда осмотрено 65×65 клеток вместо миллиона. Последняя
+ * коробка накрывает тор целиком, поэтому «не нашли» по-прежнему значит «нет». */
+const CLEAR_SCAN_RADII = [32, 64, 128, 256, W / 2] as const;
+
+function clearAreaFits(world: World, tx: number, ty: number, w: number, h: number, margin: number): boolean {
+  for (let dy = -margin; dy < h + margin; dy++)
+    for (let dx = -margin; dx < w + margin; dx++) {
+      const ci = world.idx((tx + dx + W) % W, (ty + dy + W) % W);
+      if (world.cells[ci] !== Cell.WALL || world.aptMask[ci]) return false;
+    }
+  return true;
+}
+
+/** Длина непрерывной полосы годных клеток вправо от каждой клетки. По ней
+ *  прямоугольник проверяется за `h` обращений вместо `w·h`.
+ *
+ *  Таблица считается заново на каждый вызов НАМЕРЕННО. Кэшировать её по
+ *  `world.cellVersion` нельзя: на постройке этажа генераторы пишут `world.cells`
+ *  напрямую и версию не бампают (её двигает только рантаймовый сеттер,
+ *  `core/world.ts`). Кэш по такой версии тихо отдал бы занятое место. */
+function clearRunTable(world: World): Int32Array {
+  const run = new Int32Array(W * W);
+  for (let y = 0; y < W; y++) {
+    const row = y * W;
+    /* Полоса заворачивается через шов тора, поэтому строка проходится дважды:
+     * второй проход подхватывает хвост, начавшийся у правого края. */
+    for (let pass = 0; pass < 2; pass++) {
+      for (let x = W - 1; x >= 0; x--) {
+        const ci = row + x;
+        const good = world.cells[ci] === Cell.WALL && !world.aptMask[ci];
+        run[ci] = good ? Math.min(W, run[row + ((x + 1) % W)] + 1) : 0;
       }
-    if (ok) return { x: tx, y: ty };
+    }
+  }
+  return run;
+}
+
+function scanClearArea(
+  run: Int32Array, world: World, cx: number, cy: number, w: number, h: number, margin: number,
+): { x: number; y: number } | null {
+  const need = w + margin * 2;
+  const rows = h + margin * 2;
+  if (need > W || rows > W) return null;
+  for (const radius of CLEAR_SCAN_RADII) {
+    let best: { x: number; y: number } | null = null;
+    let bestDist = Infinity;
+    const span = Math.min(W - 1, radius * 2);
+    for (let oy = 0; oy <= span; oy++) {
+      const ty = (cy - radius + oy + W) % W;
+      const y0 = (ty - margin + W) % W;
+      for (let ox = 0; ox <= span; ox++) {
+        const tx = (cx - radius + ox + W) % W;
+        const x0 = (tx - margin + W) % W;
+        let ok = true;
+        for (let dy = 0; dy < rows; dy++) {
+          if (run[((y0 + dy) % W) * W + x0] < need) { ok = false; break; }
+        }
+        if (!ok) continue;
+        const d = world.dist2(tx, ty, cx, cy);
+        if (d < bestDist) { bestDist = d; best = { x: tx, y: ty }; }
+      }
+    }
+    if (best) return best;
   }
   return null;
 }

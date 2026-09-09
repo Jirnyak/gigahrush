@@ -10,6 +10,7 @@ import {
   W,
   ZoneFaction,
   type Entity,
+  type Faction,
   type GameState,
   type Room,
   type TerritoryOwner,
@@ -947,28 +948,56 @@ export function markConveyorSpine(world: World, x0: number, y0: number, x1: numb
   }
 }
 
+function zoneAtPoint(world: World, x: number | undefined, y: number | undefined): number | undefined {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined;
+  const zone = world.zoneMap[world.idx(Math.floor(x!), Math.floor(y!))];
+  return zone >= 0 ? zone : undefined;
+}
+
+function zoneOfRoom(world: World, roomId: number | undefined): number | undefined {
+  if (roomId === undefined) return undefined;
+  const room = world.rooms[roomId];
+  if (!room) return undefined;
+  return zoneAtPoint(world, room.x + (room.w >> 1), room.y + (room.h >> 1));
+}
+
+/** Кто принял решение. Приходит готовым объектом, а не сущностью: решение
+ *  доезжает сюда мировым событием (закрытая побочка, вскрытый ящик), и живого
+ *  `Entity` в этот момент под рукой нет. Тот же приём, что у
+ *  `publishDarkMetroAmbushWarning`. */
+export interface ProductionBeltDecisionSource {
+  actorId?: number;
+  actorName?: string;
+  actorFaction?: Faction;
+  x?: number;
+  y?: number;
+  zoneId?: number;
+}
+
 export function publishProductionBeltDecision(
   game: GameState,
   world: World,
-  actor: Entity,
+  source: ProductionBeltDecisionSource,
   routeState: ProductionBeltRouteState,
   decisionId: ProductionBeltDecisionId,
 ): WorldEvent {
   const dependencies = routeState.dependencies.filter(dep => dep.decisionId === decisionId);
   const line = routeState.lines.find(l => dependencies.some(dep => dep.factoryId === l.factoryId)) ?? routeState.lines[0];
-  const px = Math.floor(actor.x);
-  const py = Math.floor(actor.y);
-  const zoneId = world.zoneMap[world.idx(px, py)];
+  /* Зона: сперва своя из события, потом по месту решения, и только затем по
+   * самой линии. Последнее нужно, потому что `quest_completed` координат не
+   * несёт вовсе, а событие без зоны выпадает из зонных буферов — то есть слух
+   * о нём не дойдёт до соседей, ради которых шов и заводится. */
+  const zoneId = source.zoneId ?? zoneAtPoint(world, source.x, source.y) ?? zoneOfRoom(world, line?.roomId);
   const badBatch = decisionId === 'expose_bad_batch' || decisionId === 'steal_bad_batch';
   return publishEvent(game, {
     type: badBatch ? 'room_blocked_production' : 'room_produced_items',
     z: PRODUCTION_BELT_Z,
-    zoneId: zoneId >= 0 ? zoneId : undefined,
+    zoneId: zoneId !== undefined && zoneId >= 0 ? zoneId : undefined,
     roomId: line?.roomId,
     containerId: line?.outputContainerId,
-    actorId: actor.id,
-    actorName: actor.name,
-    actorFaction: actor.faction,
+    actorId: source.actorId,
+    actorName: source.actorName,
+    actorFaction: source.actorFaction,
     severity: badBatch ? 4 : 3,
     privacy: decisionId === 'steal_bad_batch' ? 'secret' : 'local',
     tags: ['production_belt', 'pipeline', decisionId, ...dependencies.map(dep => dep.toRouteId)],

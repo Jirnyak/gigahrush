@@ -23,6 +23,7 @@ import { LIDA_DEF, GRANDFATHER_DEF, FIRE_LIQUIDATOR_DEF, FALSE_HEIR_DEF } from "
 import { ArchiveRooms, createArchiveRoom, paintRoom, reinforceRaionsovetArchiveAuthoredHqTerritory, expandRaionsovetArchiveGeometry, connectRoomToPoint, placeFixedLift, addDrop, decorateArchive, paintNonRoomCells, retuneRaionsovetArchiveZones } from "./geometry";
 import { spawnArchiveNpc, spawnArchiveGuard, spawnArchiveMonster, addArchiveContainer } from "./npcs";
 import { lightRaionsovetArchive } from "./lighting";
+import { bindRaionsovetArchiveDecisions } from "./decisions";
 
 export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   const world = new World();
@@ -186,6 +187,7 @@ export function generateRaionsovetArchiveDesignFloor(): FloorGeneration {
   lightRaionsovetArchive(world);
   world.bakeLights();
 
+  bindRaionsovetArchiveDecisions(world);
   return generation;
 }
 
@@ -193,3 +195,4 @@ export * from "./meta";
 export * from "./geometry";
 export * from "./npcs";
 export * from "./lighting";
+export * from "./decisions";

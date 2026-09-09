@@ -167,7 +167,9 @@ export function publishRaionsovetArchiveEvent(
 ): WorldEvent {
   return publishEvent(state, {
     type: 'rumor_observed',
-    z: 30,
+    /* Этаж стоит на 22. Литерал 30 (министерство) стоял здесь с постановки и
+     * не врал ровно потому, что функцию не звали ни разу. */
+    z: RAIONSOVET_ARCHIVE_Z,
     roomId,
     zoneId,
     targetName: targetId,

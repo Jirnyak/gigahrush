@@ -28,7 +28,7 @@ import { generateBolnichnyKorpusDesignFloor } from '../bolnichny_korpus';
 import { generateBlackMarket88DesignFloor, reinforceBlackMarket88AuthoredHqTerritory } from '../black_market_88';
 import { generateStenkaDesignFloor } from '../stenka';
 import { generateCayleyByuroDesignFloor } from '../cayley_byuro';
-import { generateChthonicAtticDesignFloor } from '../chthonic_attic';
+import { chthonicAtticRootChoiceForSeed, generateChthonicAtticDesignFloor } from '../chthonic_attic';
 import { generateCommunalRingDesignFloor } from '../communal_ring';
 import { generateCriticalLeakArchiveDesignFloor } from '../critical_leak_archive';
 import { generateDarkMetroDesignFloor } from '../dark_metro';
@@ -78,8 +78,10 @@ const DESIGN_FLOOR_GENERATORS: Record<DesignFloorId, (seed: number) => FloorGene
   liquidatorbase: generateLiquidatorBaseDesignFloor,
   outer_district: generateOuterDistrictDesignFloor,
   roof: generateRoofDesignFloor,
-  // takes an optional rootChoice variant, not a seed — global rng is already seeded by withSeededRandom below
-  chthonic_attic: () => generateChthonicAtticDesignFloor(),
+  /* Берёт НЕ сид, а вариант корня. Раньше здесь стоял пустой вызов, то есть
+     ветвь была навсегда `'cut'`, а `'feed'` и `'burn'` — мёртвым контентом.
+     Ветвь выводится из сида этажа своим потоком, до первого броска генерации. */
+  chthonic_attic: seed => generateChthonicAtticDesignFloor(chthonicAtticRootChoiceForSeed(seed)),
   radon_exchange: generateRadonExchangeDesignFloor,
   antenna_court: generateAntennaCourtDesignFloor,
   spetspriemnik: generateSpetspriemnikDesignFloor,

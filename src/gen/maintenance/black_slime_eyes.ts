@@ -29,7 +29,14 @@ const ROOM_W = 24;
 const ROOM_H = 15;
 const ENTRY_W = 7;
 const ENTRY_H = 7;
-const MAX_GENERATED_SITES_PER_RUNTIME = 1;
+/* Одна такая площадка НА ЭТАЖ. Прежде счётчик был модульный и не сбрасывался
+ * нигде во всём `src/`, то есть предел был «одна за загрузку страницы»:
+ * замерено прогоном коллекторов на четырёх сидах — площадка встала на сиде 1 и
+ * ни на одном из трёх остальных. Для игрока это значило, что второй заход в
+ * коллекторы, пересборка после самосбора и любой новый прогон получали ранний
+ * выход, хотя на площадку ведут и слух `lead_maint_black_slime_false_jar`, и
+ * контракт. Счёт теперь идёт по МИРУ, а его и так ведёт `contexts`. */
+const MAX_GENERATED_SITES_PER_FLOOR = 1;
 const MAX_EYES_PER_SITE = 3;
 
 interface BlackSlimeContext {
@@ -46,8 +53,13 @@ interface BlackSlimeContext {
   aftermathPublished: boolean;
 }
 
-let generatedSites = 0;
 const contexts = createWorldContextStore<BlackSlimeContext>();
+
+/** Сколько площадок уже стоит В ЭТОМ мире. Хранилище контекстов само сбрасывается
+ *  при смене мира, поэтому отдельного счётчика заводить не надо. */
+function sitesInWorld(world: World): number {
+  return contexts.world() === world ? contexts.all().length : 0;
+}
 
 function registerBlackSlimeContext(ctx: BlackSlimeContext): void {
   contexts.register(ctx.world, ctx.roomId, ctx, (existing, incoming) => {
@@ -418,8 +430,7 @@ function connectRooms(ctx: MaintContentCtx, entry: Room, nest: Room): void {
 }
 
 export function generateBlackSlimeEyes(ctx: MaintContentCtx): void {
-  if (generatedSites >= MAX_GENERATED_SITES_PER_RUNTIME) return;
-  generatedSites++;
+  if (sitesInWorld(ctx.world) >= MAX_GENERATED_SITES_PER_FLOOR) return;
 
   const pos = findMaintArea(
     ctx.world,

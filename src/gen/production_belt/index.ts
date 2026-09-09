@@ -15,6 +15,7 @@ import { newEntityIdCursor } from '../entity_ids';
 import { ProductionBeltGeneration, buildRooms, placeLift, expandProductionBeltGeometry, decorateLineRooms, applyZoneRole, registerProductionMachineHazards, markConveyorSpine } from "./geometry";
 import { registerProductionBeltContent, createProductionBeltState, registerProductionBeltRouteCues, populateRooms } from "./npcs";
 import { lightProductionBelt } from "./lighting";
+import { bindProductionBeltDecisions } from "./decisions";
 
 export function generateProductionBeltDesignFloor(): ProductionBeltGeneration {
   registerProductionBeltContent();
@@ -53,6 +54,7 @@ export function generateProductionBeltDesignFloor(): ProductionBeltGeneration {
   const nextId = newEntityIdCursor();
   const containers = populateRooms(world, entities, nextId, rooms);
   const productionState = createProductionBeltState(rooms, containers);
+  bindProductionBeltDecisions(world, productionState);
   registerProductionBeltRouteCues(world, rooms, containers);
   markConveyorSpine(world, rooms.corridor.x + 1, rooms.corridor.y + 3, rooms.corridor.x + rooms.corridor.w - 2, rooms.corridor.y + 3, 91);
   registerProductionMachineHazards(world, [rooms.metalLine, rooms.chargeLine, rooms.ammoLine, rooms.quarantine], 4);
@@ -68,3 +70,4 @@ export function generateProductionBeltDesignFloor(): ProductionBeltGeneration {
 export * from "./meta";
 export * from "./geometry";
 export * from "./npcs";
+export * from "./decisions";
