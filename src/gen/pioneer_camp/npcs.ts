@@ -13,7 +13,7 @@ import {
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
 import { type PlotNpcDef } from '../../data/plot';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { PIONEER_CAMP_Z, CX, CY, NPC_IDS, CampNpcId, CampRooms, NPC_DEFS } from "./meta";
@@ -167,7 +167,7 @@ export function spawnMonster(
     monsterKind: kind,
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
-    phasing: kind === MonsterKind.SHADOW,
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   };
   entities.push(monster);
 }

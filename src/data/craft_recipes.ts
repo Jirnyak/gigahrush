@@ -9,7 +9,7 @@ import {
   craftVectorTotal,
 } from './craft_materials';
 
-export type CraftStationKind = 'any' | 'workbench' | 'lathe' | 'lab' | 'net_terminal';
+export type CraftStationKind = 'any' | 'workbench' | 'lathe' | 'lab';
 export type CraftRecipeTier = 0 | 1 | 2 | 3 | 4;
 
 export interface CraftRecipeDef {
@@ -67,15 +67,20 @@ function stationForItem(def: ItemDef, components: CraftVector): CraftStationKind
   const psi = components[craftMaterialIndex('psimatter')] > 0;
 
   if (total <= 2 && (def.type === ItemType.FOOD || def.type === ItemType.DRINK || def.type === ItemType.NOTE || def.id === 'wet_rag_bundle')) return 'any';
-  if (meta || hasTag(def, 'net') || hasTag(def, 'terminal') || hasTag(def, 'cybernetics')) return 'net_terminal';
+  /* `net_terminal` как станция СНЯТА (решение владельца 2026-09-09: «не надо
+   * множить сущности»).
+   *
+   * Она раздавалась 26 рецептам — лёгкая броня, ОЗК, ТОК-200, гаусс, плазма,
+   * BFG, эмиттер гравилуча, — и НИ ОДИН объект мира её не открывал:
+   * `data/interactive.ts` знает только станок, верстак и лабу. То есть игрок
+   * находил чертёж, тратил редкое сырьё и не собирал предмет никогда.
+   * Всё, что уходило к терминалу — метаматерия, сеть, кибернетика,
+   * энергетическое оружие, — точится на станке. */
   if (psi || def.type === ItemType.MEDICINE || role === 'psi' || hasTag(def, 'sample') || hasTag(def, 'slime') || hasTag(def, 'reagent')) return 'lab';
-  /* Прицельная электроника внутри ствола не переносит ствол к сетевому терминалу:
-     обычное огнестрельное точат на станке и с ней. Терминал держит энергетическое
-     оружие, метаматерию и сетевые вещи — например кодовый ключ тамбура. */
+  if (meta || hasTag(def, 'net') || hasTag(def, 'terminal') || hasTag(def, 'cybernetics') || rareCyber) return 'lathe';
   if (def.type === ItemType.AMMO || def.type === ItemType.WEAPON || hasTag(def, 'weapon_part') || hasTag(def, 'metal') || hasTag(def, 'repair_input')) {
-    return role === 'rare_energy' ? 'net_terminal' : 'lathe';
+    return 'lathe';
   }
-  if (rareCyber) return 'net_terminal';
   return 'workbench';
 }
 

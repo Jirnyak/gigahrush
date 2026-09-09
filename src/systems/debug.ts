@@ -11,7 +11,7 @@ import { PSI_WEAPON_STATS } from '../data/psi';
 import { designFloorAtZ } from "../data/design_floors";
 import { getPermitDef, type PermitAccessTag } from '../data/permits';
 import { FACTION_NAMES } from '../data/relations';
-import { MONSTERS, monsterTypeName } from '../entities/monster';
+import { monsterHasAIFlag, MONSTERS, monsterTypeName } from '../entities/monster';
 import { monsterSpr, Spr } from '../entities/sprite_index';
 import { markDangerFieldCell } from './danger_field';
 import {  randomRPG, getMaxHp } from './rpg';
@@ -511,7 +511,7 @@ function spawnDebugMonsterPack(
       attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: spot.x, ty: spot.y, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: randomRPG(player.rpg?.level ?? 1),
-      phasing: kind === MonsterKind.SPIRIT };
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase') };
     entities.push(monster);
     const debugFogCells = seedDebugFogSharkPatch(world, kind, spot.x, spot.y);
     const debugLightCells = seedDebugLishennyyLight(world, player, kind);
@@ -1142,7 +1142,7 @@ registerDebugCommand({
         monsterKind: k, attackCd: 0,
         ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
         rpg: randomRPG(player.rpg?.level ?? 1),
-        phasing: k === MonsterKind.SPIRIT };
+        phasing: monsterHasAIFlag({ monsterKind: k }, 'wallPhase') };
       entities.push(monster);
       seedDebugFogSharkPatch(world, k, monster.x, monster.y);
     }

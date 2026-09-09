@@ -6,7 +6,7 @@ import { designFloorPopulationProfile } from '../../data/design_floor_population
 import { HUMAN_TERRITORY_OWNERS, factionToTerritoryOwner } from '../../data/factions';
 import { entitySpawnSlots } from '../../systems/entity_limits';
 import { type PlotNpcDef } from '../../data/plot';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { ensureConnectivity, finalizeExpandedFloor, generateZones } from '../shared';
@@ -442,7 +442,7 @@ export function spawnUnderhellMonster(
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: kind === MonsterKind.SPIRIT,
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
     spriteScale: kind === MonsterKind.IDOL ? 1.25 : undefined,
   });
   return id;

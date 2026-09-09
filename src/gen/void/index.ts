@@ -14,7 +14,7 @@ import { VOID_POPULATION_PROFILE } from '../../data/population_profiles';
 import { activeActorCountAtDefaultSoftLimit } from '../../data/entity_limits';
 import { calcZoneLevel, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { Spr, monsterSpr } from '../../entities/sprite_index';
 import { runVoidContent } from './content_manifest';
 import { applyVoidRevealLighting, buildVoidGeometry, paintVoidDefaults } from './geometry';
@@ -130,7 +130,7 @@ export function generateVoid(): { world: World; entities: Entity[]; spawnX: numb
       monsterKind: kind, attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: mRpg,
-      phasing: kind === MonsterKind.SPIRIT,
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
     });
   }
 

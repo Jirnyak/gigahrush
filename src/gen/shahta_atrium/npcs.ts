@@ -11,7 +11,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { ITEMS } from '../../data/catalog';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { randomRPG } from '../../systems/rpg';
 import { rng } from '../../core/rand';
 import { SHAHTA_ATRIUM_Z } from "./meta";
@@ -72,7 +72,7 @@ export function spawnMonster(entities: Entity[], nextId: { v: number }, kind: Mo
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: kind === MonsterKind.SPIRIT,
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   });
 }
 

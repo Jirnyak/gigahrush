@@ -12,7 +12,7 @@ import {
   type WorldContainer,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
@@ -66,7 +66,7 @@ export function spawnShortcutMonsters(world: World, entities: Entity[], nextId: 
       attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: randomRPG(7),
-      phasing: kind === MonsterKind.SHADOW || kind === MonsterKind.TONKAYA_TEN,
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
     });
   }
 }

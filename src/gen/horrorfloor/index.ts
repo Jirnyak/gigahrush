@@ -1,5 +1,6 @@
 import { World } from '../../core/world';
 import { Entity, EntityType, Tex, Cell, DoorState, W, MonsterKind, RoomType } from '../../core/types';
+import { monsterHasAIFlag } from '../../entities/monster';
 import { seededRandom } from '../../core/rand';
 import { carveCorridor, ensureConnectivity, generateZones, placeDoorAt, stampRoom, sanitizeDoors} from '../shared';
 import type { FloorGeneration } from '../floor_manifest';
@@ -134,7 +135,7 @@ export function generateHorrorFloorDesignFloor(): FloorGeneration {
         alive: true,
         speed: kind === MonsterKind.SCULPTURE ? 8.5 : 1.5,
         sprite: monsterSpr(kind),
-        phasing: kind === MonsterKind.GLUBINNAYA_TEN,
+        phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
         ai: { goal: AIGoal.WANDER, tx: cx, ty: cy, path: [], pi: 0, stuck: 0, timer: 0 },
         rpg: randomRPG(10),
       });

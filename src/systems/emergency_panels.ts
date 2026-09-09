@@ -33,7 +33,7 @@ import {
 } from '../data/emergency_panels';
 import { ITEMS } from '../data/catalog';
 import { isPlotNpc } from '../data/plot';
-import { MONSTERS } from '../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../entities/monster';
 import { monsterSpr } from '../entities/sprite_index';
 import { randomRPG } from './rpg';
 import { removeItem } from './inventory';
@@ -502,7 +502,7 @@ function spawnPanelThreat(
       attackCd: 0,
       ai: { goal: AIGoal.HUNT, tx: player.x, ty: player.y, path: [], pi: 0, stuck: 0, timer: 0, combatTargetId: player.id },
       rpg: randomRPG(Math.max(1, zoneLevel)),
-      phasing: kind === MonsterKind.SPIRIT,
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
     };
     entities.push(monster);
     return 1;

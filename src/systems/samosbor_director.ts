@@ -17,7 +17,7 @@ import {
 } from '../data/samosbor_director';
 import { type SamosborVariantId, type ActiveSamosborVariant } from '../data/samosbor_variants';
 import { freshNeeds, ITEMS, randomName } from '../data/catalog';
-import { MONSTERS } from '../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../entities/monster';
 import { getMaxHp, randomRPG, scaleMonsterHp, scaleMonsterSpeed } from './rpg';
 import { SeedRng, hashSeed } from '../core/rand';
 import { changeResourceStock } from './economy';
@@ -598,7 +598,7 @@ function spawnAftershockMonster(
     attackCd: def.attackRate,
     ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg,
-    phasing: kind === MonsterKind.SPIRIT,
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   };
   entities.push(monster);
   return 1;

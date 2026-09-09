@@ -19,7 +19,7 @@ import {
 } from '../../data/design_floor_population';
 import { chooseFloorMonsterKind } from '../../data/monster_ecology';
 import { growPackCells, packPlanFor } from '../monster_packs';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { entitySpawnSlots } from '../../systems/entity_limits';
@@ -156,13 +156,6 @@ export function populateDesignFloorAmbientNpcs(generation: Omit<FloorGeneration,
 // pack centers use the field-weighted sampler, so per-kind zoneWeights already keep
 // CITIZEN zones sparse. Shares the active-actor pool with NPCs via entitySpawnSlots.
 
-const PHASING_MONSTER_KINDS: ReadonlySet<MonsterKind> = new Set([
-  MonsterKind.SPIRIT,
-  MonsterKind.SHADOW,
-  MonsterKind.TONKAYA_TEN,
-  MonsterKind.GLUBINNAYA_TEN,
-]);
-
 function roomTypeAt(world: World, cell: number): RoomType {
   const rid = world.roomMap[cell];
   return rid >= 0 ? (world.rooms[rid]?.type ?? RoomType.CORRIDOR) : RoomType.CORRIDOR;
@@ -214,7 +207,7 @@ function makeMonster(
     // only for territorial packs so the AI leash (monster.ts WANDER branch) engages.
     ai: { goal: AIGoal.WANDER, tx: centerX, ty: centerY, path: [], pi: 0, stuck: 0, timer: 0, homeRoomId },
     rpg: randomRPG(level),
-    phasing: PHASING_MONSTER_KINDS.has(kind),
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   };
 }
 

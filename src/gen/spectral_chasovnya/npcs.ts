@@ -16,7 +16,7 @@ import {
 import { World } from '../../core/world';
 import { factionToTerritoryOwner } from '../../data/factions';
 import { type PlotNpcDef } from '../../data/plot';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { randomRPG } from '../../systems/rpg';
 import { territoryOwnerAtIndex } from '../../systems/territory';
@@ -64,7 +64,7 @@ export function spawnSpectralMonster(
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: x + 0.5, ty: y + 0.5, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: kind === MonsterKind.SPIRIT || kind === MonsterKind.SHADOW || kind === MonsterKind.TONKAYA_TEN || kind === MonsterKind.GLUBINNAYA_TEN,
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   });
 }
 

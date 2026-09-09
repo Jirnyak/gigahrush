@@ -44,6 +44,9 @@ export type MonsterAIFlag =
   | 'webSpitter'
   | 'flying'
   | 'noclip'
+  /* Проходит сквозь СТЕНЫ. Отдельно от `noclip`, который про мебель и взгляд:
+   * ложный дух не клипается о мебель, но стены для него твёрдые. */
+  | 'wallPhase'
   | 'wetLineShot'
   | 'packHowl'
   | 'noiseFear'

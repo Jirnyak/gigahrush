@@ -14,7 +14,7 @@ import {
   getVoidProtocolDef,
   type VoidProtocolDef,
 } from '../data/void_protocols';
-import { MONSTERS } from '../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../entities/monster';
 import { monsterSpr, Spr } from '../entities/sprite_index';
 import { damageActorByEnvironment } from './actor_damage';
 import { recordPlayerDamage } from './damage';
@@ -328,7 +328,7 @@ function spawnProtocolMonster(
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: kind === MonsterKind.SPIRIT,
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   });
 }
 

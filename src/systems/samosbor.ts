@@ -17,7 +17,7 @@ import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { addFactionRelMutual } from '../data/relations';
 import { getStack, spawnCount } from '../data/items';
 import { chooseFloorMonsterKind } from '../data/monster_ecology';
-import { MONSTERS } from '../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../entities/monster';
 import { Spr } from '../entities/sprite_index';
 import { stampMark, MarkType } from './surface_marks';
 import { forceHide } from './ai';
@@ -3543,7 +3543,7 @@ function createMonster(world: World, nextId: { v: number }, kind: MonsterKind, x
     attackCd: def.attackRate,
     ai: { goal, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg,
-    phasing: kind === MonsterKind.SPIRIT,
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   };
   return monster;
 }
@@ -3689,7 +3689,7 @@ function rewriteMonsterAsRandom(world: World, entity: Entity, z: number, samosbo
   entity.attackCd = def.attackRate;
   entity.rpg = rpg;
   entity.ai = { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 };
-  entity.phasing = kind === MonsterKind.SPIRIT;
+  entity.phasing = monsterHasAIFlag({ monsterKind: kind }, 'wallPhase');
   entity.isFogBoss = false;
   entity.fogBossZone = undefined;
   const ci = world.idx(Math.floor(entity.x), Math.floor(entity.y));

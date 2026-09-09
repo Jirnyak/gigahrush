@@ -21,10 +21,19 @@
 /*   To add a new hand-crafted room, create a .ts file here      */
 /*   and call it from generateWorld() below.                     */
 
-import { type Entity, Cell, Tex, EntityType, AIGoal, W, MonsterKind, RoomType, ZoneFaction } from '../../core/types';
+import {
+  type Entity,
+  Cell,
+  Tex,
+  EntityType,
+  AIGoal,
+  W,
+  RoomType,
+  ZoneFaction,
+} from '../../core/types';
 import { World } from '../../core/world';
 import { rng } from '../../core/rand';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { sampleNaturalPopulationCells } from '../population_placement';
 import { baseMonsterPopulationAtDefaultSoftLimit } from '../../data/population_profiles';
@@ -177,7 +186,7 @@ export function generateWorld(_seed?: number, isTutorial: boolean = false): { wo
       hp, maxHp: hp, speed, sprite: monsterSpr(kind),
       attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
-      phasing: kind === MonsterKind.SPIRIT,
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
     });
   }
 

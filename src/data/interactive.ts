@@ -10,7 +10,7 @@ import {
 export type InteractiveSurfaceLayer = 'block' | 'feature' | 'container' | 'billboard';
 
 export type InteractiveCraftMenuMode = 'craft' | 'disassemble';
-export type InteractiveCraftStationKind = 'lathe' | 'workbench' | 'lab' | 'net_terminal';
+export type InteractiveCraftStationKind = 'lathe' | 'workbench' | 'lab';
 
 export const INTERACTIVE_SURFACE_FLAG_CRAFT_LATHE = 1 << 1;
 export const INTERACTIVE_SURFACE_FLAG_DISASSEMBLY_WORKBENCH = 1 << 2;

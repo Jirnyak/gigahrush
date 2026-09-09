@@ -16,7 +16,7 @@ import { World } from '../../core/world';
 import { registerFloorScopedReset } from '../../world/world_contexts';
 import { freshNeeds } from '../../data/catalog';
 import { type PlotNpcDef, designNpcFloorKey, registerFloorSideQuest } from '../../data/plot';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -352,7 +352,7 @@ function spawnCacheBranchBacklash(
       attackCd: def.attackRate,
       ai: { goal: player ? AIGoal.HUNT : AIGoal.WANDER, tx: player?.x ?? site.x, ty: player?.y ?? site.y, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: randomRPG(level),
-      phasing: kind === MonsterKind.SPIRIT,
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
     };
     entities.push(monster);
     site.backlashSpawned++;
@@ -741,7 +741,7 @@ function spawnMonsterPressure(
       attackCd: 0,
       ai: { goal: AIGoal.WANDER, tx: cx, ty: cy, path: [], pi: 0, stuck: 0, timer: 0 },
       rpg: randomRPG(zoneLevel + 1),
-      phasing: kind === MonsterKind.SPIRIT,
+      phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
     });
   }
 }

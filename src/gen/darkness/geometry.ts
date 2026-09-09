@@ -8,7 +8,7 @@ import {
   type GameState, type WorldEvent, type TerritoryOwner,
 } from '../../core/types';
 import { World } from '../../core/world';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { publishEvent } from '../../systems/events';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -1246,13 +1246,6 @@ export function darknessMonsterAngle(id: number, x: number, y: number): number {
   return ((h >>> 0) / 0x100000000) * Math.PI * 2;
 }
 
-export function darknessMonsterPhases(kind: MonsterKind): boolean {
-  return kind === MonsterKind.SPIRIT ||
-    kind === MonsterKind.SHADOW ||
-    kind === MonsterKind.TONKAYA_TEN ||
-    kind === MonsterKind.GLUBINNAYA_TEN ||
-    kind === MonsterKind.LOZHNYY_DUKH;
-}
 
 export function spawnMonster(
   entities: Entity[],
@@ -1283,7 +1276,7 @@ export function spawnMonster(
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: darknessMonsterPhases(kind),
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   });
 }
 

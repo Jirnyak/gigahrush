@@ -14,7 +14,7 @@ export type CraftMaterialId = typeof CRAFT_MATERIAL_IDS[number];
 export type CraftVector = readonly [number, number, number, number, number, number, number, number, number];
 export type MutableCraftVector = [number, number, number, number, number, number, number, number, number];
 export type CraftMaterialRarity = 'common' | 'specific' | 'rare';
-export type CraftStationKind = 'any' | 'workbench' | 'lathe' | 'lab' | 'net_terminal';
+export type CraftStationKind = 'any' | 'workbench' | 'lathe' | 'lab';
 export const CRAFT_MATERIAL_COUNT = CRAFT_MATERIAL_IDS.length;
 
 export interface CraftMaterialDef {

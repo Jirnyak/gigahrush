@@ -6,7 +6,7 @@ import { DamageType, Cell, ContainerKind, DoorState, EntityType, AIGoal, Feature
 import { damageActorByEnvironment } from '../../systems/actor_damage';
 import { World } from '../../core/world';
 import { createWorldContextStore } from '../../world/world_contexts';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { publishEvent, registerWorldEventObserver as observeWorldEvents } from '../../systems/events';
 import { hasItem, removeItem } from '../../systems/inventory';
@@ -161,7 +161,7 @@ function spawnTraceThreat(ctx: TraceSealContext, kind: MonsterKind, name: string
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: kind === MonsterKind.SPIRIT,
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   });
 }
 

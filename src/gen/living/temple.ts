@@ -11,7 +11,7 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { registerZoneContent } from './zone_content';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { registerContentEntityDeathHook } from '../../systems/content_hooks';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -316,7 +316,7 @@ export function priestDeathCurse(
         attackCd: def.attackRate,
         ai: { goal: AIGoal.HUNT, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
         rpg,
-        phasing: kind === MonsterKind.SPIRIT,
+        phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
       });
       spawned++;
     }

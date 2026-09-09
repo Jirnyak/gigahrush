@@ -76,7 +76,7 @@ const AMBIENT_NPC_2: PlotNpcDef = {
 };
 registerAuthoredNpc({ id: 'ambient_2_2h1k6', npc: AMBIENT_NPC_2, homeFloorKey: DESIGN_NPC_HOME_FLOOR_KEY });
 
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { randomRPG } from '../../systems/rpg';
@@ -1485,7 +1485,7 @@ function spawnMonster(
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: x, ty: y, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: kind === MonsterKind.SHADOW || kind === MonsterKind.SPIRIT,
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   });
 }
 

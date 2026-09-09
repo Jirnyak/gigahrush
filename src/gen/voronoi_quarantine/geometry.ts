@@ -30,7 +30,7 @@ import { damageActorByEnvironment } from '../../systems/actor_damage';
 import { World } from '../../core/world';
 import { rng, hashSeed } from '../../core/rand';
 import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr } from '../../entities/sprite_index';
 import { placeEmergencyPanel } from '../../systems/emergency_panels';
 import { randomRPG } from '../../systems/rpg';
@@ -1550,7 +1550,7 @@ export function spawnMonster(
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: point.x, ty: point.y, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: kind === MonsterKind.SHADOW || kind === MonsterKind.SPIRIT,
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   });
 }
 

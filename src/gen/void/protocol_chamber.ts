@@ -7,7 +7,7 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { VOID_PROTOCOLS } from '../../data/void_protocols';
-import { MONSTERS } from '../../entities/monster';
+import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
 import { monsterSpr, Spr } from '../../entities/sprite_index';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
 import { carveCorridor, placeDoorAt, stampRoom } from '../shared';
@@ -56,7 +56,7 @@ function spawnMonster(
     attackCd: 0,
     ai: { goal: AIGoal.WANDER, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
     rpg: randomRPG(level),
-    phasing: kind === MonsterKind.SPIRIT,
+    phasing: monsterHasAIFlag({ monsterKind: kind }, 'wallPhase'),
   });
 }
 

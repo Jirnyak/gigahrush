@@ -423,7 +423,7 @@ export interface ItemCompositionDef {
   components: CraftVector;
   craftable?: boolean;
   discoverable?: boolean;
-  station?: 'any' | 'workbench' | 'lathe' | 'lab' | 'net_terminal';
+  station?: 'any' | 'workbench' | 'lathe' | 'lab';
   recipeTier?: 0 | 1 | 2 | 3 | 4;
   tags?: readonly string[];
 }

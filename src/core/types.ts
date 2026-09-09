@@ -1122,7 +1122,7 @@ export interface GameClock {
 }
 
 export type CraftMenuMode = 'craft' | 'disassemble';
-export type CraftStationKind = 'any' | 'workbench' | 'lathe' | 'lab' | 'net_terminal';
+export type CraftStationKind = 'any' | 'workbench' | 'lathe' | 'lab';
 
 export interface GameState {
   tick: number;
