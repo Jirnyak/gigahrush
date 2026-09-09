@@ -91,6 +91,35 @@ export function randomRoomCell(world: World, room: Room, requireEmpty = false): 
   return null;
 }
 
+/** Ставит объект в клетку комнаты по смещению. Общий на этаж и на аномалии:
+ *  тело в пять строк, а копия рядом с копией — это будущий рассинхрон. */
+export function placeRoomFeature(world: World, room: Room, feature: Feature, dx: number, dy: number): { x: number; y: number } | null {
+  const pos = roomCell(world, room, dx, dy);
+  if (!pos) return null;
+  world.features[world.idx(pos.x, pos.y)] = feature;
+  return pos;
+}
+
+/**
+ * СЛЕПОЙ выбор клетки пола: без карты проходимости и без проверки защиты.
+ *
+ * Отличается от `randomFloorCell` рядом намеренно и назван по отличию.
+ * Расхождение этих двух разобрано в `postrelease.md` §2.10 как отдельный фронт
+ * и здесь НЕ решается: свести их значит сдвинуть поток случайных чисел у всех,
+ * кто зовёт слепую версию.
+ */
+export function randomFloorCellBlind(world: World, sx: number, sy: number, minDist2: number): { x: number; y: number } | null {
+  for (let attempt = 0; attempt < 5000; attempt++) {
+    const x = irng(4, W - 5);
+    const y = irng(4, W - 5);
+    const ci = world.idx(x, y);
+    if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
+    if (minDist2 > 0 && world.dist2(sx, sy, x + 0.5, y + 0.5) < minDist2) continue;
+    return { x, y };
+  }
+  return null;
+}
+
 export function randomFloorCell(world: World, sx: number, sy: number, minDist2: number, attempts = 4000): { x: number; y: number } | null {
   const placement = placementForWorld(world);
   if (placement) {

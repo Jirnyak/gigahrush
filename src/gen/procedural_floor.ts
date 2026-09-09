@@ -96,7 +96,6 @@ import {
   sanitizeDoors,
   shapeRoom,
   stampRoom,
-  type WalkablePlacementMap,
 } from './shared';
 import type { FloorGeneration } from './floor_manifest';
 import { decorateCarnivorousFungusRoom } from './carnivorous_fungus_room';
@@ -104,6 +103,7 @@ import { applyProceduralFloorObjectProfile } from './floor_object_placement';
 import { fillVisualSlotsForWorldFeatures } from '../world/visual_cell_slots';
 import { rebuildGeneratedFloorPathBlockers } from '../world/path_blockers';
 import { applyProceduralAnomalyProfile } from './procedural_anomalies';
+import { placeRoomFeature, randomFloorCellBlind } from './procedural_anomalies/common';
 import { applyProceduralStructureLibrary } from './procedural_structure_library';
 import { ensureZombieApocalypseQuarantineDoor } from './procedural_anomalies/zombie_apocalypse';
 import { removeNpcEntities } from './entity_filters';
@@ -3506,18 +3506,6 @@ function proceduralNpcPopulationSeed(spec: ProceduralFloorSpec, nextId: number):
   return (spec.seed ^ Math.imul(spec.z + 97, 0x45d9f3b) ^ Math.imul(nextId + 1, 0x27d4eb2d)) >>> 0;
 }
 
-function randomFloorCell(world: World, sx: number, sy: number, minDist2: number): { x: number; y: number } | null {
-  for (let attempt = 0; attempt < 5000; attempt++) {
-    const x = irng(4, W - 5);
-    const y = irng(4, W - 5);
-    const ci = world.idx(x, y);
-    if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
-    if (minDist2 > 0 && world.dist2(sx, sy, x + 0.5, y + 0.5) < minDist2) continue;
-    return { x, y };
-  }
-  return null;
-}
-
 function anomalyRoutePressure(spec: ProceduralFloorSpec): number {
   return proceduralFloorAnomalyRoutePressure(spec);
 }
@@ -3703,7 +3691,7 @@ function spawnMonsters(world: World, entities: Entity[], nextId: { v: number }, 
   let rareSpawned = 0;
   const used = new Set<number>();
   for (let packSerial = 0; budget > 0; packSerial++) {
-    const center = randomFloorCell(world, sx, sy, 90 * 90);
+    const center = randomFloorCellBlind(world, sx, sy, 90 * 90);
     if (!center) break;
     const allowRare = rareSpawned < rareLimit && chance(rareMonsterChance(spec));
     const kind = chooseProceduralMonsterKind(world, spec, center, allowRare);
@@ -10616,215 +10604,6 @@ function applySmog(
   world.markFogDirty();
 }
 
-function canPaintSamosborSeedCell(world: World, ci: number): boolean {
-  return world.aptMask[ci] === 0 &&
-    world.hermoWall[ci] === 0 &&
-    world.cells[ci] !== Cell.LIFT &&
-    world.features[ci] !== Feature.LIFT_BUTTON;
-}
-
-function chooseSamosborSeedBreachRoom(world: World, rooms: Room[], spec: ProceduralFloorSpec, sx: number, sy: number): Room | null {
-  const candidates = rooms
-    .filter(room => room.id !== 0 && !room.sealed && room.w >= 5 && room.h >= 5 && room.type !== RoomType.BATHROOM)
-    .map(room => {
-      const c = roomCenter(room);
-      const d2 = world.dist2(sx, sy, c.x + 0.5, c.y + 0.5);
-      const size = room.w * room.h;
-      const typeScore = room.type === RoomType.PRODUCTION || room.type === RoomType.STORAGE ? 80 : room.type === RoomType.COMMON ? 48 : 0;
-      return { room, score: Math.min(180, Math.sqrt(d2)) + size * 0.18 + typeScore + ((spec.seed + room.id * 17) % 23) };
-    })
-    .sort((a, b) => b.score - a.score);
-  return candidates[0]?.room ?? rooms.find(room => room.id !== 0) ?? null;
-}
-
-function chooseSamosborSeedShelterRoom(world: World, rooms: Room[], breach: Room | null, sx: number, sy: number): Room | null {
-  const breachCenter = breach ? roomCenter(breach) : { x: sx, y: sy };
-  const candidates = rooms
-    .filter(room => room.id !== 0 && room.id !== breach?.id && room.w >= 5 && room.h >= 5)
-    .map(room => {
-      const c = roomCenter(room);
-      const nameShelter = room.name.startsWith('Гражданское укрытие') ||
-        room.name.startsWith('Тихая ниша укрытия') ||
-        room.name.startsWith('Убежищный отросток');
-      const cleanType = room.type === RoomType.COMMON || room.type === RoomType.STORAGE || room.type === RoomType.LIVING || room.type === RoomType.OFFICE;
-      const spawnDist = Math.sqrt(world.dist2(sx, sy, c.x + 0.5, c.y + 0.5));
-      const breachDist = Math.sqrt(world.dist2(breachCenter.x + 0.5, breachCenter.y + 0.5, c.x + 0.5, c.y + 0.5));
-      return {
-        room,
-        score: (nameShelter ? 220 : 0) + (cleanType ? 70 : 0) + Math.min(100, breachDist) - Math.min(80, spawnDist * 0.35),
-      };
-    })
-    .sort((a, b) => b.score - a.score);
-  return candidates[0]?.room ?? null;
-}
-
-function paintSamosborSeedBreach(world: World, room: Room, spec: ProceduralFloorSpec): { x: number; y: number } | null {
-  const center = roomCenter(room);
-  const rx = Math.max(3, room.w * 0.48);
-  const ry = Math.max(3, room.h * 0.48);
-  let painted = 0;
-  room.name = `Семя самосбора ${room.id}: мясной разлом`;
-  for (let dy = -1; dy <= room.h; dy++) {
-    for (let dx = -1; dx <= room.w; dx++) {
-      const x = world.wrap(room.x + dx);
-      const y = world.wrap(room.y + dy);
-      const ci = world.idx(x, y);
-      if (!canPaintSamosborSeedCell(world, ci)) continue;
-      const nx = (x - center.x) / rx;
-      const ny = (y - center.y) / ry;
-      const d2 = nx * nx + ny * ny;
-      if (world.cells[ci] === Cell.WALL && d2 <= 1.12) {
-        world.wallTex[ci] = d2 < 0.72 ? Tex.MEAT : Tex.GUT;
-        continue;
-      }
-      if (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER) continue;
-      if (world.roomMap[ci] !== room.id && d2 > 0.78) continue;
-      world.floorTex[ci] = d2 < 0.5 ? Tex.F_MEAT : Tex.F_GUT;
-      world.fog[ci] = Math.max(world.fog[ci], Math.round(82 + Math.max(0, 1 - d2) * 72));
-      if (world.features[ci] === Feature.NONE && !world.containerMap.has(ci) && ((dx * 13 + dy * 7 + spec.seed) & 31) === 0) {
-        world.features[ci] = Feature.APPARATUS;
-      }
-      if ((painted % 17) === 0) {
-        stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.42, 0.72, spec.seed ^ (painted * 97 + room.id), 116, 30, 42, false);
-      }
-      painted++;
-    }
-  }
-  const zone = world.zones[world.zoneMap[world.idx(center.x, center.y)]];
-  if (zone) {
-    zone.faction = ZoneFaction.SAMOSBOR;
-    zone.level = Math.max(zone.level, Math.min(5, spec.danger + 1));
-    zone.fogged = true;
-  }
-  const centerIdx = world.idx(center.x, center.y);
-  if (world.cells[centerIdx] === Cell.FLOOR && world.features[centerIdx] === Feature.NONE && !world.containerMap.has(centerIdx)) {
-    world.features[centerIdx] = Feature.APPARATUS;
-  }
-  stampSurfaceSplat(world, center.x, center.y, 0.5, 0.5, 0.75, 0.88, spec.seed ^ 0x5a0b0, 135, 20, 34, false);
-  stampSurfaceSplat(world, center.x, center.y, 0.5, 0.5, 0.52, 0.58, spec.seed ^ 0x51e, 42, 105, 76, false);
-  return roomCell(world, room, Math.floor(room.w / 2), Math.floor(room.h / 2)) ?? center;
-}
-
-function paintSamosborSeedTrail(world: World, spec: ProceduralFloorSpec, from: { x: number; y: number }, to: { x: number; y: number }): void {
-  const dx = world.delta(from.x, to.x);
-  const dy = world.delta(from.y, to.y);
-  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const x = world.wrap(Math.round(from.x + dx * t));
-    const y = world.wrap(Math.round(from.y + dy * t));
-    for (let side = -1; side <= 1; side++) {
-      const sx = world.wrap(x + (Math.abs(dx) >= Math.abs(dy) ? 0 : side));
-      const sy = world.wrap(y + (Math.abs(dx) >= Math.abs(dy) ? side : 0));
-      const ci = world.idx(sx, sy);
-      if (!canPaintSamosborSeedCell(world, ci) || (world.cells[ci] !== Cell.FLOOR && world.cells[ci] !== Cell.WATER)) continue;
-      if ((i + side + spec.seed) % 3 !== 0) continue;
-      world.floorTex[ci] = i % 4 === 0 ? Tex.F_GUT : world.floorTex[ci];
-      world.fog[ci] = Math.max(world.fog[ci], 42 + Math.round((1 - t) * 34));
-      if (i % 13 === 0) stampSurfaceSplat(world, sx, sy, 0.5, 0.5, 0.28, 0.5, spec.seed ^ (i * 131 + side), 92, 24, 36, false);
-    }
-  }
-}
-
-function paintSamosborSeedProtectedShell(world: World, room: Room, spec: ProceduralFloorSpec): { x: number; y: number } | null {
-  const center = roomCenter(room);
-  if (!room.name.startsWith('Гражданское укрытие') && !room.name.startsWith('Тихая ниша укрытия') && !room.name.startsWith('Убежищный отросток')) {
-    room.name = `Чистый отступ ${room.id}`;
-  }
-  for (let dy = -1; dy <= room.h; dy++) {
-    for (let dx = -1; dx <= room.w; dx++) {
-      const x = world.wrap(room.x + dx);
-      const y = world.wrap(room.y + dy);
-      const ci = world.idx(x, y);
-      if (!canPaintSamosborSeedCell(world, ci)) continue;
-      if (world.cells[ci] === Cell.WALL && world.roomMap[world.idx(center.x, center.y)] === room.id) {
-        world.wallTex[ci] = Tex.HERMO_WALL;
-      } else if ((world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.WATER) && world.roomMap[ci] === room.id) {
-        world.floorTex[ci] = ((dx + dy + spec.seed) & 3) === 0 ? Tex.F_TILE : Tex.F_CONCRETE;
-        world.fog[ci] = Math.min(world.fog[ci], 18);
-      }
-    }
-  }
-  const zone = world.zones[world.zoneMap[world.idx(center.x, center.y)]];
-  if (zone) {
-    zone.faction = ZoneFaction.CITIZEN;
-    zone.fogged = false;
-  }
-  placeRoomFeature(world, room, Feature.LAMP, 1, 1);
-  placeRoomFeature(world, room, Feature.SCREEN, room.w - 2, 1);
-  stampSurfaceSplat(world, center.x, center.y, 0.5, 0.5, 0.32, 0.36, spec.seed ^ 0xafe, 105, 146, 118, false);
-  return roomCell(world, room, Math.floor(room.w / 2), Math.floor(room.h / 2)) ?? center;
-}
-
-function registerSamosborSeedRetreatCue(
-  world: World,
-  spec: ProceduralFloorSpec,
-  breach: Room,
-  shelter: Room,
-  breachPos: { x: number; y: number },
-  shelterPos: { x: number; y: number },
-): void {
-  registerRouteCue(world, {
-    id: `procedural_${spec.key}_samosbor_retreat`,
-    x: breachPos.x + 0.5,
-    y: breachPos.y + 0.5,
-    targetX: shelterPos.x + 0.5,
-    targetY: shelterPos.y + 0.5,
-    z: spec.z,
-    roomId: breach.id,
-    targetRoomId: shelter.id,
-    zoneId: world.zoneMap[world.idx(breachPos.x, breachPos.y)],
-    label: 'чистый отступ',
-    hint: 'отступить от мясного семени к сухому карману',
-    targetName: shelter.name,
-    color: '#b8d7a2',
-    tags: ['procedural_floor', 'samosbor_seed', 'samosbor', 'retreat', 'shelter', 'protected_shell'],
-    toneSeed: (spec.seed ^ breach.id * 313 ^ shelter.id * 977) >>> 0,
-    radius: 13,
-    targetRadius: 4,
-    cooldownSec: 28,
-    heardText: 'Сирена в мясе щелкает не в ритм. Чистый отступ еще читается по сухому полу.',
-    followedText: 'Чистый отступ найден. Давка осталась за спиной, но герму все равно надо готовить руками.',
-    ignoredText: 'Чистый отступ ушел за шумом. Мясной очаг остался между маршрутами.',
-    routeGroup: {
-      id: `procedural_${spec.key}_samosbor_seed_retreat`,
-      lead: 'сирена показывает очаг',
-      risk: 'туман и мясной пол предупреждают о раннем самосборном давлении',
-      decision: 'зайти за лутом, отойти к чистому карману или держать основной маршрут',
-      reward: 'чистая комната дает ориентир для подготовки гермы',
-      mapLabel: 'чистый отступ',
-      mapHint: 'сухой карман у самосборного семени',
-    },
-  });
-}
-
-function applySamosborSeed(world: World, rooms: Room[], spec: ProceduralFloorSpec, spawnX: number, spawnY: number): void {
-  if (spec.anomalyId !== 'samosbor_seed') return;
-  for (const zone of world.zones) {
-    if (chance(0.22 + spec.danger * 0.04)) zone.faction = ZoneFaction.SAMOSBOR;
-  }
-  const breach = chooseSamosborSeedBreachRoom(world, rooms, spec, Math.floor(spawnX), Math.floor(spawnY));
-  const shelter = chooseSamosborSeedShelterRoom(world, rooms, breach, Math.floor(spawnX), Math.floor(spawnY));
-  const breachPos = breach ? paintSamosborSeedBreach(world, breach, spec) : null;
-  const shelterPos = shelter ? paintSamosborSeedProtectedShell(world, shelter, spec) : null;
-  if (breach && shelter && breachPos && shelterPos) {
-    paintSamosborSeedTrail(world, spec, shelterPos, breachPos);
-    registerSamosborSeedRetreatCue(world, spec, breach, shelter, breachPos, shelterPos);
-  }
-  for (let i = 0; i < 1400; i++) {
-    const pos = randomFloorCell(world, W / 2, W / 2, 0);
-    if (!pos) continue;
-    const ci = world.idx(pos.x, pos.y);
-    if (!canPaintSamosborSeedCell(world, ci)) continue;
-    world.floorTex[ci] = chance(0.5) ? Tex.F_GUT : Tex.F_MEAT;
-    if (chance(0.2)) stampSurfaceSplat(world, pos.x, pos.y, 0.5, 0.5, 0.45, 0.8, spec.seed + i, 120, 15, 28, false);
-  }
-  world.markWallTexDirty();
-  world.markFloorTexDirty();
-  world.markFogDirty();
-  world.markFeaturesDirty(true);
-}
-
 interface MyceliumSite {
   room: Room;
   x: number;
@@ -11400,125 +11179,6 @@ function applyHladon(world: World, rooms: Room[], entities: Entity[], nextId: { 
   seedHladonCounterplay(world, rooms, coldRooms, entities, nextId, spec, sx, sy);
   world.markFogDirty();
   world.markFloorTexDirty();
-}
-
-const TELEPORT_ENDPOINT_LIFT_CLEARANCE = 10;
-const TELEPORT_ENDPOINT_SPACING2 = 24 * 24;
-const TELEPORT_PAIR_MIN_DIST2 = 180 * 180;
-
-function nearLiftBackbone(world: World, x: number, y: number, radius: number): boolean {
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      const ci = world.idx(x + dx, y + dy);
-      if (world.cells[ci] === Cell.LIFT || world.features[ci] === Feature.LIFT_BUTTON) return true;
-    }
-  }
-  return false;
-}
-
-function farFromTeleportEndpoints(world: World, ci: number, used: ReadonlySet<number>, minDist2: number): boolean {
-  const x = ci % W;
-  const y = (ci / W) | 0;
-  for (const other of used) {
-    const ox = other % W;
-    const oy = (other / W) | 0;
-    if (world.dist2(x + 0.5, y + 0.5, ox + 0.5, oy + 0.5) < minDist2) return false;
-  }
-  return true;
-}
-
-function teleportEndpointCandidate(
-  world: World,
-  placement: WalkablePlacementMap,
-  ci: number,
-  used: ReadonlySet<number>,
-): boolean {
-  if (used.has(ci) || world.anomalyTeleports.has(ci) || !placement.reachable[ci]) return false;
-  if (world.cells[ci] !== Cell.FLOOR) return false;
-  if (world.features[ci] !== Feature.NONE) return false;
-  if (world.aptMask[ci] || world.hermoWall[ci] || world.doors.has(ci) || world.containerMap.has(ci)) return false;
-  const x = ci % W;
-  const y = (ci / W) | 0;
-  if (nearLiftBackbone(world, x, y, TELEPORT_ENDPOINT_LIFT_CLEARANCE)) return false;
-  return farFromTeleportEndpoints(world, ci, used, TELEPORT_ENDPOINT_SPACING2);
-}
-
-function pickTeleportEndpoint(
-  world: World,
-  placement: WalkablePlacementMap,
-  used: ReadonlySet<number>,
-  centerX: number,
-  centerY: number,
-  minDist2: number,
-): number {
-  const candidates = placement.candidates;
-  for (let attempt = 0; attempt < 384 && candidates.length > 0; attempt++) {
-    const ci = candidates[Math.floor(rng() * candidates.length)];
-    if (!teleportEndpointCandidate(world, placement, ci, used)) continue;
-    const x = ci % W;
-    const y = (ci / W) | 0;
-    if (minDist2 > 0 && world.dist2(centerX, centerY, x + 0.5, y + 0.5) < minDist2) continue;
-    return ci;
-  }
-  for (const ci of candidates) {
-    if (!teleportEndpointCandidate(world, placement, ci, used)) continue;
-    const x = ci % W;
-    const y = (ci / W) | 0;
-    if (minDist2 > 0 && world.dist2(centerX, centerY, x + 0.5, y + 0.5) < minDist2) continue;
-    return ci;
-  }
-  return -1;
-}
-
-function markTeleportLight(world: World, x: number, y: number, used: ReadonlySet<number>, seed: number): void {
-  const offsets = [
-    [1, 0], [-1, 0], [0, 1], [0, -1],
-    [2, 0], [-2, 0], [0, 2], [0, -2],
-    [1, 1], [-1, 1], [1, -1], [-1, -1],
-  ] as const;
-  const start = Math.abs(seed) % offsets.length;
-  for (let i = 0; i < offsets.length; i++) {
-    const [dx, dy] = offsets[(start + i) % offsets.length];
-    const ci = world.idx(x + dx, y + dy);
-    if (used.has(ci)) continue;
-    if (world.cells[ci] !== Cell.FLOOR || world.features[ci] !== Feature.NONE) continue;
-    if (world.aptMask[ci] || world.hermoWall[ci] || world.doors.has(ci) || world.containerMap.has(ci)) continue;
-    world.setFeatureAt(ci, Feature.LAMP, false);
-    return;
-  }
-}
-
-function markTeleportEndpoint(world: World, ci: number, seed: number, used: ReadonlySet<number>): void {
-  const x = ci % W;
-  const y = (ci / W) | 0;
-  world.setFeatureAt(ci, Feature.SCREEN, false);
-  world.floorTex[ci] = Tex.F_VOID;
-  stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.78, 0.72, seed, 96, 190, 235, false);
-  stampSurfaceSplat(world, x, y, 0.5, 0.5, 0.44, 0.62, seed ^ 0x52a11, 190, 90, 235, false);
-  markTeleportLight(world, x, y, used, seed);
-}
-
-function applyTeleports(world: World, spec: ProceduralFloorSpec, placement: WalkablePlacementMap): void {
-  if (spec.anomalyId !== 'teleport_cells') return;
-  const pairs = 4 + spec.danger;
-  const used = new Set<number>();
-  for (let i = 0; i < pairs; i++) {
-    const ai = pickTeleportEndpoint(world, placement, used, W / 2 + 0.5, W / 2 + 0.5, 0);
-    if (ai < 0) continue;
-    used.add(ai);
-    const ax = ai % W;
-    const ay = (ai / W) | 0;
-    const bi = pickTeleportEndpoint(world, placement, used, ax + 0.5, ay + 0.5, TELEPORT_PAIR_MIN_DIST2);
-    if (bi < 0) {
-      used.delete(ai);
-      continue;
-    }
-    used.add(bi);
-    world.anomalyTeleports.set(ai, bi);
-    world.anomalyTeleports.set(bi, ai);
-    markTeleportEndpoint(world, ai, spec.seed + i * 977, used);
-    markTeleportEndpoint(world, bi, spec.seed ^ (i * 1777 + 0x052052), used);
-  }
 }
 
 interface ProceduralRailStation {
@@ -12227,13 +11887,6 @@ function roomCell(world: World, room: Room, dx: number, dy: number): { x: number
   const ci = world.idx(x, y);
   if (world.cells[ci] !== Cell.FLOOR || world.roomMap[ci] !== room.id) return null;
   return { x, y };
-}
-
-function placeRoomFeature(world: World, room: Room, feature: Feature, dx: number, dy: number): { x: number; y: number } | null {
-  const pos = roomCell(world, room, dx, dy);
-  if (!pos) return null;
-  world.features[world.idx(pos.x, pos.y)] = feature;
-  return pos;
 }
 
 function placeRoomFeatureFallback(world: World, room: Room, feature: Feature, dx: number, dy: number, seed: number): { x: number; y: number } | null {
@@ -15115,7 +14768,6 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     spawnMonsters(world, entities, nextId, spec, spawnX, spawnY);
 
     applySmog(world, rooms, entities, nextId, spec, allowNpcs);
-    applySamosborSeed(world, rooms, spec, spawnX, spawnY);
     applyMushrooms(world, rooms, entities, nextId, spec, placement.reachable, spawnX, spawnY);
     applyCarnivorousFungusRooms(world, rooms, entities, nextId, spec, placement.reachable);
     applyHladon(world, rooms, entities, nextId, spec, spawnX, spawnY);
@@ -15129,10 +14781,8 @@ export function generateProceduralFloor(spec: ProceduralFloorSpec): FloorGenerat
     // Маршрутные лифты — единая система шахт по ребру между этажами (см. манифест
     // дизайн-этажей): этаж их не выбирает, а прежние снимаются вместе с авторскими.
     stampRouteLiftShafts(world, spec.runSeed, spec.z);
-    // Телепорты ставятся ПОСЛЕ маршрутных шахт: их проверка просвета
-    // (`nearLiftBackbone`) не видит шахту, которой ещё нет, и раньше выход мог
-    // оказаться прямо на стволе лифта — тест ловил это только по удаче розыгрыша.
-    applyTeleports(world, spec, placement);
+    // Фаза `after_lifts` — не оформление, а условие: см. `procedural_anomalies/index.ts`.
+    applyProceduralAnomalyProfile({ world, rooms, entities, nextId, spec, spawnX, spawnY, placement }, 'after_lifts');
     const reachable = reachableCellsFrom(world, spawn.spawnX, spawn.spawnY);
     ensureContainersReachable(world, rooms, spec, reachable);
     containerizeLooseProceduralDrops(world, rooms, entities, spec, reachable);
