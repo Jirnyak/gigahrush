@@ -2323,50 +2323,105 @@ function tryImmediateThreatFastLane(
   return found;
 }
 
-export function findCombatTarget(
-  world: World, entities: Entity[], e: Entity, dt: number,
+/* ── Один скелет выбора боевой цели ──────────────────────────────────
+ *
+ * Порядок «откат → удержание кэша → быстрая полоса → скан → гистерезис» был
+ * написан ПЯТЬ раз: у общего поиска, у помойного роя, у олгоя, у чернослиза и
+ * у охотника за документами. Копии разошлись по всем осям сразу, и расхождения
+ * решены владельцем (2026-09-09) в пользу общего правила:
+ *
+ * - ЛУЧ спрашивают все. Три копии из пяти не спрашивали его вовсе, из-за чего
+ *   олгой, чернослиз и печатеед брали цель сквозь бетон. Это ровно тот дефект,
+ *   за который был снят блок «Prefer player» (см. комментарий в `updateMonster`),
+ *   только разложенный по видам.
+ * - ГИСТЕРЕЗИС переключения стоял у одной копии. Без него скан просто перетирает
+ *   цель, и между двумя почти равноудалёнными жертвами охотник дребезжит.
+ * - СКАН ПРИ ЖИВОЙ ЦЕЛИ идёт у всех. Рой и олгой не сканировали вовсе, пока цель
+ *   жива, то есть брошенный рядом говняк на занятый рой не действовал.
+ *
+ * Виду остаются ровно две вещи, и обе — контент: ДОПУСК кандидата и СЧЁТ. Счёт
+ * ведётся в собственных единицах вида (у общего это `d2`, у роя доля радиуса
+ * запаха), и одна и та же формула судит и выбор, и гистерезис — иначе они
+ * начали бы отвечать на разные вопросы.
+ */
+
+/** Новая цель обязана быть лучше удерживаемой во столько раз. */
+const TARGET_SWITCH_HYSTERESIS = 0.72;
+
+interface CombatSearchSpec {
+  /** Свой буфер запроса у каждого вида: скелет зовут вложенно. */
+  readonly buffer: Entity[];
+  readonly scanCap: number;
+  /** Нужна ли дешёвая проверка «кто-то встал вплотную» между тактами скана. */
+  readonly fastLane: boolean;
+  /** Радиус запроса в клетках. Он же — предел луча. */
+  radius(rangeSq: number): number;
+  /** Одно число, нужное счёту и не зависящее от кандидата. */
+  aux?(e: Entity): number;
+  /**
+   * Счёт кандидата: меньше — лучше, `Infinity` — не годится. Дальность вид
+   * судит здесь же, счётом: у скелета своего предела нет.
+   */
+  score(world: World, e: Entity, other: Entity, d2: number, rangeSq: number, aux: number): number;
+}
+
+function runCombatSearch(
+  world: World, e: Entity, dt: number,
   rangeSq: number, scanCd: number,
-  typeFilter: CombatTargetFilter,
+  accepts: CombatTargetFilter,
+  spec: CombatSearchSpec,
+  /* Страж загрузки и тестов: индекс достраивается ровно там, где стоял раньше —
+   * в такте скана, а не на каждом кадре каждой твари. */
+  entities?: Entity[],
 ): Entity | null {
   const ai = e.ai!;
   let target: Entity | null = null;
+  const aux = spec.aux ? spec.aux(e) : 0;
 
   ai.combatScanCd = (ai.combatScanCd ?? 0) - dt;
+  /* Удержание — не выбор: годность цели решает тот же счёт, но луч у неё не
+   * спрашивается. Ушедший за угол преследуется; заново за стеной не берётся. */
+  let heldScore = Infinity;
   if (ai.combatTargetId !== undefined) {
     const cached = _entityById.get(ai.combatTargetId);
-    if (cached && cached.alive && typeFilter(cached, e)) {
+    if (cached && cached.alive && accepts(cached, e) && isHostile(e, cached)) {
       const d2 = world.dist2(e.x, e.y, cached.x, cached.y);
-      if (d2 < rangeSq && isHostile(e, cached)) { target = cached; }
+      const held = spec.score(world, e, cached, d2, rangeSq, aux);
+      if (held < Infinity) { target = cached; heldScore = held; }
     }
     if (!target) ai.combatTargetId = undefined;
   }
 
-  const immediateThreat = tryImmediateThreatFastLane(world, e, dt, rangeSq, typeFilter, target !== null);
-  if (immediateThreat) return immediateThreat;
+  if (spec.fastLane) {
+    const immediateThreat = tryImmediateThreatFastLane(world, e, dt, rangeSq, accepts, target !== null);
+    if (immediateThreat) return immediateThreat;
+  }
 
-  // Always rescan periodically to switch to closer targets
   if (ai.combatScanCd! <= 0) {
     ai.combatScanCd = scanCd;
     let newTarget: Entity | null = null;
-    let newBest = rangeSq;
-    const queryMask = combatTargetQueryMask(typeFilter);
-    const range = Math.sqrt(rangeSq);
+    let newBest = Infinity;
+    const range = spec.radius(rangeSq);
     // Видит ли смотрящий сквозь стены — свойство его самого, а не кандидата.
-    // Раньше обе справки о фазе и корень из радиуса брались заново на каждого
-    // кандидата в цикле; справки чистые, ответ тот же.
+    // Справки о фазе и корень из радиуса берутся один раз на скан, не на кандидата.
     const seesThroughWalls = hasAIFlag(e, 'noclip') || !!e.phasing;
-    ensureEntityIndex(entities).queryRadiusCapped(e.x, e.y, range, combatQuery, queryMask, COMBAT_TARGET_SCAN_CAP);
-    for (const other of combatQuery) {
+    const index = entities ? ensureEntityIndex(entities) : getEntityIndex();
+    index.queryRadiusCapped(e.x, e.y, range, spec.buffer, combatTargetQueryMask(accepts), spec.scanCap);
+    for (const other of spec.buffer) {
       if (!other.alive || other.id === e.id) continue;
-      if (!typeFilter(other, e)) continue;
+      if (!accepts(other, e)) continue;
       const d2 = world.dist2(e.x, e.y, other.x, other.y);
-      if (d2 >= newBest) continue;
+      const score = spec.score(world, e, other, d2, rangeSq, aux);
+      // Порядок отсечек тот же, что был у общего поиска: сперва дешёвый счёт,
+      // и только у кандидата, который уже лучше найденного, спрашиваются
+      // дорогие враждебность и луч.
+      if (!(score < newBest)) continue;
       if (!isHostile(e, other)) continue;
       if (!seesThroughWalls && !hasClearLine(world, e, other, range)) continue;
-      newBest = d2;
+      newBest = score;
       newTarget = other;
     }
-    if (newTarget && (!target || newBest < world.dist2(e.x, e.y, target.x, target.y) * 0.72)) {
+    if (newTarget && newBest < heldScore * TARGET_SWITCH_HYSTERESIS) {
       target = newTarget;
       ai.combatTargetId = newTarget.id;
     }
@@ -2374,11 +2429,27 @@ export function findCombatTarget(
 
   // Беззвучный не чует и не слышит: цель у него только та, что в глазах.
   // Ушёл за угол — потерян насовсем, второго канала у него нет.
-  if (target && hasAIFlag(e, 'silent') && !hasClearLine(world, e, target, Math.sqrt(rangeSq))) {
+  if (target && hasAIFlag(e, 'silent') && !hasClearLine(world, e, target, spec.radius(rangeSq))) {
     ai.combatTargetId = undefined;
     target = null;
   }
   return target;
+}
+
+const GENERAL_SEARCH: CombatSearchSpec = {
+  buffer: combatQuery,
+  scanCap: COMBAT_TARGET_SCAN_CAP,
+  fastLane: true,
+  radius: rangeSq => Math.sqrt(rangeSq),
+  score: (_world, _e, _other, d2, rangeSq) => (d2 < rangeSq ? d2 : Infinity),
+};
+
+export function findCombatTarget(
+  world: World, entities: Entity[], e: Entity, dt: number,
+  rangeSq: number, scanCd: number,
+  typeFilter: CombatTargetFilter,
+): Entity | null {
+  return runCombatSearch(world, e, dt, rangeSq, scanCd, typeFilter, GENERAL_SEARCH, entities);
 }
 
 function findImmediateCombatTarget(
@@ -2478,6 +2549,26 @@ function fixedScanCd(e: Entity): number | undefined {
 export function deterministicScanCd(id: number, base: number, spread: number): number {
   const h = Math.imul(id ^ 0x9E3779B9, 0x85EBCA6B) >>> 0;
   return base + ((h & 1023) / 1023) * spread;
+}
+
+/**
+ * Каданс скана целей с разбросом по id — единственный вход для всех шести
+ * поисков цели.
+ *
+ * `fixedScanCd` отдавала ПЛОСКОЕ число пятнадцати повадкам, и ещё четыре
+ * площадки стояли на литералах. Плоский откат ставит весь вид в один кадр:
+ * замерено прогоном на Аду — 51 зелёная собака имела ОДНО значение отката на
+ * всех, 166 Тварей два, 318 Помойных Роёв двенадцать, тогда как крысоножка
+ * (единственная, кто шёл через `deterministicScanCd`) — 199 значений на 245
+ * особей. Скан это запрос по бакетам до 80 кандидатов плюс лучи, поэтому залп
+ * стоит кадру ровно во столько раз больше, во сколько стая больше единицы.
+ *
+ * Разброс матожидания не двигает: `0.85·base + [0, 0.3·base)` в среднем равен
+ * `base`, то есть объявленная видом частота сохраняется дословно.
+ */
+function combatScanCd(e: Entity, base: number): number {
+  const declared = fixedScanCd(e) ?? base;
+  return deterministicScanCd(e.id, declared * 0.85, declared * 0.3);
 }
 
 function hasDocumentLikeItem(e: Entity): boolean {
@@ -2791,43 +2882,24 @@ function pomoynyRoyScentDetectSq(candidate: Entity, baseSq: number): number {
  * Цель роя: у каждого кандидата свой радиус притяжения по запаху, и выигрывает
  * тот, кто глубже внутри своего. Образец — `findMeatWormTarget` олгоя.
  */
-function findPomoynyRoyTarget(world: World, e: Entity, dt: number, baseSq: number): Entity | null {
-  const ai = e.ai!;
-  let target: Entity | null = null;
-
-  ai.combatScanCd = (ai.combatScanCd ?? 0) - dt;
-  if (ai.combatTargetId !== undefined) {
-    const cached = _entityById.get(ai.combatTargetId);
-    if (cached?.alive && canBeMonsterTarget(cached) && isHostile(e, cached) &&
-        world.dist2(e.x, e.y, cached.x, cached.y) <= pomoynyRoyScentDetectSq(cached, baseSq)) {
-      target = cached;
-    }
-    if (!target) ai.combatTargetId = undefined;
-  }
-
-  const immediateThreat = tryImmediateThreatFastLane(world, e, dt, baseSq, canBeMonsterTarget, target !== null);
-  if (immediateThreat) return immediateThreat;
-
-  if (target || ai.combatScanCd > 0) return target;
-  ai.combatScanCd = fixedScanCd(e) ?? deterministicScanCd(e.id, 1.0, 0.5);
-
-  const scanRadius = Math.max(Math.sqrt(baseSq), POMOYNY_ROY_MAX_SCENT_DETECT);
-  let bestScore = 1;
-  const count = getEntityIndex().queryRadiusCapped(e.x, e.y, scanRadius, pomoynyRoyQuery, ENTITY_MASK_NPC, COMBAT_TARGET_SCAN_CAP);
-  for (let i = 0; i < count; i++) {
-    const other = pomoynyRoyQuery[i];
-    if (!other.alive || other.id === e.id || !canBeMonsterTarget(other) || !isHostile(e, other)) continue;
+const POMOYNY_ROY_SEARCH: CombatSearchSpec = {
+  buffer: pomoynyRoyQuery,
+  scanCap: COMBAT_TARGET_SCAN_CAP,
+  fastLane: true,
+  radius: baseSq => Math.max(Math.sqrt(baseSq), POMOYNY_ROY_MAX_SCENT_DETECT),
+  /* Счёт — ДОЛЯ собственного радиуса запаха: выигрывает не ближайший, а тот,
+   * кто глубже внутри своего. Потому единица счёта здесь и не `d2`. */
+  score: (_world, _e, other, d2, baseSq) => {
     const reachSq = pomoynyRoyScentDetectSq(other, baseSq);
-    const d2 = world.dist2(e.x, e.y, other.x, other.y);
-    if (d2 > reachSq) continue;
-    const score = d2 / reachSq;
-    if (score >= bestScore) continue;
-    if (!hasClearLine(world, e, other, scanRadius)) continue;
-    bestScore = score;
-    target = other;
-  }
-  if (target) ai.combatTargetId = target.id;
-  return target;
+    return d2 <= reachSq ? d2 / reachSq : Infinity;
+  },
+};
+
+function findPomoynyRoyTarget(world: World, e: Entity, dt: number, baseSq: number): Entity | null {
+  return runCombatSearch(
+    world, e, dt, baseSq, combatScanCd(e, 1.0),
+    canBeMonsterTarget, POMOYNY_ROY_SEARCH,
+  );
 }
 
 function droppedScentScore(e: Entity): number {
@@ -3011,9 +3083,6 @@ function isHeavyBleedingTarget(e: Entity): boolean {
   return e.hp > 0 && e.hp / e.maxHp <= 0.42;
 }
 
-function isOlgoyScentedTarget(e: Entity): boolean {
-  return hasRawMeatItem(e) || isHeavyBleedingTarget(e);
-}
 
 export function olgoyAmbushCell(world: World, x: number, y: number): boolean {
   const ci = world.idx(x, y);
@@ -3165,45 +3234,35 @@ function tryConsumeMeatChunk(
   return true;
 }
 
-function findMeatWormTarget(world: World, e: Entity, dt: number): Entity | null {
-  const ai = e.ai!;
-  let target: Entity | null = null;
-  const normalSq = OLGOY_DETECT_RADIUS * OLGOY_DETECT_RADIUS;
-  const bloodSq = OLGOY_BLOOD_RADIUS * OLGOY_BLOOD_RADIUS;
+const OLGOY_NORMAL_SQ = OLGOY_DETECT_RADIUS * OLGOY_DETECT_RADIUS;
+const OLGOY_BLOOD_SQ = OLGOY_BLOOD_RADIUS * OLGOY_BLOOD_RADIUS;
 
-  ai.combatScanCd = (ai.combatScanCd ?? 0) - dt;
-  if (ai.combatTargetId !== undefined) {
-    const cached = _entityById.get(ai.combatTargetId);
-    if (cached?.alive && canBeMonsterTarget(cached) && isHostile(e, cached)) {
-      const scented = isOlgoyScentedTarget(cached);
-      const d2 = world.dist2(e.x, e.y, cached.x, cached.y);
-      if (d2 <= (scented ? bloodSq : normalSq)) target = cached;
-    }
-    if (!target) ai.combatTargetId = undefined;
-  }
-  if (target || ai.combatScanCd > 0) return target;
-  ai.combatScanCd = deterministicScanCd(e.id, 0.95, 0.45);
-
-  let bestScore = bloodSq;
-  getEntityIndex().queryRadiusCapped(e.x, e.y, OLGOY_BLOOD_RADIUS, combatQuery, ENTITY_MASK_ACTOR, OLGOY_SCENT_SCAN_CAP);
-  for (const other of combatQuery) {
-    if (!other.alive || other.id === e.id || !canBeMonsterTarget(other)) continue;
-    if (!isHostile(e, other)) continue;
-    const d2 = world.dist2(e.x, e.y, other.x, other.y);
+const MEAT_WORM_SEARCH: CombatSearchSpec = {
+  // Буфер общий с обычным поиском, как и было: вложенных вызовов у скана нет,
+  // а быстрая полоса на упор пишет в свой.
+  buffer: combatQuery,
+  scanCap: OLGOY_SCENT_SCAN_CAP,
+  fastLane: false,
+  radius: () => OLGOY_BLOOD_RADIUS,
+  /* Пахнущего олгой берёт с кровяной дальности, обычного — с обычной, и мясо с
+   * кровью двигают счёт множителем. Прежде здесь стоял ещё множитель «а если
+   * это игрок — то вкуснее»; он снят: олгой идёт на признак, а не на лицо. */
+  score: (_world, _e, other, d2) => {
     const meat = hasRawMeatItem(other);
     const bleeding = isHeavyBleedingTarget(other);
-    if (!meat && !bleeding && d2 > normalSq) continue;
+    if (!meat && !bleeding && d2 > OLGOY_NORMAL_SQ) return Infinity;
     let score = d2;
     if (meat) score *= 0.34;
     if (bleeding) score *= 0.52;
-    // Прежде здесь стоял множитель «а если это игрок — то вкуснее». Олгой идёт
-    // на мясо и на кровь, а не на конкретное лицо: признаки те же для всех.
-    if (score >= bestScore) continue;
-    bestScore = score;
-    target = other;
-  }
-  if (target) ai.combatTargetId = target.id;
-  return target;
+    return score < OLGOY_BLOOD_SQ ? score : Infinity;
+  },
+};
+
+function findMeatWormTarget(world: World, e: Entity, dt: number): Entity | null {
+  return runCombatSearch(
+    world, e, dt, OLGOY_BLOOD_SQ, combatScanCd(e, 0.95),
+    canBeMonsterTarget, MEAT_WORM_SEARCH,
+  );
 }
 
 
@@ -4081,11 +4140,6 @@ function chernoslizDetectSq(world: World, e: Entity): number {
   return isBlackWaterWakeCell(world, e) ? CHERNOSLIZ_WATER_DETECT_SQ : CHERNOSLIZ_DRY_DETECT_SQ;
 }
 
-function chernoslizCanTarget(world: World, e: Entity, target: Entity): boolean {
-  if (!target.alive || !canBeMonsterTarget(target) || !isHostile(e, target)) return false;
-  if (isChernoSlizHidden(world, e, target)) return false;
-  return world.dist2(e.x, e.y, target.x, target.y) < chernoslizDetectSq(world, e);
-}
 
 function chernoslizRevealNoise(noise: NoiseRecord): boolean {
   if (noise.source === 'decoy' || noise.source === 'explosion') return true;
@@ -4131,29 +4185,22 @@ function tryRevealChernoSlizByNoise(
   return true;
 }
 
-function findChernoSlizTarget(world: World, e: Entity, dt: number): Entity | null {
-  const ai = e.ai!;
-  ai.combatScanCd = (ai.combatScanCd ?? 0) - dt;
-  if (ai.combatTargetId !== undefined) {
-    const cached = _entityById.get(ai.combatTargetId);
-    if (cached && chernoslizCanTarget(world, e, cached)) return cached;
-    ai.combatTargetId = undefined;
-  }
-  if (ai.combatScanCd > 0) return null;
+const CHERNOSLIZ_SEARCH: CombatSearchSpec = {
+  buffer: chernoslizTargetQuery,
+  scanCap: CHERNOSLIZ_SCAN_CAP,
+  fastLane: false,
+  radius: rangeSq => Math.sqrt(rangeSq),
+  /* Спрятанность чернослиза от конкретного носителя фонаря — часть годности
+   * цели, а не отдельная проверка: перед тем, кто его уже видит, он не прячется. */
+  score: (world, e, other, d2, rangeSq) =>
+    (!isChernoSlizHidden(world, e, other) && d2 < rangeSq ? d2 : Infinity),
+};
 
-  ai.combatScanCd = fixedScanCd(e) ?? 0.75;
-  let target: Entity | null = null;
-  let best = chernoslizDetectSq(world, e);
-  getEntityIndex().queryRadiusCapped(e.x, e.y, Math.sqrt(best), chernoslizTargetQuery, ENTITY_MASK_ACTOR, CHERNOSLIZ_SCAN_CAP);
-  for (const other of chernoslizTargetQuery) {
-    if (!chernoslizCanTarget(world, e, other)) continue;
-    const d2 = world.dist2(e.x, e.y, other.x, other.y);
-    if (d2 >= best) continue;
-    best = d2;
-    target = other;
-  }
-  if (target) ai.combatTargetId = target.id;
-  return target;
+function findChernoSlizTarget(world: World, e: Entity, dt: number): Entity | null {
+  return runCombatSearch(
+    world, e, dt, chernoslizDetectSq(world, e), combatScanCd(e, 0.75),
+    canBeMonsterTarget, CHERNOSLIZ_SEARCH,
+  );
 }
 
 function stampChernoSlizWake(world: World, e: Entity, time: number): void {
@@ -5051,48 +5098,26 @@ function updateZhornayaTvar(
   return true;
 }
 
-function findDocumentHunterTarget(world: World, _entities: Entity[], e: Entity, dt: number): Entity | null {
-  const ai = e.ai!;
-  let target: Entity | null = null;
-  const docRangeSq = documentDetectSq(e);
-  const fallbackRangeSq = documentFallbackSq(e);
+const DOCUMENT_HUNTER_SEARCH: CombatSearchSpec = {
+  buffer: documentHunterQuery,
+  scanCap: DOCUMENT_HUNTER_SCAN_CAP,
+  fastLane: false,
+  radius: docRangeSq => Math.sqrt(docRangeSq),
+  aux: documentFallbackSq,
+  /* Две ступени, а не два прохода: носитель бумаги на всей дальности чутья бьёт
+   * ЛЮБОГО безбумажного, поэтому счёт второй ступени сдвинут на дальность
+   * первой. Порядок тот же, что давали два независимых лучших кандидата. */
+  score: (_world, _e, other, d2, docRangeSq, fallbackSq) => {
+    if (hasDocumentLikeItem(other) && d2 < docRangeSq) return d2;
+    return d2 < fallbackSq ? docRangeSq + d2 : Infinity;
+  },
+};
 
-  ai.combatScanCd = (ai.combatScanCd ?? 0) - dt;
-  if (ai.combatTargetId !== undefined) {
-    const cached = _entityById.get(ai.combatTargetId);
-    if (cached && cached.alive && canBeMonsterTarget(cached)) {
-      const d2 = world.dist2(e.x, e.y, cached.x, cached.y);
-      const documentRange = hasDocumentLikeItem(cached) && d2 < docRangeSq;
-      const fallbackRange = d2 < fallbackRangeSq;
-      if ((documentRange || fallbackRange) && isHostile(e, cached)) target = cached;
-    }
-    if (!target) ai.combatTargetId = undefined;
-  }
-
-  if (ai.combatScanCd! <= 0) {
-    ai.combatScanCd = hasAIFlag(e, 'documentScent') ? 1.1 : 1.5;
-    let docTarget: Entity | null = null;
-    let docBest = docRangeSq;
-    let fallbackTarget: Entity | null = null;
-    let fallbackBest = fallbackRangeSq;
-    getEntityIndex().queryRadiusCapped(e.x, e.y, Math.sqrt(docRangeSq), documentHunterQuery, ENTITY_MASK_ACTOR, DOCUMENT_HUNTER_SCAN_CAP);
-    for (const other of documentHunterQuery) {
-      if (!other.alive || other.id === e.id || !canBeMonsterTarget(other)) continue;
-      if (!isHostile(e, other)) continue;
-      const d2 = world.dist2(e.x, e.y, other.x, other.y);
-      if (hasDocumentLikeItem(other) && d2 < docBest) {
-        docBest = d2;
-        docTarget = other;
-      } else if (d2 < fallbackBest) {
-        fallbackBest = d2;
-        fallbackTarget = other;
-      }
-    }
-    target = docTarget ?? fallbackTarget;
-    if (target) ai.combatTargetId = target.id;
-  }
-
-  return target;
+function findDocumentHunterTarget(world: World, entities: Entity[], e: Entity, dt: number): Entity | null {
+  return runCombatSearch(
+    world, e, dt, documentDetectSq(e), combatScanCd(e, hasAIFlag(e, 'documentScent') ? 1.1 : 1.5),
+    canBeMonsterTarget, DOCUMENT_HUNTER_SEARCH, entities,
+  );
 }
 
 function applyKontorshchikGrab(
@@ -7245,7 +7270,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
   } else if (isDocumentPressureHunter(e)) {
     target = findDocumentHunterTarget(world, entities, e, dt);
   } else if (hasAIFlag(e, 'closeReveal')) {
-    target = findCombatTarget(world, entities, e, dt, detectSq, 1.25, monsterTargetFilter(e));
+    target = findCombatTarget(world, entities, e, dt, detectSq, combatScanCd(e, 1.25), monsterTargetFilter(e));
   } else if (hasAIFlag(e, 'meleeWindup')) {
     /* Замах ищет цель чаще обычного и сытым не жмурится. Обе константы вида
      * (`KOSTOREZ_DETECT_SQ`, `SAFEGUARD_DETECT_SQ`) были равны общей дальности
@@ -7254,9 +7279,9 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
     target = findCombatTarget(world, entities, e, dt, detectSq, deterministicScanCd(e.id, 0.7, 0.3), monsterTargetFilter(e));
   } else if (hasAIFlag(e, 'fractureSprint')) {
     detectSq = TRESKOTNIK_DETECT_SQ;
-    target = findCombatTarget(world, entities, e, dt, detectSq, 0.45, monsterTargetFilter(e));
+    target = findCombatTarget(world, entities, e, dt, detectSq, combatScanCd(e, 0.45), monsterTargetFilter(e));
   } else {
-    const scanCd = fixedScanCd(e) ?? deterministicScanCd(e.id, 1.0, 0.5);
+    const scanCd = combatScanCd(e, 1.0);
     target = findCombatTarget(
       world, entities, e, dt,
       detectSq, scanCd,
@@ -7354,7 +7379,7 @@ export function updateMonster(world: World, entities: Entity[], e: Entity, dt: n
       if (runtime.dormant || runtime.isolatedUntil > time) return;
     }
     /* Наблюдателя тут нет: цели не нашлось, значит никто рядом его не вскрыл —
-     * близость и фонарь любого носителя уже проверил `chernoslizCanTarget`. */
+     * близость и фонарь любого носителя уже проверил счёт `CHERNOSLIZ_SEARCH`. */
     if (hasAIFlag(e, 'blackWaterWake') && isChernoSlizHidden(world, e)) {
       const revealedByNoise = tryRevealChernoSlizByNoise(world, e, time, msgs, state);
       if (revealedByNoise) {
