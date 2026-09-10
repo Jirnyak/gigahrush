@@ -571,12 +571,43 @@ test('samosbor director cadence, beat cooldowns, and events stay bounded', () =>
   }
 });
 
-test('active maronary door malfunction ignores protected hermetic doors', () => {
+/* Бит «неправильная дверь» снесён 2026-09-10 вместе со всей системой подмены
+ * дверей (решение владельца), и вместе с ним исчез такт, на котором эта
+ * проверка стояла. Сама ГАРАНТИЯ жива и важна: у режиссёра остался `door_malfunction`
+ * (`pre_door_malfunction`), и он тоже двигает створки — значит защищённую и
+ * гермодверь он трогать не вправе. Проверка переписана на него.
+ *
+ * Первая попытка переписывания была ДОГАДКОЙ («у режиссёра вообще не осталось
+ * тактов с дверьми») и покраснела сразу: тактов с меткой `door` три, и один из
+ * них двери действительно двигает. Записано как есть — предположение вместо
+ * замера стоило одного прогона. */
+test('дверная поломка режиссёра не трогает защищённую створку', () => {
+  /* Переделано трижды, и первые две попытки стоит помнить.
+   *   1) «у режиссёра вообще не осталось тактов с дверьми» — ДОГАДКА, покраснела
+   *      сразу: тактов с меткой `door` три, и `pre_door_malfunction` створки
+   *      двигает законно;
+   *   2) перебор всех вариантов и фаз в надежде, что нужный такт выпадет сам, —
+   *      негативный контроль вышел ПУСТЫМ: он не выпадал ни разу, и снятый страж
+   *      защиты не краснел. Замок сверял пустоту с пустотой.
+   * Поэтому такт с дверной поломкой ставится СВОЙ и с подавляющим весом: только
+   * так эффект гарантированно исполняется и страж оказывается на пути теста. */
+  const beatId = 'test_door_malfunction_guard';
+  registerSamosborBeat({
+    id: beatId,
+    phase: 'warning',
+    variants: ['wet'],
+    weight: 10_000,
+    cooldown: 0,
+    maxPerCycle: 8,
+    tags: ['door', 'warning'],
+    effectId: 'door_malfunction',
+    line: 'Тестовый такт дверной поломки.',
+    color: '#fa0',
+    severity: 3,
+  });
+
   const state = makeGameState({
-    time: 100,
-    currentZ: -6,
-    samosborActive: true,
-    samosborCount: 3,
+    time: 100, currentZ: -6, samosborActive: false, samosborCount: 3,
     worldEvents: createWorldEventState(),
   });
   const world = testDirectorWorld();
@@ -586,21 +617,15 @@ test('active maronary door malfunction ignores protected hermetic doors', () => 
   world.hermoWall[doorIdx] = 1;
   world.doors.set(doorIdx, { idx: doorIdx, state: DoorState.HERMETIC_OPEN, roomA: 0, roomB: -1, keyId: '', timer: 0 });
   const player = makeTestEntity({ id: 0, x: 10.5, y: 10.5 });
-  const nextId = { v: getPlotNpcCount() + 100 }
+  const nextId = { v: getPlotNpcCount() + 100 };
 
-  try {
-    _overrideRng(() => 0);
-    const result = tickSamosborDirector(world, [player], state, nextId, testMaronarySamosborVariant(), 'active_cadence');
-
-    assert.equal(result.fired, true);
-    assert.equal(result.beatId, 'active_maronary_wrong_door');
-    assert.equal(world.doors.get(doorIdx)?.state, DoorState.HERMETIC_OPEN);
-    const event = getRecentEvents(state, { tags: ['samosbor', 'director'], limit: 1 })[0];
-    assert.ok(event);
-    assert.equal(event.data?.doors, 0);
-  } finally {
-    _restoreRng();
-  }
+  const result = tickSamosborDirector(
+    world, [player], state, nextId, testSamosborVariant('wet'), 'warning_cadence',
+  );
+  assert.equal(result.beatId, beatId, 'такт с дверной поломкой не сыграл — контроль снова пустой');
+  /* Единственная дверь мира защищена обеими масками: брать её поломке нечем. */
+  assert.equal(world.doors.get(doorIdx)?.state, DoorState.HERMETIC_OPEN);
+  assert.equal(result.extra?.doors ?? 0, 0, 'поломка сообщила о сломанной двери, которой не должно быть');
 });
 
 test('container take/put refuses full targets without changing source counts', () => {
@@ -1279,3 +1304,4 @@ function testClassicSamosborVariant(): ActiveSamosborVariant {
 function testMaronarySamosborVariant(): ActiveSamosborVariant {
   return testSamosborVariant('maronary');
 }
+

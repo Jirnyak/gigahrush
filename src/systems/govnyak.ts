@@ -75,7 +75,7 @@ export interface GovnyakUseResult {
   badBatch: boolean;
 }
 
-export function isGovnyakItem(defId: string): defId is GovnyakItemId {
+function isGovnyakItem(defId: string): defId is GovnyakItemId {
   return (GOVNYAK_ITEM_IDS as readonly string[]).includes(defId);
 }
 

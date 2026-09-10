@@ -43,7 +43,7 @@ interface QueueRoomContext {
   sourceTag: string;
 }
 
-export function isRationCouponItem(defId: string): boolean {
+function isRationCouponItem(defId: string): boolean {
   return COUPON_ITEM_IDS.has(defId);
 }
 

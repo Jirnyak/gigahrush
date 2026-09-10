@@ -476,7 +476,6 @@ import {
   setPseudoliftState,
   updatePseudolifts,
 } from './systems/pseudolift';
-import { tryUseWrongDoorRemap, updateWrongDoorRemaps } from './systems/wrong_door';
 import {
   bashContainerLock,
   containerAccessInfo,
@@ -4674,9 +4673,7 @@ function movePlayer(dt: number): void {
 
     if (actor.id === player.id && floorTeleportCd <= 0 && world.anomalyTeleports.size > 0) {
       const from = world.idx(Math.floor(player.x), Math.floor(player.y));
-      if (tryUseWrongDoorRemap(world, state, player)) {
-        floorTeleportCd = 1.25;
-      } else {
+      {
         const to = world.anomalyTeleports.get(from);
         if (to !== undefined) {
           player.x = (to % W) + 0.5;
@@ -10188,7 +10185,6 @@ function gameLoop(now: number): void {
     }
     updateProjectiles(dt);
     updateDoors(dt);
-    updateWrongDoorRemaps(world, state);
     updateHladonColdPocket(world, player, state, dt);
     needsTickAccum += dt;
     needsRealTickAccum += frameDt;
@@ -10389,7 +10385,6 @@ function gameLoop(now: number): void {
     tickRoomMemory(state.time, dt);
     updateProjectiles(dt);
     updateDoors(dt);
-    updateWrongDoorRemaps(world, state);
     needsTickAccum += dt;
     needsRealTickAccum += frameDt;
     if (needsTickAccum >= 0.25) {

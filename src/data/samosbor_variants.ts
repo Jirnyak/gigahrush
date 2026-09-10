@@ -24,7 +24,6 @@ export type SamosborSubsystemId =
   | 'aftermath'
   | 'hell_meat_walls'
   | 'maronary_sources'
-  | 'wrong_door'
   | 'source_glow'
   | 'fog_rewrite'
   | 'istotit_shelters'
@@ -59,7 +58,6 @@ export type SamosborModifierId =
   | 'meat_walls_hell'
   | 'green_source'
   | 'high_beep'
-  | 'wrong_door_hint'
   | 'bell_warning'
   | 'golden_light'
   | 'choir_mask'
@@ -220,11 +218,6 @@ export const SAMOSBOR_MODIFIERS: Record<SamosborModifierId, SamosborModifierDef>
     noSiren: true,
     fogSpawnIntervalMult: 1.1,
   },
-  wrong_door_hint: {
-    id: 'wrong_door_hint',
-    warningLine: 'Дверь повторилась на карте. Не входи, пока номер и сектор не совпали.',
-    sealTimingDelta: -3,
-  },
   bell_warning: {
     id: 'bell_warning',
     warningLine: 'Сирена сорвалась в низкие колокола. Укрытие по церковной ведомости: к золотому контуру, воду держи при себе.',
@@ -350,7 +343,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
     displayName: 'Маронарий',
     tags: ['maronary'],
     weight: 4,
-    subsystems: ['maronary_sources', 'wrong_door', 'source_glow', 'fog_rewrite'],
+    subsystems: ['maronary_sources', 'source_glow', 'fog_rewrite'],
     visual: { screenFx: 'green_signal', fogDensityBonus: 0.016, glitchIntensity: 0.07, postIntensity: 0.7 },
     fogColor: [48, 230, 86],
     tint: '#35ff66',
@@ -370,7 +363,7 @@ export const SAMOSBOR_VARIANTS: readonly SamosborVariantDef[] = [
       'Карта предлагает короткий путь на писк. Не доверяй стрелке: ставь метку и выбирай длинный обход.',
       'Стружка лежит как улика. Продай НИИ, культу или Министерству, либо спрячь отдельно от бумаг.',
     ],
-    modifiers: ['green_source', 'high_beep', 'wrong_door_hint'],
+    modifiers: ['green_source', 'high_beep'],
     gameplaySignal: 'зелёный источник обжигает вблизи, высокий писк, повтор двери, ненадёжный короткий путь, источник можно обойти/сломать, стружку продать или спрятать отдельно от документов',
     audioCue: 'beep',
     startLine: 'ПРОИЗОШЁЛ МАРОНАРИЙ: двери путают номера, документы не держи у зелёной стружки.',
@@ -858,19 +851,6 @@ export const SAMOSBOR_AFTERMATH_BEATS: readonly SamosborAftermathBeatDef[] = [
     message: 'В трещине осталась зелёная стружка. Возьми как улику, продай НИИ/культу/Министерству или не клади к документам.',
     tags: ['maronary', 'green_source', 'residue', 'shaving'],
     itemId: 'maronary_shaving',
-  },
-  {
-    id: 'aftermath_maronary_wrong_door',
-    title: 'Неправильная дверь',
-    variants: ['maronary'],
-    weight: 16,
-    cooldownSec: 540,
-    maxRuns: 6,
-    radius: 12,
-    severity: 4,
-    effect: 'door_fault',
-    message: 'Одна дверь повторилась с другим номером. Путь открыт; проверь карту, запомни сектор или не входи.',
-    tags: ['maronary', 'wrong_door', 'door', 'route'],
   },
   {
     id: 'aftermath_maronary_green_rumor',

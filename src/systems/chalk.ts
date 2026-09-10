@@ -45,7 +45,7 @@ export function createChalkItemData(maxDurability: number): ChalkItemData {
   };
 }
 
-export function ensureChalkItemData(slot: { data?: unknown }, maxDurability: number): ChalkItemData {
+function ensureChalkItemData(slot: { data?: unknown }, maxDurability: number): ChalkItemData {
   const src = slot.data && typeof slot.data === 'object' ? slot.data as Partial<ChalkItemData> : {};
   const dur = Number.isFinite(Number(src.dur))
     ? Math.max(0, Math.min(maxDurability, Number(src.dur)))

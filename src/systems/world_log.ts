@@ -261,19 +261,6 @@ function samosborWarningText(e: WorldEvent): string {
     : `Предвестник самосбора: ${place}.`;
 }
 
-function wrongDoorText(e: WorldEvent): string {
-  switch (e.data?.phase) {
-    case "created":
-      return "Маронарий: отмечена неправильная дверь.";
-    case "used":
-      return "Неправильная дверь сработала. Выход изменён.";
-    case "expired":
-      return "Неправильная дверь погасла.";
-    default:
-      return "Неправильная дверь активна на маршруте.";
-  }
-}
-
 function factionRelationText(e: WorldEvent): string {
   const factionEventId =
     typeof e.data?.factionEventId === "string" ? e.data.factionEventId : "";
@@ -681,7 +668,6 @@ const EVENT_TEXT_HANDLERS: Partial<
       return "Бетоноед вскрыл слабую стену. Короткий ход открыт.";
     if (e.tags.includes("betonoed") && e.tags.includes("shortcut_used"))
       return "Ход Бетоноеда использован как короткий маршрут.";
-    if (e.tags.includes("wrong_door")) return wrongDoorText(e);
     return `Дверь открылась${e.zoneId !== undefined ? ` в зоне ${e.zoneId + 1}` : ""}.`;
   },
   door_sealed: (e) => {

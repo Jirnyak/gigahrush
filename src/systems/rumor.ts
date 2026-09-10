@@ -628,7 +628,6 @@ function eventToStaticRumorId(event: RumorEventLike): string | undefined {
   if (event.tags?.includes('false_safe_block')) return 'faction_cultist_after_fog';
   if (event.tags?.includes('metro') || event.type?.includes('metro')) return 'floor_metro_error_line';
   if (event.tags?.includes('samosbor_maronary')) return 'samosbor_maronary_variant';
-  if (event.tags?.includes('wrong_door')) return 'samosbor_maronary_door';
   if (event.tags?.includes('samosbor_veretar')) return 'samosbor_veretar_variant';
   if (type === 'samosbor_zone_captured') return 'event_samosbor_zone_captured';
   if (type === 'fog_boss_spawned') return 'samosbor_electric_variant';

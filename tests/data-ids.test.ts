@@ -545,7 +545,7 @@ test('samosbor variants keep the universal active pipeline and variant fog seman
     ['wet', []],
     ['electric', []],
     ['meat', ['hell_meat_walls']],
-    ['maronary', ['maronary_sources', 'wrong_door', 'source_glow', 'fog_rewrite']],
+    ['maronary', ['maronary_sources', 'source_glow', 'fog_rewrite']],
     ['istotit', ['istotit_shelters', 'bell_compulsion', 'fog_create']],
     ['veretar', ['veretar_area_leak', 'fog_delete']],
   ]);

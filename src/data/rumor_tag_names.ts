@@ -291,7 +291,6 @@ const WARNING_TAG_NAMES: Record<string, string> = {
   wild_passage_trade: 'дикий обход покупают',
   wild_raid: 'дикие идут на запах кухни',
   witness: 'свидетель',
-  wrong_door: 'дверь вернулась не той',
   wrong_medical_talon: 'талон чужой',
   zhelemish_curse: 'желемыш зовут первым даром',
 };

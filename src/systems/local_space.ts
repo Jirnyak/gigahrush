@@ -22,7 +22,7 @@ export function wrapWorld(v: number): number {
   return ((v % W) + W) % W;
 }
 
-export function fracWorld(v: number): number {
+function fracWorld(v: number): number {
   return ((v % 1) + 1) % 1;
 }
 

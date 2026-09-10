@@ -70,7 +70,6 @@ import {
 } from './ai/pathfinding';
 import { pushNpcBarkMessage } from './ai/barks';
 import { hearingRadiusMetersForActor } from './hearing';
-import { createMaronaryWrongDoorRemap } from './wrong_door';
 import { canSpawnEntityType, entitySpawnSlots } from './entity_limits';
 import { killEntity } from './entity_death';
 import { installRailTrainsFromGeneration, snapshotRailTrainsForRebuild } from './procedural_anomalies/rail_trains';
@@ -161,7 +160,6 @@ const SAMOSBOR_FOG_EFFECT_ENTITY_CAP = 10;
 const SAMOSBOR_FOG_EFFECT_NOTICE_INTERVAL = 4;
 const MARONARY_SOURCE_RADIUS = 34;
 const MARONARY_SOURCE_CAP = 3;
-const MARONARY_WRONG_DOOR_RADIUS = 24;
 const MARONARY_PING_INTERVAL = 4.75;
 const MARONARY_GLOW_RADIUS = 2.65;
 const MARONARY_GLOW_DAMAGE_PER_SECOND = 3;
@@ -753,8 +751,6 @@ export interface SamosborWarningSnapshot {
   secondsLeft: number;
   screenCount: number;
   greenSourceCount: number;
-  wrongDoorX?: number;
-  wrongDoorY?: number;
   shelterRoomIds: readonly number[];
   signals: SamosborWarningSignals;
 }
@@ -802,7 +798,6 @@ interface SamosborWarningRuntime {
   shelterHintLine: string;
   screenCount: number;
   greenSourceCount: number;
-  wrongDoorIdx: number;
   signals: SamosborWarningSignals;
 }
 
@@ -1233,13 +1228,11 @@ export function resolvePlayerShelterAtSealForTests(
 function samosborEventTags(
   variant: ActiveSamosborVariant,
   base: string[],
-  wrongDoor = false,
 ): string[] {
   const tags = [...base, `samosbor_${variant.def.id}`];
   if (variant.noSiren) tags.push('no_siren');
   if (isMaronary(variant)) {
     tags.push('green_source');
-    if (wrongDoor) tags.push('wrong_door');
   }
   if (isVeretar(variant)) tags.push('white_area', 'area_leak');
   return tags;
@@ -1288,8 +1281,6 @@ export function getSamosborWarningSnapshot(state?: GameState): SamosborWarningSn
     secondsLeft,
     screenCount: samosborWarning.screenCount,
     greenSourceCount: samosborWarning.greenSourceCount,
-    wrongDoorX: samosborWarning.wrongDoorIdx >= 0 ? samosborWarning.wrongDoorIdx % W : undefined,
-    wrongDoorY: samosborWarning.wrongDoorIdx >= 0 ? (samosborWarning.wrongDoorIdx / W) | 0 : undefined,
     shelterRoomIds: getSamosborShelterRoomIds(state),
     signals: samosborWarning.signals,
   };
@@ -1727,34 +1718,14 @@ function stampMaronarySources(world: World, cx: number, cy: number): number[] {
   return selected;
 }
 
-function chooseMaronaryWrongDoorClue(world: World, cx: number, cy: number): number {
-  let bestIdx = -1;
-  let bestD2 = MARONARY_WRONG_DOOR_RADIUS * MARONARY_WRONG_DOOR_RADIUS;
-  for (const [di, door] of world.doors) {
-    if (door.state === DoorState.LOCKED || world.aptMask[di]) continue;
-    const x = di % W;
-    const y = (di / W) | 0;
-    const d2 = world.dist2(cx + 0.5, cy + 0.5, x + 0.5, y + 0.5);
-    if (d2 < bestD2) {
-      bestD2 = d2;
-      bestIdx = di;
-    }
-  }
-  if (bestIdx >= 0) {
-    stampMaronarySourceMark(world, bestIdx, 84_000 + bestIdx, 0.55);
-  }
-  return bestIdx;
-}
-
 function addMaronaryGlowCell(cells: number[], ci: number): void {
   if (ci < 0) return;
   if (!cells.includes(ci)) cells.push(ci);
 }
 
-function rememberMaronaryGlowCells(sourceCells: readonly number[], wrongDoorIdx: number): number {
+function rememberMaronaryGlowCells(sourceCells: readonly number[]): number {
   const next: number[] = [];
   for (const ci of sourceCells) addMaronaryGlowCell(next, ci);
-  addMaronaryGlowCell(next, wrongDoorIdx);
   maronaryGlowCells = next;
   maronaryGlowAccum = 0;
   return next.length;
@@ -1765,16 +1736,14 @@ function prepareMaronaryWarningClues(
   variant: ActiveSamosborVariant,
   cx: number,
   cy: number,
-): { greenSourceCount: number; wrongDoorIdx: number } {
-  if (!hasSamosborSubsystem(variant, 'maronary_sources') && !hasSamosborSubsystem(variant, 'wrong_door')) {
-    return { greenSourceCount: 0, wrongDoorIdx: -1 };
+): { greenSourceCount: number } {
+  if (!hasSamosborSubsystem(variant, 'maronary_sources')) {
+    return { greenSourceCount: 0 };
   }
   const sourceCells = hasSamosborSubsystem(variant, 'maronary_sources') ? stampMaronarySources(world, cx, cy) : [];
-  const wrongDoorIdx = hasSamosborSubsystem(variant, 'wrong_door') ? chooseMaronaryWrongDoorClue(world, cx, cy) : -1;
-  const greenSourceCount = rememberMaronaryGlowCells(sourceCells, wrongDoorIdx);
+  const greenSourceCount = rememberMaronaryGlowCells(sourceCells);
   return {
     greenSourceCount,
-    wrongDoorIdx,
   };
 }
 
@@ -2008,10 +1977,8 @@ function ambientDroneModeForVariant(variant: ActiveSamosborVariant): AmbientDron
 
 function warningHazardLine(
   variant: ActiveSamosborVariant,
-  wrongDoorIdx: number,
   shelterCount: number,
 ): string {
-  if (isMaronary(variant) && wrongDoorIdx >= 0) return 'опасность: повтор двери; зелёное свечение жжёт';
   if (isMaronary(variant)) return 'опасность: зелёный источник жжёт; держаться в стороне';
   if (isIstotit(variant) && shelterCount > 0) return `укрытия: жёлтые комнаты ${shelterCount}; мест мало, список короткий`;
   if (isVeretar(variant)) return 'опасность: белое пятно вместо комнаты';
@@ -2022,7 +1989,6 @@ function buildWarningSignals(
   variant: ActiveSamosborVariant,
   screenCount: number,
   barkCount: number,
-  wrongDoorIdx: number,
   shelterCount: number,
   seconds: number,
 ): SamosborWarningSignals {
@@ -2030,7 +1996,7 @@ function buildWarningSignals(
   const screenLine = screenCount > 0
     ? `экраны: ${screenCount} табло мигают; проверь ближайшее`
     : 'экраны: рядом нет табло';
-  const hazardLine = warningHazardLine(variant, wrongDoorIdx, shelterCount);
+  const hazardLine = warningHazardLine(variant, shelterCount);
   const npcLine = barkCount > 0
     ? `соседи: ${barkCount} предупреждения; слушай короткие команды`
     : 'соседи: никого рядом';
@@ -2175,7 +2141,6 @@ function ensureSamosborWarning(
     variant,
     screenCount,
     barkCount,
-    maronaryClue.wrongDoorIdx,
     shelterRoomIds.length,
     seconds,
   );
@@ -2218,7 +2183,6 @@ function ensureSamosborWarning(
     shelterHintLine,
     screenCount,
     greenSourceCount: maronaryClue.greenSourceCount,
-    wrongDoorIdx: maronaryClue.wrongDoorIdx,
     signals,
   };
 
@@ -2229,7 +2193,7 @@ function ensureSamosborWarning(
     y: zone.cy,
     severity: 4,
     privacy: 'public',
-    tags: samosborEventTags(variant, ['samosbor', 'warning', 'prewarning', 'variant'], maronaryClue.wrongDoorIdx >= 0),
+    tags: samosborEventTags(variant, ['samosbor', 'warning', 'prewarning', 'variant']),
     data: {
       warningChannels: [...signals.channels],
       variantId: variant.def.id,
@@ -2240,7 +2204,6 @@ function ensureSamosborWarning(
       secondsToImpact: seconds,
       screenCount,
       greenSourceCount: maronaryClue.greenSourceCount,
-      wrongDoorIdx: maronaryClue.wrongDoorIdx >= 0 ? maronaryClue.wrongDoorIdx : undefined,
       shelterRoomIds,
       signals: {
         audio: signals.audioLine,
@@ -2327,36 +2290,14 @@ export function updateSamosbor(
       type: 'samosbor_started',
       severity: 5,
       privacy: 'public',
-      tags: samosborEventTags(variant, ['samosbor', 'start', 'danger', 'variant'], warning.wrongDoorIdx >= 0),
+      tags: samosborEventTags(variant, ['samosbor', 'start', 'danger', 'variant']),
       data: {
         variantId: variant.def.id,
         variantName: variant.def.displayName,
         samosborCount: state.samosborCount,
         greenSourceCount: warning.greenSourceCount,
-        wrongDoorIdx: warning.wrongDoorIdx >= 0 ? warning.wrongDoorIdx : undefined,
       },
     });
-    if (hasSamosborSubsystem(variant, 'wrong_door')) {
-      createMaronaryWrongDoorRemap(
-        world,
-        entities,
-        state,
-        'maronary_start',
-        warning.wrongDoorIdx >= 0 ? warning.wrongDoorIdx : undefined,
-      );
-    }
-
-    // Switch some armed NPCs to CIVIL_DEFENSE during samosbor
-    for (const npc of entities) {
-      if (npc.type !== EntityType.NPC || !npc.alive) continue;
-      const armed = !!npc.weapon || npc.faction === Faction.LIQUIDATOR;
-      if (armed && rng() < 0.3) {
-        if (npc.originalOccupation === undefined) {
-           npc.originalOccupation = npc.occupation;
-        }
-        npc.occupation = Occupation.CIVIL_DEFENSE;
-      }
-    }
 
     // NPCs hide (citizens/scientists only — handled by forceHide)
     forceHide(entities, state.msgs, state.time, world, state.clock, getSamosborShelterRoomIds(state));
@@ -2372,7 +2313,6 @@ export function updateSamosbor(
       warning.zoneX,
       warning.zoneY,
       warning.greenSourceCount,
-      warning.wrongDoorIdx,
     );
     activeSamosborScale = 'full';
     clearSamosborWarning(false, false);
@@ -3056,7 +2996,6 @@ function applyDoorFault(
     newState: door.state,
     doorMarked: true,
     doorMark,
-    wrongDoor: pending.variant.def.id === 'maronary' || def.tags.includes('wrong_door'),
   });
   return true;
 }
@@ -4570,7 +4509,6 @@ function captureZone(
   preferredX?: number,
   preferredY?: number,
   warningGreenSourceCount = 0,
-  warningWrongDoorIdx = -1,
 ): number {
   const preferredZone = preferredZoneId >= 0 ? world.zones[preferredZoneId] : undefined;
   const candidates = world.zones.filter(z => territoryOwnerAt(world, z.cx, z.cy) !== ZoneFaction.SAMOSBOR);
@@ -4710,7 +4648,7 @@ function captureZone(
     severity: 5,
     privacy: 'public',
     tags: [
-      ...samosborEventTags(variant, ['samosbor', 'zone', 'fog', 'danger'], warningWrongDoorIdx >= 0),
+      ...samosborEventTags(variant, ['samosbor', 'zone', 'fog', 'danger']),
       ...(veretarAreaLeaks > 0 ? ['area_leak'] : []),
     ].slice(0, 8),
     data: {
@@ -4723,7 +4661,6 @@ function captureZone(
       sourceX,
       sourceY,
       greenSourceCount: warningGreenSourceCount,
-      wrongDoorIdx: warningWrongDoorIdx >= 0 ? warningWrongDoorIdx : undefined,
     },
   });
   const bossLine = istotit

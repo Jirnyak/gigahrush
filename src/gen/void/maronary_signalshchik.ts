@@ -185,7 +185,7 @@ function handleFollowed(ctx: SignalshchikContext, state: GameState): void {
   if (player) player.psiMadness = Math.max(player.psiMadness ?? 0, 5);
   setMonsterHunt(ctx, player);
   pushHud(state, 'Вы пошли за зеленой стрелкой. Шаг замедлился, ПСИ поплыло, монстр взял ваш след.');
-  publishSignalEvent(state, ctx, 'followed', 'samosbor_warning', 4, ['wrong_door'], { failure: 'confusion_delay_eye_pressure' });
+  publishSignalEvent(state, ctx, 'followed', 'samosbor_warning', 4, ['maronary_map'], { failure: 'confusion_delay_eye_pressure' });
 }
 
 function handleDisabled(ctx: SignalshchikContext, state: GameState): void {
@@ -403,7 +403,7 @@ export function generateMaronarySignalshchik(
       count: 1,
       data: { text: 'ЗЕЛЕНЫЙ МАРШРУТ: стрелка ведет через задержку и ПСИ-сбой. Не проверяйте взглядом; уходите, ломайте источник или берите темную полку.' },
     }],
-    [TAG_FOLLOW, 'wrong_door'],
+    [TAG_FOLLOW, 'maronary_map'],
   );
   const disableContainerId = addSignalContainer(
     world,
@@ -459,7 +459,7 @@ export function generateMaronarySignalshchik(
     hint: 'темная полка дает награду без зеленого сигнала',
     targetName: 'незеленый обход',
     color: '#7f9',
-    tags: [ENCOUNTER_ID, 'void', 'maronary', 'bypass', 'wrong_door'],
+    tags: [ENCOUNTER_ID, 'void', 'maronary', 'bypass', 'maronary_map'],
     toneSeed: room.id * 991 + 120317,
     radius: 10,
     targetRadius: 2.8,
