@@ -574,19 +574,6 @@ const EXPEDITION_CONTRACTS: ContractDef[] = [
     xpReward: 70, relationDelta: 9, tags: ['expedition', 'floor_maintenance', 'room_medical', 'science', 'nii', 'inspect', 'access', 'documents', 'dry_lab'],
   },
   {
-    id: 'exp_void_seroburmaline_blind_sample', title: 'Слепой соскоб серобурмалина', issuer: 'Полевой научный Пустоты',
-    faction: Faction.SCIENTIST, rank: 4, type: QuestType.FETCH,
-    desc: 'Полевой научный просит серобурмалиновую пробу из обхода Серого Смотрителя. Смотреть прямо запрещено: НИИ платит за соскоб, а не за акт потери глаза.',
-    target: {
-      z: -50, roomType: RoomType.STORAGE,
-      zoneTag: 'seryy_smotritel', hint: 'Пустота: узел Серого Смотрителя. Иди нижним обходом по меловым меткам, не держи источник в прямой линии и забери слепую пробу.',
-    },
-    targetItem: 'slime_sample_seroburmaline', targetCount: 1,
-    rewardItem: 'psi_void_needle', rewardCount: 1, extraRewards: [{ defId: 'psi_stabilizer', count: 1 }],
-    moneyReward: 340, rewardResourceId: 'psi', rewardScarcityMax: 3.0,
-    xpReward: 170, relationDelta: 12, tags: ['expedition', 'floor_void', 'room_storage', 'science', 'nii', 'slime', 'sample', 'seroburmaline', 'anomaly', 'dry_lab'],
-  },
-  {
     id: 'exp_maint_furnace_burn_residue', title: 'Пробу в гашёный остаток', issuer: 'Печь деактивации',
     faction: Faction.LIQUIDATOR, rank: 2, type: QuestType.FETCH,
     desc: 'Доведи коричневую пробу до печи и верни гашёный остаток. Платят топливом; рынок не трогать, доклад после огня короче.',

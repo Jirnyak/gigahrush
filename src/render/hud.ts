@@ -66,7 +66,6 @@ import { getActiveRouteCueHud, getObjectiveRouteHud, type ObjectiveRouteHud, typ
 import { guideTarget } from '../systems/target_guide';
 import { drawTargetGuide } from './target_guide';
 import { getNearestSmallCaravan, type SmallCaravanHudSnapshot } from '../systems/caravans';
-import { getSeroburmalineHudFx } from '../systems/seroburmaline';
 import { ENTITY_MASK_ACTOR, ENTITY_MASK_PROJECTILE, getEntityIndex } from '../systems/entity_index';
 import { getNetSphereSnapshot, isNetSphereOpen } from '../systems/net_sphere';
 import {
@@ -88,7 +87,6 @@ import { isEmergencyPanelMenuOpen } from '../systems/emergency_panels';
 import {
   textJitter, flicker, drawHoloBar, drawGlitchText,
   drawNeuroPanel, drawGlitchLine, drawStaticNoise, drawVeretarVeil, drawRouteCueWave, drawMaronaryProofNoise, drawSmogVeil,
-  drawSeroburmalineNoLookFx,
 } from './hud_fx';
 import { fitTextStable as fitUiText, setUiTextTime } from './ui_text';
 import { allocateHudSlot, canvasMenuScale, createHudSlots, getMobileHudSafeContext, mobileHudSafeInsetsForCanvas, type UiRect } from './ui_layout';
@@ -2209,8 +2207,6 @@ export function drawHUD(
   const hazardWarning = getPlayerHazardWarning(world, player);
   const hazardWarningVisible = !!hazardWarning && (showHazardWarning || hazardWarning.critical);
 
-  const seroburmalineFx = showCompactPanels && showStatusHints ? getSeroburmalineHudFx(state) : null;
-  if (seroburmalineFx) drawSeroburmalineNoLookFx(ctx, w, h, time, seroburmalineFx);
 
   // ── Crosshair (neuro-style) ──────────────────────────────
   if (showCompactPanels && showCrosshair) {

@@ -11735,7 +11735,7 @@ interface SlimeSampleVisual {
   glow: [number, number, number];
   label: [number, number, number];
   seal: [number, number, number];
-  mark: 'black' | 'blue' | 'brown' | 'contaminated' | 'fake' | 'green' | 'red' | 'seroburmaline';
+  mark: 'black' | 'blue' | 'brown' | 'contaminated' | 'fake' | 'green' | 'red';
   glowAlpha: number;
 }
 
@@ -11817,17 +11817,6 @@ function slimeSampleVisual(defId: string): SlimeSampleVisual | null {
         seal: [164, 36, 42],
         mark: 'red',
         glowAlpha: 24,
-      };
-    case 'slime_sample_seroburmaline':
-      return {
-        liquid: [112, 88, 118],
-        liquidDark: [36, 32, 46],
-        liquidLight: [108, 190, 220],
-        glow: [132, 92, 220],
-        label: [166, 164, 132],
-        seal: [88, 70, 122],
-        mark: 'seroburmaline',
-        glowAlpha: 38,
       };
     default:
       return null;
@@ -11924,21 +11913,7 @@ function drawSlimeSampleSprite(t: Uint32Array, seed: number, visual: SlimeSample
       line(t, 21, 51, 46, 49, 1.2, visual.liquid, seed + 2592, 130);
       rect(t, 37, 28, 43, 34, warning, seed + 2593, 170);
       break;
-    case 'seroburmaline':
-      rect(t, 24, 35, 41, 39, violet, seed + 2594, 178);
-      rect(t, 25, 40, 41, 44, blue, seed + 2595, 164);
-      rect(t, 34, 30, 43, 34, [72, 72, 76], seed + 2596, 210);
-      drawEye(t, 33, 39, seed + 2597, {
-        body: visual.liquid,
-        dark: visual.liquidDark,
-        light: visual.liquidLight,
-        accent: blue,
-        glow: violet,
-      }, 0.68);
-      line(t, 23, 25, 44, 49, 0.8, blue, seed + 2598, 130);
-      drawNoiseDust(t, seed + 2599, blue, 10);
-      drawNoiseDust(t, seed + 2600, violet, 10);
-      break;
+
   }
 
   drawNoiseDust(t, seed + 2601, rust, visual.mark === 'fake' ? 6 : 10);
@@ -12212,7 +12187,7 @@ function drawSampleSprite(t: Uint32Array, seed: number, p: Palette, defId: strin
   rect(t, ampoule ? 28 : 24, 27, ampoule ? 36 : 40, 48, p.glow, seed + 142, 195);
   ellipse(t, 32, 34, ampoule ? 5 : 11, ampoule ? 9 : 10, p.glow, seed + 143, 210);
   rect(t, ampoule ? 28 : 24, 11, ampoule ? 36 : 40, 16, p.dark, seed + 144);
-  if (defId.includes('eye') || defId.includes('seroburmaline') || (seed & 7) === 3) drawEye(t, 32, 34, seed, p, 0.72);
+  if (defId.includes('eye') || (seed & 7) === 3) drawEye(t, 32, 34, seed, p, 0.72);
 }
 
 function drawAlkaliPowderSprite(t: Uint32Array, seed: number, p: Palette): void {

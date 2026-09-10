@@ -341,64 +341,6 @@ export function drawGlitchLine(
   ctx.restore();
 }
 
-export interface SeroburmalineHudFxView {
-  intensity: number;
-  exposure: number;
-  looking: boolean;
-  warning: string;
-}
-
-export function drawSeroburmalineNoLookFx(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  time: number,
-  fx: SeroburmalineHudFxView,
-): void {
-  const intensity = Math.max(0, Math.min(0.78, fx.intensity));
-  if (intensity <= 0.01) return;
-
-  ctx.save();
-  const grd = ctx.createRadialGradient(w * 0.5, h * 0.5, Math.min(w, h) * 0.16, w * 0.5, h * 0.5, Math.max(w, h) * 0.64);
-  grd.addColorStop(0, 'rgba(0,0,0,0)');
-  grd.addColorStop(0.58, `rgba(76,52,68,${0.04 * intensity})`);
-  grd.addColorStop(1, `rgba(96,54,82,${0.22 * intensity})`);
-  ctx.fillStyle = grd;
-  ctx.fillRect(0, 0, w, h);
-
-  const bandCount = 6;
-  ctx.lineWidth = 1;
-  for (let i = 0; i < bandCount; i++) {
-    const phase = time * 1.7 + i * 8.13;
-    const y = h * (0.22 + i * 0.105) + Math.sin(phase) * 4;
-    const skew = Math.sin(phase * 0.7) * 18;
-    ctx.strokeStyle = `rgba(185,132,158,${(0.035 + i * 0.006) * intensity})`;
-    ctx.beginPath();
-    ctx.moveTo(w * 0.18 + skew, y);
-    ctx.lineTo(w * 0.82 - skew, y + Math.sin(phase + 1.7) * 3);
-    ctx.stroke();
-  }
-
-  if (fx.looking || fx.exposure > 0.28) {
-    const fontSize = Math.max(10, Math.min(18, Math.floor(Math.min(w, h) * 0.034)));
-    const x = w * 0.5;
-    const y = h * 0.5 - fontSize * 3.1;
-    const pulse = 0.76 + Math.sin(time * 9) * 0.12;
-    ctx.textAlign = 'center';
-    ctx.font = `bold ${fontSize}px "Press Start 2P", monospace`;
-    ctx.shadowColor = `rgba(190,110,150,${0.45 * intensity})`;
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = `rgba(235,205,218,${pulse * intensity})`;
-    ctx.fillText(fx.warning, x + (hash2(Math.floor(time * 18), 870) - 0.5) * 2.2, y);
-    ctx.shadowBlur = 0;
-    ctx.font = `${Math.max(8, Math.floor(fontSize * 0.62))}px "Press Start 2P", monospace`;
-    ctx.fillStyle = `rgba(190,215,205,${0.56 * intensity})`;
-    ctx.fillText('в сторону / вниз / закрыть', x, y + fontSize * 1.15);
-  }
-
-  ctx.restore();
-}
-
 /* ── Compact route-cue waveform for actionable HUD hints ─────── */
 export function drawRouteCueWave(
   ctx: CanvasRenderingContext2D,

@@ -95,7 +95,6 @@ import { proceduralAnomalyInteractionTargetId, tryUseProceduralFloorAnomaly } fr
 import { railTrainInteractionTargetId, tryUseRailTrain } from './procedural_anomalies/rail_trains';
 import { isRouteCueTarget, routeObjectiveLiftPromptSuffix, tryUseRouteCue } from './route_cues';
 import { tryUseSamosborVariantInteraction } from './samosbor';
-import { tryCoverSeroburmalineSource } from './seroburmaline';
 import { portalAllowsCasinoLikeContent } from './platform_bridge';
 import { TUTORIAL_START } from '../data/tutorial_start';
 
@@ -612,7 +611,6 @@ function activateNormalPriorityInteractionForLook(ctx: InteractionContext): Inte
   }
 
   if (tryUseHeatlinePressure(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
-  if (tryCoverSeroburmalineSource(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true, worldChanged: true };
   if (tryUseHladonColdPocketCounter(ctx.world, ctx.player, ctx.state, ctx.lookX, ctx.lookY)) return { handled: true };
   const content = tryUseContentInteraction(ctx);
   if (content.handled) return content;

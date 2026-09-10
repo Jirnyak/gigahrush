@@ -598,7 +598,10 @@ test('каждый вариант самосбора несёт своё лиц�
 });
 
 test('slime definitions expose stable sample ids and text handles', () => {
-  assert.equal(SLIME_DEFS.length, 8, 'AG61 defines the MVP slime type set');
+  /* Было восемь; серобурмалиновая слизь снесена 2026-09-10 вместе со всей своей
+   * системой (решение владельца: «не был задуман в игре»). Число двигают только
+   * так — вместе со снятым видом, а не подгонкой под красный тест. */
+  assert.equal(SLIME_DEFS.length, 7, 'AG61 defines the MVP slime type set');
   assert.deepEqual(validateSlimeDefs(), [], 'slime definitions must validate internally');
   assertUnique('slime', SLIME_DEFS.map(def => def.id));
   assertUnique('slime sample', SLIME_SAMPLE_IDS);

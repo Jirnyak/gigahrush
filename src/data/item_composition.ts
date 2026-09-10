@@ -76,7 +76,6 @@ const AUTHORED_RARE_MATERIAL_ITEMS: Record<string, readonly CraftMaterialId[]> =
   blue_glow_sample_open: ['psimatter'],
   slime_sample_silver: ['psimatter'],
   slime_sample_silver_open: ['psimatter'],
-  slime_sample_seroburmaline: ['psimatter'],
   void_archive_warrant: ['metamatter'],
   chernobog_redacted_central_note: ['metamatter'],
 };

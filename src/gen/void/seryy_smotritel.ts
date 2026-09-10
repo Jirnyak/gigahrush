@@ -22,9 +22,13 @@ import { rng } from '../../core/rand';
 export const SERYY_SMOTRITEL_ID = 'seryy_smotritel' as const;
 export const SERYY_SMOTRITEL_RU_NAME = 'Серый Смотритель' as const;
 
+/* Добыча слепого обхода. Была `slime_sample_seroburmaline`; после сноса
+ * серобурмалиновой системы узел отдаёт пустотный сгусток — предмет того же
+ * назначения (проба для НИИ), уже живущий в игре. */
+const WATCHER_SAMPLE_ID = 'strange_clot';
+
 const TAG_ID = SERYY_SMOTRITEL_ID;
 const TAG_NO_LOOK = 'no_look';
-const TAG_SEROBURMALINE = 'seroburmaline';
 const TAG_MONSTER = 'monster';
 const TAG_PSI = 'psi';
 const TAG_WATCHED = 'watched';
@@ -57,7 +61,7 @@ interface SeryyContext extends SeryySmotritelGeneration {
 const contexts = createWorldContextStore<SeryyContext>();
 
 function contextTags(phase: string): string[] {
-  return [TAG_ID, TAG_NO_LOOK, TAG_SEROBURMALINE, TAG_MONSTER, TAG_PSI, phase];
+  return [TAG_ID, TAG_NO_LOOK, TAG_MONSTER, TAG_PSI, phase];
 }
 
 function eventHasTags(event: WorldEvent, ...tags: string[]): boolean {
@@ -179,8 +183,12 @@ function note(text: string): Item {
   return { defId: 'note', count: 1, data: { text } };
 }
 
-function markSeroburmaline(world: World, x: number, y: number, seed: number, radius = 0.62): void {
-  stampMark(world, x, y, 0.5, 0.5, radius, MarkType.SEROBURMALINE, seed, 142, 92, 124, 230);
+/* Остаток Смотрителя — ПСИ-метка. Своя метка `SEROBURMALINE` снята вместе со
+ * всей серобурмалиновой системой (решение владельца, 2026-09-10): узел был
+ * единственным, кто ею пользовался снаружи, а сам он про взгляд и ПСИ, а не про
+ * слизь — он и объявлен тегами `no_look` и `psi`. */
+function markWatcherResidue(world: World, x: number, y: number, seed: number, radius = 0.62): void {
+  stampMark(world, x, y, 0.5, 0.5, radius, MarkType.PSI, seed, 142, 92, 124, 230);
   stampMark(world, x, y, 0.5, 0.5, radius * 0.55, MarkType.PSI, seed + 101, 96, 58, 138, 165);
 }
 
@@ -205,8 +213,8 @@ function decorateWatcherHall(world: World, room: Room): void {
   for (const dy of [2, 3, 5, 6]) setInteriorWall(world, room, 16, dy);
   world.features[world.idx(room.x + 3, room.y + 1)] = Feature.SCREEN;
   world.features[world.idx(room.x + room.w - 3, room.y + 7)] = Feature.SCREEN;
-  markSeroburmaline(world, room.x + 8, room.y + 4, 19190, 0.36);
-  markSeroburmaline(world, room.x + 14, room.y + 4, 19191, 0.36);
+  markWatcherResidue(world, room.x + 8, room.y + 4, 19190, 0.36);
+  markWatcherResidue(world, room.x + 14, room.y + 4, 19191, 0.36);
 }
 
 function decorateSource(world: World, room: Room, sourceX: number, sourceY: number): void {
@@ -214,7 +222,7 @@ function decorateSource(world: World, room: Room, sourceX: number, sourceY: numb
   world.features[world.idx(room.x + 2, room.y + 2)] = Feature.SCREEN;
   world.features[world.idx(room.x + room.w - 3, room.y + 2)] = Feature.SCREEN;
   world.features[world.idx(room.x + 2, room.y + room.h - 3)] = Feature.CANDLE;
-  markSeroburmaline(world, sourceX, sourceY, 19019, 0.86);
+  markWatcherResidue(world, sourceX, sourceY, 19019, 0.86);
   for (let dy = -2; dy <= 2; dy++) {
     for (let dx = -2; dx <= 2; dx++) {
       const ci = world.idx(sourceX + dx, sourceY + dy);
@@ -277,7 +285,7 @@ function publishSeryyEvent(
     containerId: event.containerId,
     severity,
     privacy: 'local',
-    tags: [TAG_MONSTER, TAG_SEROBURMALINE, TAG_NO_LOOK, TAG_PSI, TAG_ID, phase, 'void'],
+    tags: [TAG_MONSTER, TAG_NO_LOOK, TAG_PSI, TAG_ID, phase, 'void'],
     data: {
       outcome: phase,
       sourceX: ctx.sourceX,
@@ -370,7 +378,7 @@ function disableSource(ctx: SeryyContext, state: GameState, event: WorldEvent): 
 }
 
 function markSampleTaken(ctx: SeryyContext, state: GameState, event: WorldEvent): void {
-  if (ctx.sampleTaken || event.itemId !== 'slime_sample_seroburmaline') return;
+  if (ctx.sampleTaken || event.itemId !== WATCHER_SAMPLE_ID) return;
   ctx.sampleTaken = true;
   state.msgs.push(msg('Проба серобурмалина снята из слепого соскоба.', state.time, '#b8c'));
   publishSeryyEvent(state, ctx, TAG_SAMPLE, 3, event);
@@ -465,7 +473,7 @@ export function generateSeryySmotritel(
     { defId: 'glass_shard', count: 1 },
   ], contextTags(TAG_DISABLED));
   const sampleContainerId = addContainer(world, reward, reward.x + 4, reward.y + 2, 'Слепая проба серобурмалина', [
-    { defId: 'slime_sample_seroburmaline', count: 1 },
+    { defId: WATCHER_SAMPLE_ID, count: 1 },
     { defId: 'psi_dust', count: 1 },
     note('Слух для НИИ: Серого Смотрителя берут маршрутом: источник сбоку, рука по стене, глаза вниз.'),
   ], contextTags(TAG_SAMPLE));

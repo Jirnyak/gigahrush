@@ -30,7 +30,7 @@ transient particles and canvas HUD overlays.
   включаются только через graphics setting, active samosbor, game-over/glitch or
   weak neuro-interface interference.
 - Persistent visual history живет в `World.surfaceMap` and floor memory/save:
-  кровь, пули, scorch, burns, webs, PSI, Maronary, Seroburmaline, chalk and
+  кровь, пули, scorch, burns, webs, PSI, Maronary, chalk and
   related residue.
 
 ## Taste Contract
@@ -233,7 +233,6 @@ Current mark families:
 - `PSI`
 - `MARONARY`
 - `BLACK_HAND`
-- `SEROBURMALINE`
 - `BURN`
 - `WEB`
 - `BULLET_WALL`

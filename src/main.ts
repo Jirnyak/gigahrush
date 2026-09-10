@@ -375,7 +375,6 @@ import { updateCarnivorousFungus } from './systems/carnivorous_fungus';
 import { updateArenaDuel, resetArenaDuel } from './systems/arena';
 import { updateArenaLadder, resetArenaLadderRuntime } from './systems/arena_ladder';
 import { hladonColdMoveMultiplier, updateHladonColdPocket } from './systems/procedural_anomalies/hladon';
-import { tryCoverSeroburmalineSource, updateSeroburmalineExposure } from './systems/seroburmaline';
 import { updateRouteCues, resetRouteCueHud } from './systems/route_cues';
 import { resetRumorEvents } from './systems/rumor';
 import { resetDialogueState } from './systems/dialogue';
@@ -7141,17 +7140,6 @@ function handleChalkTool(player: Entity, wantsToolUse: boolean): void {
   }
 }
 
-function handleCoverSeroburmaline(player: Entity, toolId: string, tx: number, ty: number, useEdge: boolean): boolean {
-  if ((toolId === 'cleaning_kit' || toolId === 'vacuum') && useEdge && _toolActionCd <= 0) {
-    if (tryCoverSeroburmalineSource(world, player, state, tx, ty, toolId)) {
-      updateWorldData(world);
-      _toolActionCd = 0.2;
-      return true;
-    }
-  }
-  return false;
-}
-
 function handleJackhammerTool(player: Entity, wantsToolUse: boolean, cx: number, cy: number, ci: number): void {
   if (!wantsToolUse || _toolActionCd > 0) return;
   if (world.hermoWall[ci] || world.aptMask[ci]) {
@@ -7312,7 +7300,6 @@ function handleTargetedTool(player: Entity, toolId: string, wantsToolUse: boolea
   const cy = Math.floor(ty);
   const ci = world.idx(cx, cy);
 
-  if (handleCoverSeroburmaline(player, toolId, tx, ty, useEdge)) return;
   if (toolId === 'jackhammer') return handleJackhammerTool(player, wantsToolUse, cx, cy, ci);
   if (toolId === 'door_kit') return handleDoorKitTool(player, useEdge, cx, cy, ci);
   if (toolId === 'block_kit') return handleBlockKitTool(player, useEdge, ci);
@@ -10291,7 +10278,6 @@ function gameLoop(now: number): void {
     // PSI does NOT auto-regenerate — only restored via items (pills, antidepressant)
     // Update ongoing PSI spell effects (phase shift, madness, control)
     makeCurrentPlayer(updatePsiEffects(entities, dt, player, state.msgs, state.time).player);
-    updateSeroburmalineExposure(world, player, state, dt);
 
     // Blood trails from wounded entities + particle physics
     bloodTrailAccum += dt;

@@ -1021,7 +1021,6 @@ test('sprite bundle 042 slime samples read as distinct sealed anomaly jars', () 
     ['slime_sample_fake', 'Поддельная проба слизи'],
     ['slime_sample_green', 'Проба зелёной слизи'],
     ['slime_sample_red', 'Проба красной слизи'],
-    ['slime_sample_seroburmaline', 'Проба серобурмалиновой слизи'],
   ];
   const hashes = new Set<number>();
 
@@ -1082,9 +1081,6 @@ test('sprite bundle 042 slime samples read as distinct sealed anomaly jars', () 
   assert.ok(countPixels(red, (r, g, b, a) => a > 115 && r > 135 && g < 100 && b < 105) > 165, 'red slime sample should show red adhesive mass');
   assert.ok(countPixelsIn(red, 21, 35, 48, 51, (r, g, b, a) => a > 90 && r > 135 && g < 105) > 90, 'red slime sample should include sticky strand marks');
 
-  const seroburmaline = generateItemSprite('slime_sample_seroburmaline');
-  assert.ok(countPixels(seroburmaline, (r, g, b, a) => a > 90 && b > 135 && r > 80 && g < 150) > 55, 'seroburmaline sample should show purple/blue void glow');
-  assert.ok(countPixelsIn(seroburmaline, 28, 36, 39, 43, (_r, _g, _b, a) => a > 120) > 42, 'seroburmaline sample should keep a no-look eye-like core');
 });
 
 test('antibiotic sprite reads as a dirty medical blister packet', () => {

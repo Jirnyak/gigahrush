@@ -127,7 +127,6 @@ export const enum MarkType {
   PSI,      // psi-energy mark — purple, crystalline, angular
   MARONARY, // green proof/source mark — hard ring with impossible scan lines
   BLACK_HAND, // cult route warning — readable palm + fingers
-  SEROBURMALINE, // visual-risk slime — gray/magenta crystalline residue
   BURN,     // fire burn — torn/wispy charred patches, semi-transparent
   WEB,      // pale spider web threads — readable adhesive warning
   BULLET_WALL, // precise wall bullet chip — clipped to one cell tile
@@ -341,28 +340,6 @@ function shaderBurn(u: number, v: number, seed: number): number {
   return 0.3 + charPat * 0.45;
 }
 
-function shaderSeroburmaline(u: number, v: number, seed: number): number {
-  const r = Math.sqrt(u * u + v * v);
-  if (r > 1.15) return 0;
-  const angle = Math.atan2(v, u);
-  const ringNoise = fbm(u * 4 + hash(seed) * 5, v * 4 + hash(seed + 1) * 5, seed + 700);
-  const edge = 0.48 + ringNoise * 0.28;
-  const radial = r < edge ? 0.72 + (1 - r / Math.max(0.01, edge)) * 0.22 : Math.max(0, (1.15 - r) * 0.28);
-
-  const spokeCount = 7 + Math.floor(hash(seed + 3) * 5);
-  let spoke = 0;
-  for (let i = 0; i < spokeCount; i++) {
-    const a = i * (Math.PI * 2 / spokeCount) + hash(seed + 20 + i) * 0.45;
-    let da = Math.abs(angle - a);
-    if (da > Math.PI) da = Math.PI * 2 - da;
-    const width = 0.025 + hash(seed + 40 + i) * 0.035;
-    if (da < width && r < 1.05) spoke = Math.max(spoke, (1 - da / width) * (1 - r * 0.35));
-  }
-
-  const grit = snoise(u * 18 + seed, v * 18 - seed, seed + 900) > 0.58 ? 0.22 : 0;
-  return Math.min(1, Math.max(radial, spoke * 0.86) + grit);
-}
-
 function shaderWeb(u: number, v: number, seed: number): number {
   const r = Math.sqrt(u * u + v * v);
   if (r > 1.1) return 0;
@@ -378,7 +355,7 @@ function shaderWeb(u: number, v: number, seed: number): number {
 /* ── Shader dispatch ──────────────────────────────────────────── */
 const SHADERS: ((u: number, v: number, seed: number) => number)[] = [
   shaderSplat, shaderBullet, shaderScorch, shaderDrip, shaderPool, shaderPsi, shaderMaronary, shaderBlackHand,
-  shaderSeroburmaline, shaderBurn, shaderWeb, shaderWallBullet,
+  shaderBurn, shaderWeb, shaderWallBullet,
 ];
 
 function blackHandCells(world: World): BlackHandMarkCell[] {

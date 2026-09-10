@@ -862,7 +862,6 @@ async function auditThirdWaveContent() {
       'slime_black',
       'slime_blue',
       'slime_silver',
-      'slime_seroburmaline',
     ], 'SLIME_DEFS', failures);
     markMissingIds(items, [
       'slime_sample_brown',
@@ -872,7 +871,6 @@ async function auditThirdWaveContent() {
       'slime_sample_black',
       'slime_sample_blue',
       'slime_sample_silver',
-      'slime_sample_seroburmaline',
     ], 'ITEMS slime samples', failures);
     if (!resources.includes('slime_samples')) failures.push('RESOURCES missing "slime_samples"');
     else coverage.push('slime data rail: 8 sample ids + slime_samples resource');

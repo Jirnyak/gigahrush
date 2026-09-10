@@ -8,7 +8,7 @@ export type SlimeId =
   | 'slime_black'
   | 'slime_blue'
   | 'slime_silver'
-  | 'slime_seroburmaline';
+;
 
 export type SlimeRewardTier = 1 | 2 | 3 | 4 | 5;
 export type SlimeRouteChoice = 'deliver' | 'sell' | 'burn' | 'hide' | 'report';
@@ -138,21 +138,6 @@ export const SLIME_DEFS: readonly SlimeDef[] = [
     preferredFactions: [Faction.WILD, Faction.CULTIST, Faction.SCIENTIST],
     routeChoices: ['deliver', 'sell', 'hide', 'report'],
     textHandles: ['slime_silver_sealed_trade', 'silver_slime_science_handoff', 'market88_nii_receipt_silver'],
-  },
-  {
-    id: 'slime_seroburmaline',
-    name: 'Серобурмалиновая слизь',
-    tags: ['slime', 'sample', 'residue', 'visual_risk', 'cognitive_risk', 'void'],
-    danger: 5,
-    routeRole: 'No-look void route: проба берётся по памяти, маршрут важнее взгляда, награда платит за дисциплину.',
-    cleanupHint: 'Не смотреть на перелив, закрыть метки, идти по заранее отмеченному маршруту и сдавать без демонстрации.',
-    sealedRisk: 'Целая серобурмалиновая тара доказывает, что носильщик не проверял перелив глазами.',
-    unsealedRisk: 'Сорванная пломба на серобурмалине означает спор с банкой, который уже проигран в протоколе.',
-    sampleId: 'slime_sample_seroburmaline',
-    rewardTier: 5,
-    preferredFactions: [Faction.SCIENTIST, Faction.CULTIST],
-    routeChoices: ['deliver', 'hide', 'report'],
-    textHandles: ['slime_seroburmaline_no_look', 'lead_void_seroburmaline_blind_sample'],
   },
 ];
 

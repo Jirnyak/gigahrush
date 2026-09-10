@@ -55,7 +55,6 @@ import { generateVentshun } from './ventshun';
 import { generateRedAdhesiveTrap } from './red_adhesive_trap';
 import { generateBlackSlimeEyes } from './black_slime_eyes';
 import { generateChernayaLichinka } from './chernaya_lichinka';
-import { generateSeroburmalineNoLook } from './seroburmaline_no_look';
 import { generateBetonoedShortcut } from './betonoed_shortcut';
 import { generateKostorezLocker } from './kostorez_locker';
 import { generateSlepoglazLine } from './slepoglaz_line';
@@ -252,7 +251,6 @@ export function runMaintenanceContent(
   generateCultHeldWorkshop({ world, entities, nextId: { v: nextId }, spawnX, spawnY });
   nextId = syncNextEntityId(entities, nextId);
 
-  generateSeroburmalineNoLook({ world, entities, nextId: { v: nextId }, spawnX, spawnY });
   nextId = syncNextEntityId(entities, nextId);
 
   generateBlackSlimeEyes({ world, entities, nextId: { v: nextId }, spawnX, spawnY });
