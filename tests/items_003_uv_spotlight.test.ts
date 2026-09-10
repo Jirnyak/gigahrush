@@ -9,7 +9,6 @@ import { resourceForItem } from '../src/data/resources';
 import {
   droppedToolLightScore,
   equippedToolLightScore,
-  passiveToolLightRenderIntensity,
   toolLightDef,
 } from '../src/data/tool_lights';
 import { generateLiquidatorArchive } from '../src/gen/ministry/liquidator_archive';
@@ -31,6 +30,11 @@ test('uv spotlight is liquidator cleanup gear with resource pressure', () => {
   assert.equal(ITEM_TAGS.uv_spotlight?.includes('weapon'), false);
 });
 
+/* Пассивный ярус света снят 2026-09-10; прежние проверки `passive === false` и
+ * нулевой пассивной яркости сверяли мёртвое поле с его же значением. Смысл
+ * строки при этом настоящий и остаётся: прожектор — ИМПУЛЬС по взгляду, а не
+ * лампа, поэтому у него нулевая `renderIntensity` и нулевая заметность
+ * носителя — ореола вокруг человека он не даёт, в отличие от фонаря. */
 test('uv spotlight stays a tool pulse, not a weapon or passive lamp', () => {
   const def = ITEMS.uv_spotlight;
   const lightDef = toolLightDef(def.id);
@@ -38,9 +42,8 @@ test('uv spotlight stays a tool pulse, not a weapon or passive lamp', () => {
   assert.equal(WEAPON_STATS[def.id], undefined);
   assert.match(def.desc, /Слот инструмента/);
   assert.match(def.desc, /по взгляду/);
-  assert.equal(lightDef?.passive, false);
-  assert.equal(passiveToolLightRenderIntensity(def.id, { cur: 36, max: 36 }), 0);
-  assert.equal(equippedToolLightScore(def.id), 0);
+  assert.ok(lightDef, 'прожектор пропал из реестра источников света');
+  assert.equal(equippedToolLightScore(def.id), 0, 'направленный луч ореола не даёт');
   assert.equal(droppedToolLightScore(def.id), 0);
   assert.equal(lightDef?.renderIntensity, 0);
   assert.equal(uvSpotlightRenderIntensity(0), 0);

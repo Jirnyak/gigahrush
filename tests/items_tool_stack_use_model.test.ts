@@ -15,9 +15,6 @@ import {
   activeToolLightDrainPerSecond,
   activeToolLightRenderIntensity,
   equippedToolLightScore,
-  passiveToolLightDrainPerSecond,
-  passiveToolLightMoveMultiplier,
-  passiveToolLightRenderIntensity,
   toolLightDef,
 } from '../src/data/tool_lights';
 import { addItem, getEquippedToolDurability } from '../src/systems/inventory';
@@ -91,7 +88,15 @@ test('non-use misc pickup creates separate slots unless the item declares a stac
   assert.deepEqual(player.inventory?.at(-1), { defId: 'krona_battery', count: 2, data: undefined });
 });
 
-test('equipping light tools is not passive light use by default', () => {
+/* Тест ОХРАНЯЛ ДЕФЕКТ и переписан 2026-09-10.
+ *
+ * Прежняя редакция запирала три равенства пассивного яруса и — главное —
+ * `equippedToolLightScore(id) === 0`, то есть «человек с фонарём в руке
+ * незаметен». Ноль этот брался не из замысла, а из мёртвого поля `passive`, и
+ * из-за него молчали три написанных пути: противодействие гермодверному буру,
+ * опознание светящегося актора у Лишенного и его же выбор цели по свету. Ярус
+ * снят по решению владельца, ноль вместе с ним. */
+test('свет в руке зажигается кнопкой, но носителя видно и без неё', () => {
   for (const id of ['flashlight', 'liquidator_flashlamp'] as const) {
     const player = makeTestPlayer();
     assert.equal(addItem(player, id, 1), true);
@@ -99,12 +104,11 @@ test('equipping light tools is not passive light use by default', () => {
 
     const durability = getEquippedToolDurability(player);
     assert.deepEqual(durability, { cur: ITEMS[id].durability, max: ITEMS[id].durability }, id);
-    assert.equal(toolLightDef(id)?.passive, false, id);
-    assert.equal(passiveToolLightDrainPerSecond(id), 0, id);
-    assert.equal(passiveToolLightMoveMultiplier(id), 1, id);
-    assert.equal(passiveToolLightRenderIntensity(id, durability), 0, id);
-    assert.equal(equippedToolLightScore(id), 0, id);
+    assert.ok(toolLightDef(id), id);
+    // Луч и расход батареи — только по удержанию кнопки; это зовёт сам вызывающий.
     assert.ok(activeToolLightDrainPerSecond(id) > 0, id);
     assert.ok(activeToolLightRenderIntensity(id, durability) > 0, id);
+    // А вот носитель источника света заметен твари и буру всегда.
+    assert.ok(equippedToolLightScore(id) > 0, id);
   }
 });

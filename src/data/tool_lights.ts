@@ -1,6 +1,11 @@
+/* Ярус «горит сам, пока держишь в руке» СНЯТ 2026-09-10 по решению владельца.
+ * Поле `passive` стояло `false` у всех четырёх источников света, то есть расход,
+ * замедление ходьбы и яркость пассивного света были написаны, подключены к
+ * рендеру, движению и прочности — и не включены ни у одного предмета. Свет в
+ * игре зажигается ТОЛЬКО удержанием кнопки использования, и так было всегда.
+ * Вернуть поведение — это строка данных, а не воскрешение яруса. */
 export interface ToolLightDef {
   id: string;
-  passive: boolean;
   drainPerSecond: number;
   renderIntensity: number;
   minChargeRatio: number;
@@ -12,7 +17,6 @@ export interface ToolLightDef {
 export const TOOL_LIGHT_DEFS: readonly ToolLightDef[] = [
   {
     id: 'flashlight',
-    passive: false,
     drainPerSecond: 1,
     renderIntensity: 1,
     minChargeRatio: 0.25,
@@ -22,7 +26,6 @@ export const TOOL_LIGHT_DEFS: readonly ToolLightDef[] = [
   },
   {
     id: 'lighter',
-    passive: false,
     drainPerSecond: 1, // small drain
     renderIntensity: 0.6, // weaker than flashlight (1)
     minChargeRatio: 0.25,
@@ -32,7 +35,6 @@ export const TOOL_LIGHT_DEFS: readonly ToolLightDef[] = [
   },
   {
     id: 'liquidator_flashlamp',
-    passive: false,
     drainPerSecond: 1.15,
     renderIntensity: 1.35,
     minChargeRatio: 0.22,
@@ -42,7 +44,6 @@ export const TOOL_LIGHT_DEFS: readonly ToolLightDef[] = [
   },
   {
     id: 'uv_spotlight',
-    passive: false,
     drainPerSecond: 0,
     renderIntensity: 0,
     minChargeRatio: 0,
@@ -60,34 +61,14 @@ export function toolLightDef(toolId: string | undefined): ToolLightDef | undefin
   return toolId ? TOOL_LIGHT_BY_ID[toolId] : undefined;
 }
 
-export function passiveToolLightDrainPerSecond(toolId: string | undefined): number {
-  const def = toolLightDef(toolId);
-  return def?.passive ? def.drainPerSecond : 0;
-}
-
-export function passiveToolLightMoveMultiplier(toolId: string | undefined): number {
-  const def = toolLightDef(toolId);
-  return def?.passive ? def.moveMultiplier : 1;
-}
-
-export function passiveToolLightRenderIntensity(
-  toolId: string | undefined,
-  durability: { cur: number; max: number } | null,
-): number {
-  const def = toolLightDef(toolId);
-  if (!def?.passive || !durability || durability.max <= 0 || durability.cur <= 0) return 0;
-  const charge = Math.max(def.minChargeRatio, Math.min(1, durability.cur / durability.max));
-  return def.renderIntensity * charge;
-}
-
 export function activeToolLightDrainPerSecond(toolId: string | undefined): number {
   const def = toolLightDef(toolId);
-  return def && !def.passive && def.renderIntensity > 0 ? def.drainPerSecond : 0;
+  return def && def.renderIntensity > 0 ? def.drainPerSecond : 0;
 }
 
 export function activeToolLightMoveMultiplier(toolId: string | undefined): number {
   const def = toolLightDef(toolId);
-  return def && !def.passive && def.renderIntensity > 0 ? def.moveMultiplier : 1;
+  return def && def.renderIntensity > 0 ? def.moveMultiplier : 1;
 }
 
 export function activeToolLightRenderIntensity(
@@ -95,14 +76,24 @@ export function activeToolLightRenderIntensity(
   durability: { cur: number; max: number } | null,
 ): number {
   const def = toolLightDef(toolId);
-  if (!def || def.passive || def.renderIntensity <= 0 || !durability || durability.max <= 0 || durability.cur <= 0) return 0;
+  if (!def || def.renderIntensity <= 0 || !durability || durability.max <= 0 || durability.cur <= 0) return 0;
   const charge = Math.max(def.minChargeRatio, Math.min(1, durability.cur / durability.max));
   return def.renderIntensity * charge;
 }
 
+/** Насколько заметен человек с источником света В РУКЕ.
+ *
+ *  Спрашивают трое, и все трое молчали, пока ответом был ноль: противодействие
+ *  гермодверному буру (`systems/hermodoor_borer.ts`), опознание светящегося
+ *  актора у Лишенного и его же выбор цели по свету (`ai/monster.ts`). Ноль они
+ *  получали не по замыслу, а через снятое поле `passive`: света «сам по себе» в
+ *  игре нет, значит условие не выполнялось никогда.
+ *
+ *  Ответ теперь про НОШЕНИЕ, а не про то, зажат ли курок в этот кадр: все три
+ *  спрашивающих задают вопрос «этот человек с фонарём?», а не «светит ли он
+ *  прямо сейчас». */
 export function equippedToolLightScore(toolId: string | undefined): number {
-  const def = toolLightDef(toolId);
-  return def?.passive ? def.actorLightScore : 0;
+  return toolLightDef(toolId)?.actorLightScore ?? 0;
 }
 
 export function droppedToolLightScore(itemId: string): number {

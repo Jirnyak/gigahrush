@@ -11,9 +11,6 @@ import {
   activeToolLightRenderIntensity,
   droppedToolLightScore,
   equippedToolLightScore,
-  passiveToolLightDrainPerSecond,
-  passiveToolLightMoveMultiplier,
-  passiveToolLightRenderIntensity,
   toolLightDef,
 } from '../src/data/tool_lights';
 import { addItem, getEquippedToolDurability } from '../src/systems/inventory';
@@ -37,6 +34,10 @@ test('liquidator flashlamp maps to tool and electronics scarcity', () => {
   assert.ok(electronics?.itemIds.includes('liquidator_flashlamp'));
 });
 
+/* Пассивный ярус света снят 2026-09-10, вместе с ним ушли три проверки нуля.
+ * Заодно ушёл ноль заметности носителя: он брался из мёртвого поля `passive`, а
+ * не из замысла, и из-за него молчали противодействие буру и обе светозависимые
+ * ветки Лишенного. Тяжёлая лампа заметнее фонаря — это и заперто. */
 test('liquidator flashlamp keeps heavy light metadata without passive activation', () => {
   const player = makeTestPlayer();
   assert.equal(addItem(player, 'liquidator_flashlamp', 1), true);
@@ -46,14 +47,10 @@ test('liquidator flashlamp keeps heavy light metadata without passive activation
   const flashlamp = toolLightDef('liquidator_flashlamp');
   const flashlight = toolLightDef('flashlight');
   assert.deepEqual(durability, { cur: ITEMS.liquidator_flashlamp.durability, max: ITEMS.liquidator_flashlamp.durability });
-  assert.equal(flashlamp?.passive, false);
+  assert.ok(flashlamp, 'лампа пропала из реестра источников света');
   assert.ok((flashlamp?.renderIntensity ?? 0) > (flashlight?.renderIntensity ?? 0));
   assert.ok((flashlamp?.moveMultiplier ?? 1) < (flashlight?.moveMultiplier ?? 1));
-  assert.equal(passiveToolLightDrainPerSecond('liquidator_flashlamp'), 0);
-  assert.equal(passiveToolLightRenderIntensity('liquidator_flashlamp', durability), 0);
-  assert.equal(passiveToolLightMoveMultiplier('liquidator_flashlamp'), 1);
-  assert.equal(equippedToolLightScore('liquidator_flashlamp'), 0);
-  assert.equal(equippedToolLightScore('flashlight'), 0);
+  assert.ok(equippedToolLightScore('liquidator_flashlamp') > equippedToolLightScore('flashlight'));
   assert.ok(activeToolLightDrainPerSecond('liquidator_flashlamp') > activeToolLightDrainPerSecond('flashlight'));
   assert.ok(activeToolLightMoveMultiplier('liquidator_flashlamp') < activeToolLightMoveMultiplier('flashlight'));
   assert.ok(activeToolLightRenderIntensity('liquidator_flashlamp', durability) > 1);

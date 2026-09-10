@@ -1677,10 +1677,6 @@ function buildWallSnakeFieldRooms(world: World, spec: ProceduralFloorSpec): { ro
   return { rooms, spawnX: spawn.x + 0.5, spawnY: spawn.y + 0.5 };
 }
 
-function archiveRoomHasLandmarkName(room: Room): boolean {
-  return ARCHIVE_WARREN_LANDMARK_NAMES.some(name => room.name.includes(name));
-}
-
 function adminMicroRoomSize(type: RoomType): { w: number; h: number } {
   if (type === RoomType.BATHROOM) return { w: irng(4, 6), h: irng(4, 6) };
   if (type === RoomType.KITCHEN) return { w: irng(5, 8), h: irng(5, 8) };
@@ -5981,12 +5977,12 @@ function applyArchiveWarrens(
     .sort((a, b) => (b.w * b.h) - (a.w * a.h));
   const limit = Math.min(candidates.length, 10 + spec.danger * 3);
 
-  /* Восемь авторских имён-ориентиров не присваивались нигде, и потому
-   * `archiveRoomHasLandmarkName` отвечал `false` ВСЕГДА, а составное имя поста
-   * ликвидаторов в `stampLiquidatorCheckpoint` было недостижимой веткой.
-   * Проверено прогоном: шесть процедурных этажей с `geometryId ===
-   * 'archive_warrens'` (z 15, 21, 23, 25, 29, 33), комнат с подстрокой «Окно
-   * жалоб» — ноль.
+  /* Восемь авторских имён-ориентиров не присваивались нигде: проверено
+   * прогоном шести процедурных этажей с `geometryId === 'archive_warrens'` —
+   * комнат с подстрокой «Окно жалоб» было ноль. Их единственный читатель
+   * (составное имя поста ликвидаторов) из-за этого не срабатывал никогда и
+   * снят 2026-09-10: после раздачи имён он всё равно не встретился ни на одном
+   * сиде — ориентиры и посты садятся в разные комнаты.
    *
    * Ориентир — комната ОДНА на этаж, поэтому имя идёт без номера: номер здесь
    * ради уникальности, а у ориентира уникально само имя. Порядок вращается
@@ -7969,9 +7965,11 @@ function stampLiquidatorCheckpoint(world: World, checkpoint: LiquidatorCheckpoin
   const checkpointName = index === 0
     ? `Главный пост ликвидаторов ${checkpoint.room.id}`
     : `Контрольный пост ликвидаторов ${checkpoint.room.id}`;
-  checkpoint.room.name = archiveRoomHasLandmarkName(checkpoint.room)
-    ? `${checkpoint.room.name}: ${checkpointName}`
-    : checkpointName;
+  /* Составное имя «<ориентир>: <пост>» снято 2026-09-10: ветка была
+     недостижима по построению (имена ориентиров не присваивались никому), а
+     после их раздачи не встретилась ни на одном из шести сидов — ориентиры и
+     посты садятся в разные комнаты. */
+  checkpoint.room.name = checkpointName;
   setLiquidatorCheckpointFloor(world, checkpoint.x, checkpoint.y, spec.seed ^ (index * 0x4c11));
   placeLiquidatorFixture(world, checkpoint.x, checkpoint.y, Feature.SCREEN);
   placeLiquidatorFixture(world, checkpoint.x + 1, checkpoint.y, Feature.DESK);

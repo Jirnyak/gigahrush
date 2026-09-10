@@ -247,9 +247,6 @@ import {
   activeToolLightDrainPerSecond,
   activeToolLightMoveMultiplier,
   activeToolLightRenderIntensity,
-  passiveToolLightDrainPerSecond,
-  passiveToolLightMoveMultiplier,
-  passiveToolLightRenderIntensity,
 } from './data/tool_lights';
 import { entityDisplayName } from './entities/monster';
 import { ensureProceduralSpriteSeeds } from './entities/procedural_visuals';
@@ -1366,15 +1363,12 @@ function onOnlinePeerJoin(msgData: any): void {
       if (typeof v === 'number' && Number.isFinite(v)) (impNeeds as unknown as Record<string, number>)[key] = Math.max(0, Math.min(100, v));
     }
   }
+  const importedSex = typeof impRaw.sex === 'string' ? (impRaw.sex as CharacterSex) : undefined;
   const remoteActor: Entity = {
+    ...playerBodyDefaults(),
     id: nextEntityId.v++,
-    type: EntityType.NPC,
     x: spawnX, y: spawnY,
-    angle: -Math.PI / 2, pitch: 0,
-    alive: true,
-    speed: HUMANOID_BASE_MOVE_SPEED,
-    sprite: Occupation.TRAVELER,
-    spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
+    angle: -Math.PI / 2,
     needs: impNeeds,
     hp: impHp, maxHp: impMaxHp,
     money: imp?.money ?? 0,
@@ -1384,13 +1378,16 @@ function onOnlinePeerJoin(msgData: any): void {
     name: msgData.nickname || `Игрок ${peerSlot}`,
     netGen: msgData.netGen,
     npcVisualId: typeof impRaw.npcVisualId === 'string' ? impRaw.npcVisualId.slice(0, 40) : undefined,
-    sex: typeof impRaw.sex === 'string' ? (impRaw.sex as CharacterSex) : undefined,
     rpg: freshRPG(1),
     // Invaders are WILD: hostile to the host (PLAYER), his NPCs and monsters
     // through the ordinary relation matrix — no special-case AI anywhere.
     faction: isInvader ? Faction.WILD : Faction.PLAYER,
     peerSlot,
-    ...playerAlifeFields(),
+    /* Пол гостя обязан приехать ВНУТРЬ `playerAlifeFields`, а не рядом с ним:
+     * она расстилается последней и сама решает `sex`, `isFemale`, `age` и рост.
+     * Стоя отдельным полем выше, привезённый пол молча перетирался хозяйским —
+     * гость выходил в кадр телом хозяина. */
+    ...playerAlifeFields({ sex: importedSex }),
   } as Entity;
   if (imp?.rpg && remoteActor.rpg) Object.assign(remoteActor.rpg, imp.rpg);
   // playerAlifeFields() marks visitors personally friendly (relation 100);
@@ -1836,14 +1833,10 @@ function onOnlineFloorSnapshotChunk(msgData: any, chunks: (string | undefined)[]
 
     // Create local player actor for camera attachment
     const localPlayer: Entity = {
+      ...playerBodyDefaults(),
       id: PEER_LOCAL_PLAYER_ID_BASE + (peerMySlot ?? 0),
-      type: EntityType.NPC,
       x: spawnX, y: spawnY,
-      angle: -Math.PI / 2, pitch: 0,
-      alive: true,
-      speed: HUMANOID_BASE_MOVE_SPEED,
-      sprite: Occupation.TRAVELER,
-      spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
+      angle: -Math.PI / 2,
       needs: freshNeeds(),
       hp: 100, maxHp: 100,
       money: 100,
@@ -1852,7 +1845,6 @@ function onOnlineFloorSnapshotChunk(msgData: any, chunks: (string | undefined)[]
       name: 'Вы',
       netGen: getNetSphereSnapshot().netGen,
       rpg: freshRPG(1),
-      faction: Faction.PLAYER,
       peerSlot: peerMySlot,
       ...playerAlifeFields(),
     } as Entity;
@@ -2837,6 +2829,37 @@ function playerDemographicSex(source: Partial<Entity>): CharacterSex {
   return playerSex;
 }
 
+/* Неизменная часть тела игрока — одна на все шесть мест, где оно рождается.
+ *
+ * Мест ровно шесть: новая игра, загрузка сейва, смена этажа, возврат из
+ * Пустоты и две сетевые (актёр гостя у хозяина, локальный актёр гостя). Пять
+ * минтят номер из курсора сущностей, шестая берёт его из
+ * `PEER_LOCAL_PLAYER_ID_BASE` — это разные ВХОДЫ, и сводить их нельзя. А вот
+ * ответ на «из чего вообще сделано тело игрока» у всех шести один, и жил он
+ * шестью копиями: комментарий ниже был скопирован дословно ЧЕТЫРЕЖДЫ и сам
+ * является следом прошлого дрейфа — кто-то забыл `sprite`/`spriteScale`, и
+ * игрок вышел в кадр домохозяйкой в полный рост.
+ *
+ * Тело игрока одето как у сетевого пира: тот же вид и тот же масштаб. `sprite:
+ * 0` — это `Occupation.HOUSEWIFE`, а без `spriteScale` силуэт ещё и в полтора
+ * раза выше стоящего рядом пира.
+ *
+ * Что сюда НЕ входит и почему: место, угол, здоровье, нужды, инвентарь, деньги,
+ * имя, `rpg`, статусы — разные у разных входов. Фракция входит: она `PLAYER`
+ * у пяти из шести, а вторженец переопределяет её после расстилки. */
+function playerBodyDefaults(): Pick<Entity,
+  'type' | 'pitch' | 'alive' | 'speed' | 'sprite' | 'spriteScale' | 'faction'> {
+  return {
+    type: EntityType.NPC,
+    pitch: 0,
+    alive: true,
+    speed: HUMANOID_BASE_MOVE_SPEED,
+    sprite: Occupation.TRAVELER,
+    spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
+    faction: Faction.PLAYER,
+  };
+}
+
 /* Тело игрока — такой же актор, и строка состояния у него такая же.
  *
  * Раньше `ai` у игрока не было вовсе, и это делало его невыразимым для общих
@@ -3571,20 +3594,11 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     materializeCurrentAlifeFloor(currentFloorMemoryKey());
 
     player = {
+      ...playerBodyDefaults(),
       id: nextEntityId.v++,
-      type: EntityType.NPC,
       x: gen.spawnX,
       y: gen.spawnY,
       angle: savedAngle,
-      pitch: 0,
-      alive: true,
-      speed: HUMANOID_BASE_MOVE_SPEED,
-      /* Тело игрока одето как у сетевого пира: тот же вид и тот же масштаб.
-       * Иначе в кадре сцены он выходил ДОМОХОЗЯЙКОЙ в полный рост — `sprite: 0`
-       * это `Occupation.HOUSEWIFE`, а без `spriteScale` силуэт ещё и в полтора
-       * раза выше стоящего рядом пира. */
-      sprite: Occupation.TRAVELER,
-      spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
       needs: savedNeeds,
       hp: savedHp,
       maxHp: savedMaxHp,
@@ -3596,7 +3610,6 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
       rpg: savedRpg,
       statuses: savedStatuses,
       name: playerDisplayName(),
-      faction: Faction.PLAYER,
       ...playerAlifeFields(player),
     };
     entities.push(player);
@@ -4066,20 +4079,11 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   resetEntityIdCursorToEntities();
 
   player = {
+    ...playerBodyDefaults(),
     id: nextEntityId.v++,
-    type: EntityType.NPC,
     x: gen.spawnX,
     y: gen.spawnY,
     angle: -Math.PI / 2, // face north — toward slides
-    pitch: 0,
-    alive: true,
-    speed: HUMANOID_BASE_MOVE_SPEED,
-    /* Тело игрока одето как у сетевого пира: тот же вид и тот же масштаб.
-     * Иначе в кадре сцены он выходил ДОМОХОЗЯЙКОЙ в полный рост — `sprite: 0`
-     * это `Occupation.HOUSEWIFE`, а без `spriteScale` силуэт ещё и в полтора
-     * раза выше стоящего рядом пира. */
-    sprite: Occupation.TRAVELER,
-    spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
     needs: freshNeeds(),
     hp: 100, maxHp: 100,
     money: 100,
@@ -4088,7 +4092,6 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
     tool: '',
     name: playerDisplayName(),
     rpg: freshRPG(1),
-    faction: Faction.PLAYER,
     ...playerAlifeFields(),
   };
   entities.push(player);
@@ -4648,8 +4651,7 @@ function movePlayer(dt: number): void {
     const hazardMod = getCellHazardMoveMultiplier(world, actor);
     const statusMod = zhelemishMoveMult(actor, state.time);
     const coldMod = hladonColdMoveMultiplier(world, actor);
-    const toolLightMod = passiveToolLightMoveMultiplier(actor.tool) *
-      ((input.use || input.mouseUse) ? activeToolLightMoveMultiplier(actor.tool) : 1);
+    const toolLightMod = (input.use || input.mouseUse) ? activeToolLightMoveMultiplier(actor.tool) : 1;
     const sprintMod = playerSprintMoveMultiplier(actor);
     const moveMod = sleepMod * hazardMod * statusMod * coldMod * toolLightMod * sprintMod;
     mx = mx / len * speed * moveMod;
@@ -5183,11 +5185,6 @@ function tickPeerLocalToolResources(dt: number): 'edge' | 'hold' | undefined {
   if (!toolId) return undefined;
   if (!(player.inventory ?? []).some(item => item.defId === toolId)) { player.tool = ''; return undefined; }
 
-  const passiveLightDrain = passiveToolLightDrainPerSecond(toolId);
-  if (passiveLightDrain > 0) {
-    consumeToolDurability(player, dt * passiveLightDrain, state.msgs, state.time, state);
-    return undefined;
-  }
   const activeLightDrain = activeToolLightDrainPerSecond(toolId);
   if (activeLightDrain > 0) {
     if (wantsToolUse) consumeToolDurability(player, dt * activeLightDrain, state.msgs, state.time, state);
@@ -6351,19 +6348,10 @@ function switchFloor(
     );
     player = {
       id: nextEntityId.v++,
-      type: EntityType.NPC,
+      ...playerBodyDefaults(),
       x: spawn.x,
       y: spawn.y,
       angle: savedAngle,
-      pitch: 0,
-      alive: true,
-      speed: HUMANOID_BASE_MOVE_SPEED,
-      /* Тело игрока одето как у сетевого пира: тот же вид и тот же масштаб.
-       * Иначе в кадре сцены он выходил ДОМОХОЗЯЙКОЙ в полный рост — `sprite: 0`
-       * это `Occupation.HOUSEWIFE`, а без `spriteScale` силуэт ещё и в полтора
-       * раза выше стоящего рядом пира. */
-      sprite: Occupation.TRAVELER,
-      spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
       needs: savedNeeds,
       hp: savedHp,
       maxHp: savedMaxHp,
@@ -6375,7 +6363,6 @@ function switchFloor(
       rpg: savedRpg,
       statuses: savedStatuses,
       name: playerDisplayName(),
-      faction: Faction.PLAYER,
       ...playerAlifeFields(player),
     };
     entities.push(player);
@@ -6924,20 +6911,11 @@ function loadGame(): boolean {
       );
 
       player = {
+        ...playerBodyDefaults(),
         id: nextEntityId.v++,
-        type: EntityType.NPC,
         x: spawn.x,
         y: spawn.y,
         angle: finiteNumber(dataPlayer.angle, 0),
-        pitch: 0,
-        alive: true,
-        speed: HUMANOID_BASE_MOVE_SPEED,
-        /* Тело игрока одето как у сетевого пира: тот же вид и тот же масштаб.
-         * Иначе в кадре сцены он выходил ДОМОХОЗЯЙКОЙ в полный рост — `sprite: 0`
-         * это `Occupation.HOUSEWIFE`, а без `spriteScale` силуэт ещё и в полтора
-         * раза выше стоящего рядом пира. */
-        sprite: Occupation.TRAVELER,
-        spriteScale: ONLINE_PLAYER_SPRITE_SCALE,
         needs: normalizedNeeds,
         hp: clampNumber(dataPlayer.hp, normalizedMaxHp, 1, normalizedMaxHp),
         maxHp: normalizedMaxHp,
@@ -6949,7 +6927,6 @@ function loadGame(): boolean {
         rpg: normalizedRpg,
         statuses: normalizePlayerStatuses(dataPlayer.statuses),
         name: playerDisplayName(),
-        faction: Faction.PLAYER,
         ...playerAlifeFields(dataPlayer as Partial<Entity>),
       };
       entities.push(player);
@@ -7319,11 +7296,6 @@ function handlePsiTool(player: Entity, toolId: string, wantsToolUse: boolean): b
 }
 
 function handleLightDrain(player: Entity, toolId: string, wantsToolUse: boolean, dt: number): boolean {
-  const passiveLightDrain = passiveToolLightDrainPerSecond(toolId);
-  if (passiveLightDrain > 0) {
-    consumeToolDurability(player, dt * passiveLightDrain, state.msgs, state.time, state);
-    return true;
-  }
   const activeLightDrain = activeToolLightDrainPerSecond(toolId);
   if (activeLightDrain > 0) {
     if (wantsToolUse) consumeToolDurability(player, dt * activeLightDrain, state.msgs, state.time, state);
@@ -10002,7 +9974,7 @@ function gameLoop(now: number): void {
       // close the visit once for any peer who died this frame.
       for (const pa of peerActors) {
         if (pa.alive) {
-          if (!state.paused) hostTickRemoteActor(pa, dt, state);
+          if (!state.paused) hostTickRemoteActor(pa, dt);
         } else if (pa.peerSlot !== undefined && !_peerVisitEnded.has(pa.peerSlot)) {
           _peerVisitEnded.add(pa.peerSlot);
           sendOnlineMessage({ type: 'visit_end', _targetSlot: pa.peerSlot, evac: false });
@@ -10542,15 +10514,11 @@ function gameLoop(now: number): void {
   const cameraView = runtimeCameraView(runtimeCamera, renderActor, cameraFovRadians());
   const camX = cameraView.x;
   const camY = cameraView.y;
-  const passiveFlashlight = state.gameOver
-    ? 0
-    : passiveToolLightRenderIntensity(renderActor.tool, getEquippedToolDurability(renderActor));
-  const activeToolLight = state.gameOver || !(input.use || input.mouseUse)
+  /* Свет в руке зажигается ТОЛЬКО удержанием кнопки: пассивный ярус снят
+     2026-09-10, он не был включён ни у одного предмета и всегда давал ноль. */
+  const flashlight = state.gameOver || !(input.use || input.mouseUse)
     ? 0
     : activeToolLightRenderIntensity(renderActor.tool, getEquippedToolDurability(renderActor));
-  const flashlight = state.gameOver
-    ? 0
-    : Math.max(passiveFlashlight, activeToolLight);
   const toolBeam = state.gameOver ? 0 : uvSpotlightRenderIntensity(state.uvBeamFx);
 
   // Update dynamic world data (fog, door states, wallTex for slides)
