@@ -5,11 +5,20 @@ import {
   type PlayerStatus,
   type PlayerStatusId,
   type PlayerStatusSource,
+  type WorldEventSeverity,
   type WorldEventType,
   msg,
 } from '../core/types';
 import { itemIsBladeWeapon } from '../data/items';
 import { publishEvent } from './events';
+import {
+  GOVNYAK_USE,
+  PLAYER_STATUS_GROUP_CAP,
+  isGovnyakItem,
+  playerStatusDef,
+} from '../data/player_statuses';
+import { ITEMS } from '../data/items';
+import { monsterBaitPreviewForItem } from './monster_bait';
 import { rng } from '../core/rand';
 import { isPlayerEntity } from './player_actor';
 
@@ -36,6 +45,8 @@ const GOVNYAK_STATUS_SOURCES = new Set<PlayerStatusSource>([
   'govnyak_bad_batch',
 ]);
 const PLAYER_STATUS_RESTORE_CAP = 12;
+/** Потолок силы меток говняка. Общий для всех трёх — он и есть шкала сделки. */
+const GOVNYAK_INTENSITY_CAP = 3;
 export const PAUPSINA_WEB_ID: PlayerStatusId = 'paupsina_web';
 export const PAUPSINA_WEB_DURATION_SEC = 4.2;
 export const PAUPSINA_WEB_ROOT_SEC = 0.65;
@@ -107,6 +118,153 @@ function statusEvent(
     tags,
     data: { statusId: ZHELEMISH_SKIN_ID, ...data },
   });
+}
+
+/* ── Общее ядро статусов ───────────────────────────────────────────
+ *
+ * До 2026-09-10 у каждого статуса была своя обвязка: свой поиск в списке, свой
+ * upsert, свой потолок длительности, своя обрезка и свой проход по истечению.
+ * Говняк держал всё это отдельным модулем на 337 строк. Теперь механика одна, а
+ * различия живут данными (`data/player_statuses.ts`).
+ */
+
+/** Метка на теле, если она ещё жива. */
+export function activePlayerStatus(e: Entity, id: PlayerStatusId, now: number): PlayerStatus | undefined {
+  for (const status of e.statuses ?? []) {
+    if (status.id === id && status.expiresAt > now) return status;
+  }
+  return undefined;
+}
+
+/** Сила метки; ноль — метки нет. Срок здесь НЕ спрашивается намеренно: истёкшие
+ *  снимает один общий проход `expirePlayerStatuses`, и до него список чист. */
+export function playerStatusIntensity(e: Entity, id: PlayerStatusId): number {
+  for (const status of e.statuses ?? []) {
+    if (status.id === id) return status.intensity ?? 0;
+  }
+  return 0;
+}
+
+/** Обрезка группы: сроки и силы по потолкам реестра, дубли слиты, лишние сняты. */
+function capPlayerStatusGroup(e: Entity, group: string, now: number): void {
+  if (!e.statuses) return;
+  const merged: PlayerStatus[] = [];
+  const others: PlayerStatus[] = [];
+  for (const status of e.statuses) {
+    const def = playerStatusDef(status.id);
+    if (def?.group !== group) {
+      others.push(status);
+      continue;
+    }
+    const capped: PlayerStatus = {
+      ...status,
+      expiresAt: def.durationCap === undefined
+        ? status.expiresAt
+        : Math.min(status.expiresAt, now + def.durationCap),
+      intensity: status.intensity === undefined
+        ? undefined
+        : Math.min(def.intensityCap ?? status.intensity, Math.max(0, status.intensity)),
+    };
+    const existing = merged.find(m => m.id === capped.id);
+    if (!existing) {
+      merged.push(capped);
+      continue;
+    }
+    existing.startedAt = Math.min(existing.startedAt, capped.startedAt);
+    existing.expiresAt = Math.max(existing.expiresAt, capped.expiresAt);
+    existing.intensity = Math.max(existing.intensity ?? 0, capped.intensity ?? 0);
+    existing.badReaction = existing.badReaction === true || capped.badReaction === true;
+  }
+  if (merged.length > PLAYER_STATUS_GROUP_CAP) {
+    merged.sort((a, b) => b.expiresAt - a.expiresAt);
+    merged.length = PLAYER_STATUS_GROUP_CAP;
+  }
+  e.statuses = others.concat(merged);
+}
+
+/** Поставить или продлить метку. Потолки берутся из реестра, не из вызывающего. */
+export function applyPlayerStatus(
+  e: Entity,
+  id: PlayerStatusId,
+  source: PlayerStatusSource,
+  now: number,
+  duration: number,
+  intensity?: number,
+  badReaction = false,
+): PlayerStatus {
+  const def = playerStatusDef(id);
+  if (!e.statuses) e.statuses = [];
+  const idx = e.statuses.findIndex(status => status.id === id);
+  const prev = idx >= 0 ? e.statuses[idx] : undefined;
+  const cappedDuration = def?.durationCap === undefined ? duration : Math.min(duration, def.durationCap);
+  const status: PlayerStatus = {
+    id,
+    source,
+    startedAt: prev?.startedAt ?? now,
+    expiresAt: Math.min(now + cappedDuration, Math.max(prev?.expiresAt ?? 0, now + duration)),
+    intensity: intensity === undefined
+      ? undefined
+      : Math.min(def?.intensityCap ?? intensity, Math.max(0, intensity)),
+    badReaction: badReaction || prev?.badReaction,
+  };
+  if (idx >= 0) e.statuses[idx] = status;
+  else e.statuses.push(status);
+  if (def?.group) capPlayerStatusGroup(e, def.group, now);
+  return status;
+}
+
+/** Один проход по истёкшим меткам на всё тело. Вызывающий получает каждую
+ *  снятую метку и решает, объявлять ли о ней миру. */
+export function expirePlayerStatuses(
+  e: Entity,
+  now: number,
+  onExpire?: (status: PlayerStatus) => void,
+): void {
+  if (!e.statuses || e.statuses.length === 0) return;
+  const total = e.statuses.length;
+  let write = 0;
+  for (let i = 0; i < total; i++) {
+    const status = e.statuses[i];
+    if (status.expiresAt <= now) {
+      onExpire?.(status);
+      continue;
+    }
+    if (write !== i) e.statuses[write] = status;
+    write++;
+  }
+  if (write === total) return;
+  e.statuses.length = write;
+  if (write === 0) e.statuses = undefined;
+}
+
+/**
+ * Разброс от всех меток разом: дрожь минус твёрдость.
+ *
+ * Формула ОДНА на реестр, а кто дрожит и кто держит — данные. Так цена сделки
+ * с говняком стала видимой: облегчение вычитает из того же числа, в которое
+ * кашель и долг прибавляют, и своей оси заводить не понадобилось.
+ */
+export function playerStatusAimSpreadMult(e: Entity): number {
+  if (!e.statuses || e.statuses.length === 0) return 1;
+  let shake = 0;
+  let steady = 0;
+  let steadyCap = 0;
+  for (const status of e.statuses) {
+    const def = playerStatusDef(status.id);
+    if (!def) continue;
+    const intensity = status.intensity ?? 0;
+    if (intensity <= 0) continue;
+    if (def.aimSpreadPerIntensity) {
+      shake += Math.min(def.aimCap ?? Infinity, intensity * def.aimSpreadPerIntensity);
+    }
+    if (def.aimSteadyPerIntensity) {
+      steady += Math.min(def.aimCap ?? Infinity, intensity * def.aimSteadyPerIntensity);
+      steadyCap = Math.max(steadyCap, def.aimCap ?? Infinity);
+    }
+  }
+  if (shake === 0 && steady === 0) return 1;
+  const cappedSteady = Math.min(steadyCap, steady);
+  return Math.max(1 - steadyCap, 1 + Math.min(0.75, shake) - cappedSteady);
 }
 
 export function normalizePlayerStatuses(input: unknown): PlayerStatus[] | undefined {
@@ -580,4 +738,178 @@ export function zhelemishStatsLine(entity: Entity, time: number): string | null 
   const left = Math.max(0, Math.ceil(status.expiresAt - time));
   const reaction = status.badReaction ? ' реакция: вода/ПСИ хуже' : '';
   return `Желемыш ${sourceLabel(status.source)}: ${left}s из ${zhelemishDuration(status.source)}s, входящий удар -30%, ход -18%, лечение -45%, вода уходит${reaction}`;
+}
+
+
+/* ── Говняк: сделка на теле игрока ──────────────────────────────────
+ * Отдельной системы у говняка больше нет — она была 337 строк и повторяла
+ * общую обвязку статусов слово в слово: свой поиск, свой upsert, свой потолок
+ * длительности, своя обрезка группы, свой проход по истечению. Осталось ровно
+ * то, чего у общего ядра нет и быть не должно: цена затяжки, её реплика и её
+ * событие. Числа сделки — данные (`data/player_statuses.ts`).
+ */
+
+export interface GovnyakUseResult {
+  text: string;
+  severity: WorldEventSeverity;
+  badBatch: boolean;
+}
+
+function itemName(defId: string): string {
+  return ITEMS[defId]?.name ?? defId;
+}
+
+function publishGovnyakStatusEvent(
+  state: GameState | undefined,
+  actor: Entity,
+  type: 'player_status_applied' | 'player_status_expired' | 'player_status_cured' | 'player_status_bad_reaction',
+  status: PlayerStatus,
+  severity: WorldEventSeverity,
+  tags: string[],
+): void {
+  if (!state || !isPlayerEntity(actor)) return;
+  publishEvent(state, {
+    type,
+    actorId: actor.id,
+    actorName: actor.name ?? 'Вы',
+    actorFaction: actor.faction,
+    itemId: status.source,
+    itemName: itemName(status.source),
+    severity,
+    privacy: severity >= 4 ? 'local' : 'private',
+    tags: ['player', 'govnyak', 'contraband', 'status', ...tags],
+    data: {
+      statusId: status.id,
+      source: status.source,
+      intensity: status.intensity ?? 0,
+      expiresAt: status.expiresAt,
+      remainingSeconds: Math.max(0, status.expiresAt - (state?.time ?? 0)),
+      statusCap: PLAYER_STATUS_GROUP_CAP,
+      badReaction: status.badReaction === true,
+      rumorIds: tags.includes('bad_batch')
+        ? ['govnyak_bad_batch']
+        : tags.includes('recovery')
+          ? ['govnyak_recovery']
+          : ['govnyak_debt'],
+    },
+  });
+}
+
+export function useGovnyakItem(actor: Entity, defId: string, state?: GameState): GovnyakUseResult | undefined {
+  if (!isGovnyakItem(defId)) return undefined;
+  const def = GOVNYAK_USE[defId];
+  const now = state?.time ?? 0;
+  const source = defId as PlayerStatusSource;
+  const badBatch = def.badChance >= 1 || rng() < def.badChance;
+  const baitPreview = monsterBaitPreviewForItem(defId, 'use', 1);
+
+  if (actor.rpg) actor.rpg.psi = Math.min(actor.rpg.maxPsi, actor.rpg.psi + def.psiRelief);
+  if (actor.needs) {
+    actor.needs.water = Math.max(0, actor.needs.water - def.thirstCost);
+    actor.needs.sleep = Math.max(0, actor.needs.sleep - def.sleepCost);
+  }
+  if (def.hpCost > 0 && actor.hp !== undefined) actor.hp = Math.max(1, actor.hp - def.hpCost);
+  actor.attackCd = Math.max(actor.attackCd ?? 0, def.attackDelay);
+  if (badBatch && def.badMadness > 0) actor.psiMadness = Math.max(actor.psiMadness ?? 0, def.badMadness);
+
+  const relief = applyPlayerStatus(actor, 'govnyak_relief', source, now, def.reliefSeconds, 1);
+  const cough = applyPlayerStatus(
+    actor,
+    'govnyak_cough',
+    source,
+    now,
+    badBatch ? def.coughSeconds * 1.4 : def.coughSeconds,
+    Math.min(GOVNYAK_INTENSITY_CAP, playerStatusIntensity(actor, 'govnyak_cough') + (badBatch ? 1.1 : 0.65)),
+    badBatch,
+  );
+  const debt = applyPlayerStatus(
+    actor,
+    'govnyak_debt',
+    source,
+    now,
+    def.debtSeconds,
+    Math.min(GOVNYAK_INTENSITY_CAP, playerStatusIntensity(actor, 'govnyak_debt') + def.debt),
+    badBatch,
+  );
+
+  if (state && isPlayerEntity(actor)) {
+    publishEvent(state, {
+      type: 'player_use_item',
+      actorId: actor.id,
+      actorName: actor.name ?? 'Вы',
+      actorFaction: actor.faction,
+      itemId: defId,
+      itemName: itemName(defId),
+      itemCount: 1,
+      itemValue: ITEMS[defId]?.value ?? 0,
+      severity: badBatch ? 4 : 3,
+      privacy: badBatch ? 'local' : 'private',
+      tags: ['player', 'inventory', 'govnyak', 'contraband', 'use', badBatch ? 'bad_batch' : 'relief', 'cough_debt', 'bait_marker'],
+      data: {
+        psiRelief: def.psiRelief,
+        costText: `water-${def.thirstCost} sleep-${def.sleepCost}${def.hpCost > 0 ? ` hp-${def.hpCost}` : ''}`,
+        debtIntensity: debt.intensity ?? 0,
+        coughIntensity: cough.intensity ?? 0,
+        reliefSeconds: relief.expiresAt - now,
+        coughSeconds: cough.expiresAt - now,
+        debtSeconds: debt.expiresAt - now,
+        baitRadius: baitPreview?.radius,
+        baitSeconds: baitPreview?.ttlSeconds,
+        baitMaxAttractions: baitPreview?.maxAttractions,
+        baitMarker: baitPreview?.markerLabel,
+        rumorIds: [badBatch ? 'govnyak_bad_batch' : 'govnyak_trade'],
+      },
+    });
+    publishGovnyakStatusEvent(state, actor, 'player_status_applied', debt, 3, ['debt']);
+    if (badBatch) publishGovnyakStatusEvent(state, actor, 'player_status_bad_reaction', cough, 4, ['bad_batch', 'cough']);
+  }
+
+  const debtLabel = Math.ceil((debt.intensity ?? 0) * 10) / 10;
+  const coughLabel = Math.ceil((cough.intensity ?? 0) * 10) / 10;
+  const reliefSeconds = Math.ceil(relief.expiresAt - now);
+  const coughSeconds = Math.ceil(cough.expiresAt - now);
+  const debtSeconds = Math.ceil(debt.expiresAt - now);
+  const cost = `вода -${def.thirstCost}${def.hpCost > 0 ? `, HP -${def.hpCost}` : ''}`;
+  const statusText = `облегчение ${reliefSeconds}с, кашель ${coughSeconds}с x${coughLabel}, долг ${debtLabel}/3 ${debtSeconds}с`;
+  const baitText = baitPreview
+    ? ` Дымовая метка: ${Math.round(baitPreview.radius)}кл/${Math.ceil(baitPreview.ttlSeconds)}с, до ${baitPreview.maxAttractions}, активных <=${baitPreview.activeCap}.`
+    : '';
+  if (badBatch) {
+    return {
+      text: `Говняк сорвался: ПСИ +${def.psiRelief}, ${cost}. ${statusText}.${baitText}`,
+      severity: 4,
+      badBatch,
+    };
+  }
+  return {
+    text: `Говняк притушил шум: ПСИ +${def.psiRelief}, ${cost}. ${statusText}.${baitText}`,
+    severity: 3,
+    badBatch,
+  };
+}
+
+export function updateGovnyakConditions(e: Entity, state: GameState): void {
+  if (!e.statuses || e.statuses.length === 0) return;
+  const now = state.time;
+  const originalLength = e.statuses.length;
+  let writeIdx = 0;
+
+  for (let i = 0; i < originalLength; i++) {
+    const status = e.statuses[i];
+    if (status.id.startsWith('govnyak_') && status.expiresAt <= now) {
+      if (status.id === 'govnyak_debt') {
+        publishGovnyakStatusEvent(state, e, 'player_status_cured', status, 3, ['recovery', 'debt_clear']);
+      } else if (status.id === 'govnyak_cough') {
+        publishGovnyakStatusEvent(state, e, 'player_status_expired', status, 2, ['recovery', 'cough_clear']);
+      }
+    } else {
+      if (writeIdx !== i) e.statuses[writeIdx] = status;
+      writeIdx++;
+    }
+  }
+
+  if (writeIdx !== originalLength) {
+    e.statuses.length = writeIdx;
+    if (writeIdx === 0) e.statuses = undefined;
+  }
 }

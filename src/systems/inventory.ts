@@ -46,11 +46,7 @@ import { publishEvent } from './events';
 import { placeMonsterBait, removeMonsterBaitForEntity } from './monster_bait';
 import { handleRationCouponUse } from './ration_coupons';
 import { recordPermitAccess, recordPermitExposure, recordPermitForged } from './permits';
-import {
-  govnyakAimSpreadMult,
-  updateGovnyakConditions,
-  useGovnyakItem,
-} from './govnyak';
+
 import { destroyMaronaryShaving } from './maronary_shaving';
 import { CHALK_ITEM_ID, createChalkItemData } from './chalk';
 import {
@@ -79,6 +75,9 @@ import {
   sporeHazeAimSpreadMult,
   zhelemishHealingMult,
   zhelemishSourceForItem,
+  playerStatusAimSpreadMult,
+  updateGovnyakConditions,
+  useGovnyakItem,
 } from './status';
 import { consumeNoisyDocumentDelay } from './document_scent';
 import { pushNpcLogMessage } from './ai/barks';
@@ -2280,9 +2279,13 @@ export function getWeaponStats(e: Entity, itemId = equippedCombatItemId(e)): Wea
     if (nextSpeed !== ws.speed) { speed = nextSpeed; changed = true; }
   }
   if (ws.isRanged && ws.spread !== undefined && ws.spread > 0) {
-    const govnyakSpread = e.statuses ? govnyakAimSpreadMult(e) : 1;
+    /* Разброс от МЕТОК считает одна общая формула реестра: раньше её вёл
+     * говняк своей, и каждая новая метка требовала бы третьего множителя.
+     * Споровая дымка осталась отдельным множителем — она спрашивает противогаз,
+     * а не силу метки, и это не «сколько трясёт», а «есть ли защита». */
+    const statusSpread = e.statuses ? playerStatusAimSpreadMult(e) : 1;
     const sporeSpread = e.statuses ? sporeHazeAimSpreadMult(e) : 1;
-    const nextSpread = ws.spread * (e.rpg ? agiRangedSpreadMult(e.rpg) : 1) * govnyakSpread * sporeSpread;
+    const nextSpread = ws.spread * (e.rpg ? agiRangedSpreadMult(e.rpg) : 1) * statusSpread * sporeSpread;
     if (nextSpread !== ws.spread) { spread = nextSpread; changed = true; }
   }
   if (e.rpg && ws.psiCost !== undefined && ws.psiCost > 0) {
