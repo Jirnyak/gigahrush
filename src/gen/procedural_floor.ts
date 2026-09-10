@@ -5981,11 +5981,26 @@ function applyArchiveWarrens(
     .sort((a, b) => (b.w * b.h) - (a.w * a.h));
   const limit = Math.min(candidates.length, 10 + spec.danger * 3);
 
+  /* Восемь авторских имён-ориентиров не присваивались нигде, и потому
+   * `archiveRoomHasLandmarkName` отвечал `false` ВСЕГДА, а составное имя поста
+   * ликвидаторов в `stampLiquidatorCheckpoint` было недостижимой веткой.
+   * Проверено прогоном: шесть процедурных этажей с `geometryId ===
+   * 'archive_warrens'` (z 15, 21, 23, 25, 29, 33), комнат с подстрокой «Окно
+   * жалоб» — ноль.
+   *
+   * Ориентир — комната ОДНА на этаж, поэтому имя идёт без номера: номер здесь
+   * ради уникальности, а у ориентира уникально само имя. Порядок вращается
+   * сидом, чтобы на разных этажах ориентиры были разные. */
+  const landmarkOffset = Math.abs(spec.seed) % ARCHIVE_WARREN_LANDMARK_NAMES.length;
+  const landmarkCount = Math.min(limit, ARCHIVE_WARREN_LANDMARK_NAMES.length);
+
   for (let i = 0; i < limit; i++) {
     const room = candidates[i];
-    room.name = room.type === RoomType.OFFICE
-      ? `Опись ${room.id}: столы доступа`
-      : `Архивная нора ${room.id}`;
+    room.name = i < landmarkCount
+      ? ARCHIVE_WARREN_LANDMARK_NAMES[(landmarkOffset + i) % ARCHIVE_WARREN_LANDMARK_NAMES.length]
+      : room.type === RoomType.OFFICE
+        ? `Опись ${room.id}: столы доступа`
+        : `Архивная нора ${room.id}`;
     room.floorTex = room.type === RoomType.OFFICE ? Tex.F_GREEN_CARPET : Tex.F_PARQUET;
     for (let dy = 1; dy < room.h - 1; dy++) {
       for (let dx = 1; dx < room.w - 1; dx++) {
