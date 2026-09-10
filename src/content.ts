@@ -44,7 +44,16 @@ import { setSamosborGenServices } from './systems/samosbor';
 /* Сюжетная цепочка и тринадцать главных личностей. Сюда же приезжает
    `npc_plot_packages` — он подключается голым импортом из `data/plot`. */
 import './data/plot';
+import { registerReviewedCommunityNpcPackages } from './data/npc_packages';
 
 /* Самосбор перестраивает этаж, но не знает, кто его порождает: слой systems
    стоит под gen и звать его не имеет права. Стройка ставится здесь. */
 setSamosborGenServices({ generateFloor });
+
+/* Приёмник пакетов сообщества. Сегодня `COMMUNITY_NPC_PACKAGE_FOLDERS` пуст, и
+   вызов не делает ничего — но звать его было НЕКОМУ вовсе, то есть первая же
+   принятая папка молча не зарегистрировалась бы, и автор искал бы своего NPC в
+   мире, которого тот не видел. Место здесь: это точка сборки контента, и
+   регистрация пакетов уже идёт отсюда. Замок на класс — в
+   `tests/community-npc-packages.test.ts`. */
+registerReviewedCommunityNpcPackages();

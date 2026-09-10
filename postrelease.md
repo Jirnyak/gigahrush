@@ -1172,8 +1172,19 @@ inline-аномалии стояли в РАЗНЫХ местах построй
 6. `placeInteractiveInRoom` — вызовов ноль, `scripts/content-audit.mjs` их ищет,
    `interactive.md` документирует функцию в семи местах как generator-facing API. Либо сносим
    вместе с абзацами, либо признаём API и подключаем.
-7. `registerReviewedCommunityNpcPackages` — **единственная** ссылка на
-   `COMMUNITY_NPC_PACKAGE_FOLDERS`. Пакеты сообщества не регистрируются ни разу.
+7. `registerReviewedCommunityNpcPackages` — **ЗАКРЫТО 2026-09-09, и это была ловушка на
+   будущее, а не потеря контента.** `COMMUNITY_NPC_PACKAGE_FOLDERS` ПУСТ («Reviewed
+   community folders are added here with explicit JSON imports»), поэтому в игре сегодня
+   не терялось ничего. Цена молчания была вся впереди: звать приёмник было НЕКОМУ, и
+   первая же принятая папка молча не зарегистрировалась бы, а автор искал бы своего NPC
+   в мире, который его не видел. Вызов поставлен в `src/content.ts` — точку сборки
+   контента, откуда регистрация пакетов и так идёт. Замок —
+   `tests/community-npc-packages.test.ts`, три теста, контроль показан красным.
+   **Ловушка, стоившая переписывания замка:** первая версия проверяла `folder.documents`
+   и `folder.id`, которых у `NpcCommunityPackageFolder` нет вовсе, — и tsc МОЛЧАЛ,
+   потому что список объявлен `as const` пустым, тип элемента выродился в `never`, а у
+   `never` есть любое поле. Пустой список умеет ослеплять не только тест, но и
+   компилятор.
 8. Четыре этажа объявили `reinforce*Territory` и не позвали
    (`hyperbolic_switchyard`, `istinniy_labirint`, `manhattan_crossroads`, `turing_nursery`):
    `initializeCellTerritory` переписывает владение, авторские штабы остаются без хозяина.
