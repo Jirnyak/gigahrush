@@ -10,7 +10,15 @@ The browser save lives in `localStorage` under `gigahrush_save`.
 
 Current authoritative shape:
 
-- `SAVE_SHAPE_VERSION = 28`;
+- `SAVE_SHAPE_VERSION = 32`;
+- **32 (2026-09-09):** у задания появилось поле `giverBySlot` — «`giverId` и `targetNpcId`
+  этого задания суть СЛОТ личности, а не номер сущности». Прежде ответ выводился из
+  происхождения задания, и для процедурного он был неверен: обычного жильца усыновляет
+  A-Life, личность у него есть. Замерено прогоном материализации — номер сущности
+  сменился у 24 личностей из 24, слот не сдвинулся ни у одной, то есть задание,
+  взятое у обычного NPC, после поездки на лифте адресовало тело, которого больше нет.
+  Санитайзер поле читает и НЕ выдумывает: без него сохранённое процедурное задание
+  снова начало бы искать тело по мёртвому номеру;
 - old or unversioned saves are rejected;
 - newer saves are rejected;
 - cross-version migration code is not required by default.

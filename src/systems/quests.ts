@@ -361,14 +361,53 @@ function questMarkerTone(q: Quest): NpcQuestMarkerTone {
 /**
  * Что за число лежит в `giverId` / `targetNpcId` этого задания.
  *
- * Поле по природе двух видов, и различает их только происхождение задания:
- * АВТОРСКОЕ хранит СЛОТ личности (он переживает перегенерацию этажа и уезжает в
- * сейв), ПРОЦЕДУРНОЕ и контрактное — номер живой сущности (личности за ним нет и
- * хранить нечего). Пока слот и номер сущности были одним числом, разница ничего
- * не стоила; теперь каждый читатель обязан спросить.
+ * Ответ ХРАНИТСЯ (`giverBySlot`), а не выводится из происхождения задания.
+ * Прежде правило звучало «авторское адресует слотом, процедурное — номером
+ * сущности, потому что личности за ним нет». Вторая половина оказалась неверна:
+ * обычного жильца усыновляет A-Life (`needsAlifeAdoption`), личность у него
+ * есть, и живёт она в `alifeId`. Замерено прогоном материализации: при
+ * перестройке этажа номер сущности сменился у 24 личностей из 24, слот — ни у
+ * одной. То есть задание, взятое у обычного NPC, после поездки на лифте
+ * оказывалось адресовано телу, которого больше нет.
+ *
+ * Запасной ход для заданий БЕЗ поля — прежнее правило: у авторского оно даёт
+ * верный ответ по построению, и это не догадка, а тот же контракт.
  */
 export function questAddressesBySlot(q: Quest): boolean {
-  return q.plotStepIndex !== undefined || q.sideQuestId !== undefined;
+  return q.giverBySlot ?? (q.plotStepIndex !== undefined || q.sideQuestId !== undefined);
+}
+
+/**
+ * Адрес дающего для НОВОГО задания.
+ *
+ * Личность важнее тела: у обычного жильца есть `alifeId`, и он переживает
+ * перестройку этажа, а номер сущности — нет. Тело без личности (шаблон,
+ * контрактный собеседник, кто-то вне A-Life) по-прежнему адресуется номером,
+ * потому что хранить о нём нечего.
+ */
+export function questGiverAddress(npc: Entity): Pick<Quest, 'giverId' | 'giverBySlot' | 'giverName'> {
+  const name = npc.name ?? '???';
+  return npc.alifeId !== undefined
+    ? { giverId: npc.alifeId, giverBySlot: true, giverName: name }
+    : { giverId: npc.id, giverName: name };
+}
+
+/**
+ * Адрес пары «дающий → адресат» для процедурного разговора.
+ *
+ * У задания ОДИН флаг пространства на оба числа, поэтому слот берётся только
+ * когда личность есть у обоих. Один слот и один номер тела под общим флагом —
+ * это молчаливо неверный адресат, а не полумера.
+ */
+export function questTalkAddress(npc: Entity, target: Entity): {
+  giver: Pick<Quest, 'giverId' | 'giverBySlot' | 'giverName'>;
+  targetNpcId: number;
+} {
+  const giver = questGiverAddress(npc);
+  if (giver.giverBySlot === true && target.alifeId !== undefined) {
+    return { giver, targetNpcId: target.alifeId };
+  }
+  return { giver: { giverId: npc.id, giverName: npc.name ?? '???' }, targetNpcId: target.id };
 }
 
 /** Живой выдавший задание — по слоту либо по номеру сущности, смотря чьё задание. */
@@ -2175,7 +2214,7 @@ function generateQuest(
     });
     return assignProceduralQuestDeadline({
       id: state.nextQuestId++, type: QuestType.FETCH,
-      giverId: npc.id, giverName: npc.name ?? '???',
+      ...questGiverAddress(npc),
       desc: `${npc.name}: «Принеси ${def.name} ×${count} в ${ctx.roomName}. Плата после сдачи; не тяни до сирены.»`,
       targetItem: item, targetCount: count,
       rewardItem: reward, rewardCount: 1, relationDelta: 10,
@@ -2197,7 +2236,7 @@ function generateQuest(
     });
     return assignProceduralQuestDeadline({
       id: state.nextQuestId++, type: QuestType.VISIT,
-      giverId: npc.id, giverName: npc.name ?? '???',
+      ...questGiverAddress(npc),
       desc: `${npc.name}: «Проверь ${room.name} ${toroidalDirection(world, npc.x, npc.y, room.x, room.y)}. Нужна отметка, не рассказ.»`,
       targetRoom: room.id,
       rewardItem: pickRewardItem(occ, ctx), rewardCount: 1, relationDelta: 8,
@@ -2222,7 +2261,7 @@ function generateQuest(
     });
     return assignProceduralQuestDeadline({
       id: state.nextQuestId++, type: QuestType.KILL,
-      giverId: npc.id, giverName: npc.name ?? '???',
+      ...questGiverAddress(npc),
       desc: `${npc.name}: «Убей ${monsterQuestName(kind)}${mdef ? ` у ${ctx.roomName}` : ''}. Плата после тишины.»`,
       targetMonsterKind: kind, killCount: 0, killNeeded,
       rewardItem: pickRewardItem(occ, ctx), rewardCount: 1, relationDelta: 15,
@@ -2239,11 +2278,15 @@ function generateQuest(
     risk: 1,
     tags: ['procedural', 'talk'],
   });
+  /* `giverBySlot` отвечает и за `targetNpcId` — оба числа задания обязаны жить
+   * в ОДНОМ пространстве. Поэтому слот берётся только когда личность есть у
+   * обоих: иначе флаг сказал бы «слот», а адресат приехал бы номером тела. */
+  const talkAddress = questTalkAddress(npc, target);
   return assignProceduralQuestDeadline({
     id: state.nextQuestId++, type: QuestType.TALK,
-    giverId: npc.id, giverName: npc.name ?? '???',
+    ...talkAddress.giver,
     desc: `${npc.name}: «Передай ${target.name} сообщение. Он ${toroidalDirection(world, npc.x, npc.y, target.x, target.y)}; плата после ответа.»`,
-    targetNpcId: target.id, targetNpcName: target.name,
+    targetNpcId: talkAddress.targetNpcId, targetNpcName: target.name,
     rewardItem: pickRewardItem(occ, ctx), rewardCount: 1, relationDelta: 12,
     difficulty: rewardCalc.difficulty, xpReward: rewardCalc.xpReward, moneyReward: rewardCalc.moneyReward,
     done: false,

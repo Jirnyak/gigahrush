@@ -10,7 +10,7 @@
  * это бамп числа и явный отказ старому сейву, а не миграция (см. `save.md`).
  */
 
-export const SAVE_SHAPE_VERSION = 31;
+export const SAVE_SHAPE_VERSION = 32;
 
 export type SaveShapeVersionStatus = 'missing' | 'old' | 'current' | 'newer' | 'invalid';
 

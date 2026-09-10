@@ -355,6 +355,11 @@ function normalizeQuest(raw: unknown, nowMinutes: number): Quest | null {
     done,
   };
   
+  /* Чем адресован дающий — факт задания, а не догадка читателя: без него
+   * процедурное задание после загрузки снова начнёт искать тело по номеру,
+   * которого в новом этаже нет. */
+  if (raw.giverBySlot === true) q.giverBySlot = true;
+
   if (typeof raw.giverPlotNpcId === 'number' && !Number.isNaN(raw.giverPlotNpcId)) {
     q.giverId = clampInt(raw.giverPlotNpcId, 0, 0, 1_000_000);
   } else if (typeof raw.giverPlotNpcId === 'string' && raw.giverPlotNpcId.length > 0) {
