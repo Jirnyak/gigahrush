@@ -9,6 +9,7 @@ import {
   type GameState,
 } from '../core/types';
 import { World } from '../core/world';
+import { itemIsBladeWeapon, itemIsHeavyPryWeapon } from '../data/items';
 import { publishEvent } from './events';
 import { cleanCellHazardsNear } from './cell_hazards';
 import { hasAirborneHazardProtection } from './status';
@@ -17,7 +18,6 @@ import { isPlayerEntity } from './player_actor';
 export const BORSHCHEVIK_SMOKE_BURST_CELL_CAP = 24;
 
 const BORSCH_RUMOR_IDS = ['ecology_borshchevik_sap', 'lead_maintenance_borshchevik_blockade'] as const;
-const BORSCH_CUT_WEAPONS = new Set(['knife', 'axe', 'liquidator_axe', 'chainsaw', 'fire_hook', 'rebar', 'pipe']);
 
 interface RootSite {
   id: string;
@@ -254,7 +254,7 @@ export function recordBorshchevikCut(world: World, state: GameState, plant: Enti
  * порог живучести объявлен в `DEF.damageFloor` и считается за общей дверью, а
  * рубка осталась списком инструмента — это про лезвие, а не про тип. */
 export function isBorshchevikCuttingWeapon(weaponId: string | undefined): boolean {
-  return weaponId !== undefined && BORSCH_CUT_WEAPONS.has(weaponId);
+  return itemIsBladeWeapon(weaponId) || itemIsHeavyPryWeapon(weaponId);
 }
 
 export function damageBorshchevikRootSite(world: World, state: GameState, plant: Entity): boolean {

@@ -10,7 +10,7 @@ import {
   type WorldEvent,
 } from '../core/types';
 import { World } from '../core/world';
-import { ITEMS } from '../data/items';
+import { ITEMS, itemIsBladeWeapon, itemIsHeavyPryWeapon } from '../data/items';
 import { entityDisplayName } from '../entities/monster';
 import { publishEvent, registerWorldEventObserver } from './events';
 import { registerInventoryUseHandler, type InventoryUseHandlerContext } from './inventory';
@@ -24,18 +24,6 @@ export const BLOOD_PLANT_HEAL_SCAN_SEC = 1.2;
 export const BLOOD_PLANT_HEAL_PER_SOURCE = 4;
 export const BLOOD_PLANT_SALT_RADIUS = 3.6;
 
-const BLOOD_PLANT_CUT_WEAPONS = new Set([
-  'knife',
-  'axe',
-  'liquidator_axe',
-  'chainsaw',
-  'fire_hook',
-  'rebar',
-  'pipe',
-  'crowbar',
-  'entrenching_spade',
-  'bayonet',
-]);
 
 interface BloodRootSite {
   id: string;
@@ -231,9 +219,11 @@ export function traceBloodPlantTendrilCells(
 }
 
 /* Огонь опознаётся ТИПОМ УРОНА, порог живучести объявлен в `DEF.damageFloor`.
- * Режущий инструмент остался списком: это про лезвие, а не про тип урона. */
+ * Рубка — свойство ПРЕДМЕТА, а не список у механики: лоза поддаётся и лезвию,
+ * и тяжёлому рычагу. Прежний собственный список совпадал с этой парой меток
+ * ровно, поэтому набор не сдвинулся. */
 export function isBloodPlantCuttingWeapon(weaponId: string | undefined): boolean {
-  return weaponId !== undefined && BLOOD_PLANT_CUT_WEAPONS.has(weaponId);
+  return itemIsBladeWeapon(weaponId) || itemIsHeavyPryWeapon(weaponId);
 }
 
 export function recordBloodPlantBurned(world: World, state: GameState, plant: Entity, actor?: Entity): number {

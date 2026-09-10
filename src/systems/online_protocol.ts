@@ -16,9 +16,10 @@
  *     message is a billed Durable Object request, so batching matters.
  */
 
-import { W, Cell, DoorState, type Entity, type Item } from '../core/types';
+import { W, Cell, DoorState, type Entity, type GameState, type Item } from '../core/types';
 import { World } from '../core/world';
-import { countAmmo, removeItem, equippedCombatItemId, getWeaponStats } from './inventory';
+import { consumeToolDurability, countAmmo, removeItem, equippedCombatItemId, getWeaponStats } from './inventory';
+import { passiveToolLightDrainPerSecond } from '../data/tool_lights';
 import { calculateReloadTime } from './combat';
 import { resetCoopState } from './coop_session';
 import { killEntity } from './entity_death';
@@ -461,9 +462,10 @@ export function applyVisitExport(player: Entity, exp: VisitExport): void {
 // every host frame per peer actor; mirrors the peer's local prediction rules
 // so a fully-acked echo converges to the same values the peer predicted.
 
-export function hostTickRemoteActor(actor: Entity, dt: number): void {
+export function hostTickRemoteActor(actor: Entity, dt: number, state?: GameState): void {
   if (!actor.alive) return;
   actor.attackCd = Math.max(0, (actor.attackCd ?? 0) - dt);
+  hostTickRemoteToolLight(actor, dt, state);
   if (!actor.reloading) return;
   actor.reloadTimer = Math.max(0, (actor.reloadTimer ?? 0) - dt);
   if (actor.reloadTimer > 0) return;
@@ -482,6 +484,35 @@ export function hostTickRemoteActor(actor: Entity, dt: number): void {
     actor.currentMag = ws.magazineSize ?? 1;
   }
   actor.reloading = false;
+}
+
+/* Пассивный расход инструмента у пира считал только сам пир.
+ *
+ * `applyPeerToolUse` живёт на НАМЕРЕНИИ, то есть на нажатии, а пассивный
+ * инструмент горит сам по себе — и на хосте не горел ни у кого. Предсказание
+ * пира при этом честно списывало прочность (`tickPeerLocalToolResources`), а
+ * хозяйское эхо возвращало её обратно. Тот же класс, что уже починенная
+ * прочность ближнего боя, и место ему там же, где хост ведёт остальные
+ * ресурсы пира.
+ *
+ * ЧЕСТНО ПРО ОХВАТ: сегодня эта дыра НЕДОСТИЖИМА — во всём `TOOL_LIGHT_DEFS`
+ * нет ни одного `passive: true`, поэтому `passiveToolLightDrainPerSecond`
+ * возвращает ноль всем четырём фонарям. Строка стоит ради симметрии с двумя
+ * такими же ветками локального игрока (`main.ts`), которые ровно так же
+ * недостижимы: весь пассивный ярус объявлен и не включён ни у одного предмета.
+ * Решение «какой фонарь горит сам» — авторское, записано в `postrelease.md`.
+ *
+ * Активный расход (нажатая кнопка) остаётся у `applyPeerToolUse`: он привязан к
+ * такту нажатия, а не к кадру, и дублировать его здесь значило бы жечь дважды.
+ * Сообщения идут в пустой список: фонарь держит пир, а не хозяин экрана. */
+function hostTickRemoteToolLight(actor: Entity, dt: number, state?: GameState): void {
+  if (!state) return;
+  const toolId = actor.tool ?? '';
+  if (!toolId) return;
+  const drain = passiveToolLightDrainPerSecond(toolId);
+  if (drain <= 0) return;
+  if (!(actor.inventory ?? []).some(item => item.defId === toolId)) return;
+  consumeToolDurability(actor, dt * drain, [], state.time, state);
 }
 
 /** Host: begin a reload for a peer actor (mirrors the peer's local rules). */

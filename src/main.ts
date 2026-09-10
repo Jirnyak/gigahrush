@@ -1241,6 +1241,10 @@ function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
         const roomA = world.roomMap[world.idx(cx - 1, cy)] >= 0 ? world.roomMap[world.idx(cx - 1, cy)] : world.roomMap[world.idx(cx, cy - 1)];
         const roomB = world.roomMap[world.idx(cx + 1, cy)] >= 0 ? world.roomMap[world.idx(cx + 1, cy)] : world.roomMap[world.idx(cx, cy + 1)];
         world.cells[ci] = Cell.DOOR;
+        // Створка пира меняет проходимость у ХОЗЯИНА — значит и его навигация
+        // обязана узнать. Локальный путь игрока это делал, хозяйский за пира —
+        // нет, и AI на хосте продолжал считать клетку стеной.
+        markNavigationCellsDirty([ci]);
         world.markCellsDirty();
         markNetCellTouched(ci);
         world.doors.set(ci, { idx: ci, state: DoorState.CLOSED, roomA, roomB, keyId: '', timer: 0 });
@@ -1254,6 +1258,8 @@ function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
     if (ci !== pci && !world.aptMask[ci] && !world.hermoWall[ci] && (world.cells[ci] === Cell.FLOOR || world.cells[ci] === Cell.DOOR)) {
       if (world.cells[ci] === Cell.DOOR) world.removeDoorAt(ci);
       world.cells[ci] = Cell.WALL;
+      // То же и на закладку: без этого AI хозяина ходит сквозь стену пира.
+      markNavigationCellsDirty([ci]);
       world.markCellsDirty();
       markNetCellTouched(ci);
       const room = world.roomAt(actor.x, actor.y);
@@ -9996,7 +10002,7 @@ function gameLoop(now: number): void {
       // close the visit once for any peer who died this frame.
       for (const pa of peerActors) {
         if (pa.alive) {
-          if (!state.paused) hostTickRemoteActor(pa, dt);
+          if (!state.paused) hostTickRemoteActor(pa, dt, state);
         } else if (pa.peerSlot !== undefined && !_peerVisitEnded.has(pa.peerSlot)) {
           _peerVisitEnded.add(pa.peerSlot);
           sendOnlineMessage({ type: 'visit_end', _targetSlot: pa.peerSlot, evac: false });

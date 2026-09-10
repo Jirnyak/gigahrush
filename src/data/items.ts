@@ -82,6 +82,18 @@ export function itemIsFlammable(defId: string): boolean {
   return def ? itemDefHasTag(def, 'flammable') : false;
 }
 
+/** Лезвие: режет паутину, стебель и лозу. */
+export function itemIsBladeWeapon(defId: string | undefined): boolean {
+  const def = defId === undefined ? undefined : ITEMS[defId];
+  return def ? itemDefHasTag(def, 'blade') : false;
+}
+
+/** Тяжёлый рычаг: паутину не берёт, стебель и лозу ломает. */
+export function itemIsHeavyPryWeapon(defId: string | undefined): boolean {
+  const def = defId === undefined ? undefined : ITEMS[defId];
+  return def ? itemDefHasTag(def, 'heavy_pry') : false;
+}
+
 export function itemEquipSlot(def: ItemDef): ItemEquipSlot | null {
   if (def.type === ItemType.WEAPON) return itemDefHasTag(def, 'psi') ? 'tool' : 'weapon';
   if (def.type === ItemType.TOOL) return 'tool';
@@ -204,7 +216,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   protein_mold_cake: ['bait', 'bait_fungal', 'concentrate', 'mold_food'],
   liquidator_rake: ['weapon', 'liquidator', 'rake', 'cleanup', 'slime_clean', 'slime_counterplay', 'melee_reach', 'tool'],
   rake_bayonet: ['weapon', 'liquidator', 'bayonet', 'rake', 'melee_reach', 'metal', 'issue_gear', 'rare_stash'],
-  liquidator_axe: ['weapon', 'liquidator', 'cleanup', 'slime_counterplay', 'door_work', 'melee_heavy'],
+  liquidator_axe: ['weapon', 'liquidator', 'cleanup', 'slime_counterplay', 'door_work', 'melee_heavy', 'blade'],
   rubber_club: ['weapon', 'liquidator', 'control', 'melee_control', 'nonlethalish', 'tool'],
   slyoznev_pps41: ['weapon', 'liquidator', 'smg', 'ammo_9mm', 'ammo_burn', 'recruit_stash'],
   eralashnikov_auto: ['weapon', 'liquidator', 'rifle', 'ammo_762', 'ammo_burn', 'permit', 'issue_stash'],
@@ -238,7 +250,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   brt2_foam_projector: ['weapon', 'liquidator', 'foam', 'projector', 'engineer', 'control', 'immobilizer', 'foam_grenade_ammo', 'rare_engineer_crate'],
   breach_charge: ['weapon', 'liquidator', 'breach', 'grenade', 'engineer', 'self_ammo', 'collateral', 'door_work', 'biomass'],
   pbrog1_foam_launcher: ['weapon', 'liquidator', 'foam', 'launcher', 'engineer', 'single_use', 'control', 'rare_engineer_crate'],
-  bayonet: ['weapon', 'liquidator', 'melee_reach', 'metal', 'issue_gear'],
+  bayonet: ['weapon', 'liquidator', 'melee_reach', 'metal', 'issue_gear', 'blade'],
   homemade_pistol: ['weapon', 'sidearm', 'homemade', 'contraband', 'craft_pistol', 'ammo_9mm'],
   barrel_part: ['weapon_component', 'barrel', 'armory', 'production', 'repair_input', 'metal'],
   homemade_ammo_instruction: ['document', 'instruction', 'ammo', 'homemade', 'contraband', 'black_market', 'production', 'recipe', 'paper', 'audit'],
@@ -363,6 +375,28 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   cotton_wool: ['medical', 'filter', 'component'],
   cloth_roll: ['medical', 'filter', 'component', 'cloth', 'wet_cloth', 'samosbor', 'counterplay', 'cold_counter', 'flammable'],
   note: ['flammable'],
+
+  /* ── «Чем режут» и «чем ломают» ─────────────────────────────────
+   * Три системы держали СВОЙ список режущего инструмента: паутина паупсины
+   * (`systems/status.ts`), борщевик (`systems/borshchevik.ts`) и кровяная
+   * лоза (`systems/blood_plant.ts`). Ядро у всех одно, а хвосты разошлись
+   * зеркально: у борщевика были арматура и труба, но не было штыка и
+   * лопатки; у паутины наоборот. Это дубликат СИСТЕМЫ — «каким оружием
+   * режут» — и место ему на предмете, как метке `flammable` выше.
+   *
+   * Меток две, потому что свойств действительно два: лезвие режет, тяжёлый
+   * рычаг ломает. Паутина спрашивает только лезвие; стебель и лозу берёт и
+   * то, и другое. Ни одна из трёх механик при сведении ничего не потеряла —
+   * борщевик добавил штык, лопатку и монтировку, и это разбор, а не правка
+   * баланса. Решено агентом, требует подтверждения владельца. */
+  knife: ['weapon', 'blade'],
+  axe: ['weapon', 'blade'],
+  chainsaw: ['weapon', 'blade'],
+  fire_hook: ['weapon', 'blade'],
+  entrenching_spade: ['weapon', 'blade'],
+  rebar: ['weapon', 'heavy_pry'],
+  pipe: ['weapon', 'heavy_pry'],
+  crowbar: ['tool', 'heavy_pry'],
   book: ['flammable'],
   filter_layer: ['filter', 'component', 'flammable'],
   technical_spirit: ['medical', 'sterilization', 'fuel', 'contraband', 'reagent', 'brewing', 'trade'],

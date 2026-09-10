@@ -8,6 +8,7 @@ import {
   type WorldEventType,
   msg,
 } from '../core/types';
+import { itemIsBladeWeapon } from '../data/items';
 import { publishEvent } from './events';
 import { rng } from '../core/rand';
 import { isPlayerEntity } from './player_actor';
@@ -42,7 +43,6 @@ export const PAUPSINA_WEB_MOVE_MULT = 0.54;
 export const PAUPSINA_WEB_ROOT_MULT = 0.22;
 const PAUPSINA_WEB_CUT_REDUCTION_SEC = 2.6;
 const PAUPSINA_WEB_FIRE_REDUCTION_SEC = 3.8;
-const PAUPSINA_WEB_CUT_WEAPONS = new Set(['knife', 'axe', 'liquidator_axe', 'chainsaw', 'fire_hook', 'bayonet', 'entrenching_spade']);
 export const SPORE_HAZE_ID: PlayerStatusId = 'spore_haze';
 export const SPORE_HAZE_DURATION_SEC = 4.8;
 export const SPORE_HAZE_PROTECTED_DURATION_SEC = 2.2;
@@ -287,8 +287,11 @@ export function applyPaupsinaWeb(
   return existing ?? status;
 }
 
+/* Паутину берёт ТОЛЬКО лезвие: трубой и арматурой нить не режут, их метка
+ * `heavy_pry` здесь намеренно не спрашивается. Прежний собственный список
+ * совпадал с набором `blade` ровно, поэтому набор не сдвинулся. */
 export function isPaupsinaWebCuttingWeapon(weaponId: string | undefined): boolean {
-  return !!weaponId && PAUPSINA_WEB_CUT_WEAPONS.has(weaponId);
+  return itemIsBladeWeapon(weaponId);
 }
 
 export function reducePaupsinaWeb(
