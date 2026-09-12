@@ -5,7 +5,6 @@ import {
   DoorState,
   EntityType,
   MonsterKind,
-  RoomType,
   Tex,
   type Entity,
   type Room,
@@ -20,7 +19,7 @@ import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg'
 import { requireSpawnedPlotNpcFromPackage } from '../plot_npc_spawn';
 import { rng } from '../../core/rand';
 import { BASE_FLOOR, MAZE_WALL, MAZE_FLOOR, THREAD_FLOOR, DOCUMENT_STASH_ROOM, MazeGraph, CellPoint, LabyrinthOwnedRoom } from "./meta";
-import { centerOf, addDoorToRoomState, deepestDeadEnds, paintRoomTerritory, ownerForLabyrinthRoomName } from "./geometry";
+import { centerOf, addDoorToRoomState, deepestDeadEnds, paintRoomTerritory } from "./geometry";
 
 export function carveThinLine(world: World, a: CellPoint, b: CellPoint, floorTex: Tex, markSeed = 0): number[] {
   const touched: number[] = [];
@@ -96,28 +95,11 @@ export function paintLabyrinthTerritorySeeds(world: World, ownedRooms: readonly 
   for (const item of ownedRooms) paintRoomTerritory(world, item.room, item.owner);
 }
 
-export function reinforceIstinniyLabirintTerritorySeeds(world: World): void {
-  for (const room of world.rooms) {
-    const owner = ownerForLabyrinthRoomName(room.name);
-    if (owner === undefined) continue;
-    if (room.name.endsWith(': гермоядро') || room.name === 'Лабиринт: нулевая катушка Ариадны' || room.name === 'Лабиринт: дальняя лифтовая спина') {
-      room.type = RoomType.HQ;
-      room.sealed = true;
-      room.wallTex = Tex.HERMO_WALL;
-      for (let dy = -1; dy <= room.h; dy++) {
-        for (let dx = -1; dx <= room.w; dx++) {
-          const idx = world.idx(room.x + dx, room.y + dy);
-          if (dx >= 0 && dx < room.w && dy >= 0 && dy < room.h) continue;
-          if (world.cells[idx] === Cell.WALL) {
-            world.hermoWall[idx] = 1;
-            world.wallTex[idx] = Tex.HERMO_WALL;
-          }
-        }
-      }
-    }
-    paintRoomTerritory(world, room, owner);
-  }
-}
+/* `reinforceIstinniyLabirintTerritorySeeds` снят 2026-09-12 по той же причине,
+ * что и близнец у питомника Тьюринга: написан, не позван, холост. Замер — ноль
+ * изменений по владению, гермостене, текстуре стен, запечатанным комнатам (5→5)
+ * и штабам (25→25). Землю красит `paintLabyrinthTerritorySeeds` из `index.ts`,
+ * а гермоядра ставятся на постройке комнат. */
 
 export function addContainer(world: World, nextContainerId: { v: number }, x: number, y: number, roomId: number, kind: ContainerKind, name: string, inventory: WorldContainer['inventory'], tags: string[], access: WorldContainer['access'] = 'public'): void {
   world.addContainer({

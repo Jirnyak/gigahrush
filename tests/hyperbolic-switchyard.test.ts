@@ -16,6 +16,7 @@ import { designFloorPopulationProfile } from '../src/data/design_floor_populatio
 import { activeActorSoftLimit } from '../src/data/entity_limits';
 import { getSideQuestRegistrySnapshot } from '../src/data/plot';
 import { generateDesignFloor } from '../src/gen/design_floors/manifest';
+import { SWITCHYARD_HQ_SPECS } from '../src/gen/hyperbolic_switchyard/meta';
 import {
   HYPERBOLIC_SWITCHYARD_Z,
   HYPERBOLIC_SWITCHYARD_DESIGN_FLOOR_ID,
@@ -172,4 +173,34 @@ test('hyperbolic_switchyard fills macro arcs with mid/micro rooms and cell-first
 test('hyperbolic_switchyard registers the guide payment side quest', () => {
   const ids = new Set(getSideQuestRegistrySnapshot().map(q => q.id));
   assert.equal(ids.has('hyperbolic_switchyard_pay_guide'), true);
+});
+
+/* ── Авторская земля штабов покрашена своим хозяином ──────────────
+ *
+ * `reinforceHyperbolicSwitchyardAuthoredHqTerritory` был написан и НЕ ПОЗВАН ни
+ * из одной точки: тринадцать тысяч клеток авторской земли стояли под чужим
+ * владельцем, а земля кормит расстановку A-Life, патрули и отношения. Правку
+ * откладывали из страха сдвинуть ДОЛИ владения этажа — замер показал, что
+ * сдвига нет (44.0 % → 44.1 %, остальные владельцы без изменений), и вызов
+ * поставлен в манифест сразу после `initializeCellTerritory`.
+ *
+ * Замок держит ПОСЛЕДСТВИЕ, а не вызов: земля под центром каждого авторского
+ * штаба принадлежит объявленной стороне. Так он краснеет и от снятого вызова,
+ * и от перестановки шага до раздачи территории (она бы его перекрасила).
+ */
+test('земля под каждым авторским штабом стрелочной принадлежит его стороне', () => {
+  const gen = generatedHyperbolicSwitchyard();
+  const wrong: string[] = [];
+  let checked = 0;
+  for (const spec of SWITCHYARD_HQ_SPECS) {
+    const prefix = `Гиперболическая стрелочная: штаб ${spec.title}, `;
+    for (const room of gen.world.rooms) {
+      if (!room?.name.startsWith(prefix)) continue;
+      checked++;
+      const owner = territoryOwnerAt(gen.world, room.x + room.w / 2, room.y + room.h / 2);
+      if (owner !== spec.owner) wrong.push(`${room.name}: земля ${owner}, а хозяин ${spec.owner}`);
+    }
+  }
+  assert.ok(checked >= SWITCHYARD_HQ_SPECS.length, `штабов найдено ${checked} — проверять нечего`);
+  assert.deepEqual(wrong, [], `чужая земля под ${wrong.length} авторскими штабами из ${checked}:\n${wrong.join('\n')}`);
 });

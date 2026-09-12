@@ -97,20 +97,12 @@ export interface TuringNurseryMetrics {
   decisionContainers: number;
 }
 
-export function reinforceTuringNurseryAuthoredHqTerritory(world: World): void {
-  const hqRoomsByName = new Map<string, Room>();
-  for (const room of world.rooms) {
-    if (room?.type === RoomType.HQ && room.name) {
-      hqRoomsByName.set(room.name, room);
-    }
-  }
-
-  for (const spec of TURING_HQ_SPECS) {
-    const room = hqRoomsByName.get(spec.name);
-    if (!room) continue;
-    hardenTuringHqRoom(world, room, spec.owner, spec.wallTex, spec.floorTex);
-  }
-}
+/* `reinforceTuringNurseryAuthoredHqTerritory` снят 2026-09-12: он был написан,
+ * не позван ни из одной точки и при этом ХОЛОСТ — замер показал ноль изменений
+ * по всем каналам разом (владение, гермостена, текстура стен, запечатанные
+ * комнаты 22→22, штабы 24→24). Его работу целиком делает `buildTuringHqSuites`
+ * на постройке: там и `paintRoomTerritory`, и `decorateHqCore`. Подключать его
+ * было бы не «починкой забытого вызова», а вторым проходом по уже покрашенному. */
 
 export function hardenTuringHqRoom(world: World, room: Room, owner: TerritoryOwner, wallTex: Tex, floorTex: Tex): void {
   room.type = RoomType.HQ;

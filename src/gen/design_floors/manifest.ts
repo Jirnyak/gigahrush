@@ -47,6 +47,8 @@ import { generateObschezhitieSmenyDesignFloor } from '../obschezhitie_smeny';
 import { generateOranzhereyaBetonaDesignFloor } from '../oranzhereya_betona';
 import { generatePenroseLaundryDesignFloor, reinforcePenroseLaundryAuthoredHqTerritory } from '../penrose_laundry';
 import { generatePerevalkaDesignFloor, reinforcePerevalkaAuthoredHqTerritory } from '../perevalka';
+import { reinforceHyperbolicSwitchyardAuthoredHqTerritory } from '../hyperbolic_switchyard/geometry';
+import { reinforceManhattanCrossroadsAuthoredHqTerritory } from '../manhattan_crossroads/geometry';
 import { generatePioneerCampDesignFloor } from '../pioneer_camp';
 import { generatePodadDesignFloor } from '../podad';
 import {
@@ -176,6 +178,14 @@ export function generateDesignFloor(id: DesignFloorId, runSeed = DEFAULT_DESIGN_
     if (id === 'production_belt') reinforceProductionBeltAuthoredHqTerritory(gen.world);
     if (id === 'penrose_laundry') reinforcePenroseLaundryAuthoredHqTerritory(gen.world);
     if (id === 'perevalka') reinforcePerevalkaAuthoredHqTerritory(gen.world);
+    /* Стрелочная и перекрёсток докрашивались никем: их `reinforce*` были
+     * написаны и не позваны, то есть авторская земля штабов стояла под чужим
+     * владельцем, а гермоядро штабов — без хозяина. Замер перед подключением:
+     * стрелочная двигает 13 912 клеток, перекрёсток — 73, и при этом ДОЛИ
+     * владения этажа не сдвигаются (44.0 % → 44.1 %, остальные без изменений).
+     * Именно доли и были причиной откладывать правку; их сдвига нет. */
+    if (id === 'hyperbolic_switchyard') reinforceHyperbolicSwitchyardAuthoredHqTerritory(gen.world);
+    if (id === 'manhattan_crossroads') reinforceManhattanCrossroadsAuthoredHqTerritory(gen.world);
     // Floor-authored post-territory reinforcement (HQ ownership, zone tuning) that the
     // generator deferred to a hook; previously this hook was set but never invoked.
     gen.onAfterTerritory?.(gen.world, gen.entities);

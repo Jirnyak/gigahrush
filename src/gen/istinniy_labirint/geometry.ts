@@ -661,14 +661,10 @@ export function placeLabyrinthMidMicro(world: World, graph: MazeGraph, roomsByNa
   return owned;
 }
 
-export function ownerForLabyrinthRoomName(name: string): TerritoryOwner | undefined {
-  if (name === 'Лабиринт: нулевая катушка Ариадны' || name.startsWith('Лабиринт: миништаб ликвидаторов у катушки')) return ZoneFaction.LIQUIDATOR;
-  if (name === 'Лабиринт: дальняя лифтовая спина' || name.startsWith('Лабиринт: дикий пост у дальней спины')) return ZoneFaction.WILD;
-  if (name.startsWith('Лабиринт: гражданский узел белой стены')) return ZoneFaction.CITIZEN;
-  if (name.startsWith('Лабиринт: НИИ измерения поворотов')) return ZoneFaction.SCIENTIST;
-  if (name.startsWith('Лабиринт: культовый карман обратных стрелок')) return ZoneFaction.CULTIST;
-  return undefined;
-}
+/* `ownerForLabyrinthRoomName` снят вместе со своим единственным вызывающим —
+ * холостым `reinforceIstinniyLabirintTerritorySeeds`. Хозяина комнаты лабиринт
+ * знает на постройке и красит сразу (`paintLabyrinthTerritorySeeds`), выводить
+ * его обратно из ИМЕНИ было незачем: имя — подпись, а не источник истины. */
 
 export function pairKey(a: number, b: number): string {
   return a < b ? `${a}:${b}` : `${b}:${a}`;
