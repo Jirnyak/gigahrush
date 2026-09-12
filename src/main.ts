@@ -172,7 +172,7 @@ import { cleanCellHazardsNear, getCellHazardMoveMultiplier, tickCellHazards } fr
 import { musicSystem } from './systems/music';
 
 import { adjustMonsterProjectileDamage, recordMonsterMeleeDeath, recordMonsterProjectileDeath } from './systems/monster_counterplay';
-import { applyDamage } from './systems/combat';
+import { applyDamage, applyHitStagger } from './systems/combat';
 import { calculateReloadTime } from './systems/combat';
 import {
   pickupNearby, pickupDrop, useItem, dropItem, getWeaponStats, equippedCombatItemId,
@@ -1014,11 +1014,11 @@ function applyPeerFireAction(actor: Entity, slot: number, claimedTargetId?: numb
       notifyVictim: !isPlayerEntity(target),
       deathByCaller: true,
     });
-    target.staggerTimer = 0.15;
     const mSpd = 6;
     const mVx = Math.cos(actor.angle) * mSpd;
     const mVy = Math.sin(actor.angle) * mSpd;
     spawnBloodHit(world, target.x, target.y, actor.angle, dmg, target.type === EntityType.MONSTER, mVx, mVy, 0.5);
+    applyHitStagger(target, dmg);
     if (isPlayerEntity(target)) {
       recordPlayerDamage(state, actor, dmg, `Удар от ${actor.name || 'игрока'}: -${dmg}`, 'npc');
       state.dmgFlash = Math.max(state.dmgFlash, Math.min(1, 0.3 + dmg / (target.maxHp ?? 100) * 1.5));
@@ -4985,6 +4985,10 @@ function handlePlayerAttack(_dt: number): void {
           const mVx = Math.cos(player.angle) * meleeSpd;
           const mVy = Math.sin(player.angle) * meleeSpd;
           spawnBloodHit(world, e.x, e.y, player.angle, dmg, e.type === EntityType.MONSTER, mVx, mVy, 0.5);
+          /* Оглушение — та же дверь, что у руки пира и у отдачи: одна и та же
+           * сталь обязана давать один и тот же мир. Раньше здесь не было ничего,
+           * а у пира стояли плоские 0.15 в одно поле из двух. */
+          applyHitStagger(e, dmg);
           state.msgs.push(msg(`Удар! ${entityDisplayName(e)} -${dmg}`, state.time, '#fc4'));
           if (e.hp <= 0) {
             killEntity(e);

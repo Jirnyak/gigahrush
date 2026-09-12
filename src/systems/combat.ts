@@ -91,20 +91,42 @@ export function setCombatClock(time: number): void {
  */
 const staggerRefractory = new WeakMap<Entity, number>();
 
+/**
+ * Боль от попадания — ЕДИНСТВЕННЫЙ писатель оглушения.
+ *
+ * Вынесена отдельной дверью, потому что оглушение и отдача — разные половины
+ * удара, и ближний бой хочет ровно первую: толчка у него нет ни у игрока, ни у
+ * пира (так и записано в обоих). Пока двери не было, «оглушает ли удар» имело
+ * ТРИ ответа: канон здесь (оба поля, откат атаки, формула от доли HP), урезанная
+ * копия на пути пира (одно поле, плоские 0.15) и НИЧЕГО на руке игрока. Одна и
+ * та же сталь в одной и той же руке давала разный мир — прямое нарушение закона
+ * «игрок — просто NPC», и как обычно в его пользу.
+ *
+ * Пишутся оба поля: канон живёт на сущности, `ai.staggerTimer` — его зеркало для
+ * боевого такта, и `movePlayer` каждый кадр перетирает зеркало каноном.
+ */
+export function applyHitStagger(target: Entity, damage: number): void {
+  if (damage <= 0 || !target.alive) return;
+  const ratio = damage / (target.maxHp || 100);
+  if (ratio <= STAGGER_MIN_HP_RATIO) return;
+  if (combatClock < (staggerRefractory.get(target) ?? -Infinity)) return;
+  // Asymptotic stagger up to 1 second
+  const staggerTime = Math.min(1.0, (ratio * 1.5) / (ratio * 1.5 + 0.2));
+  staggerRefractory.set(target, combatClock + staggerTime * 2);
+  target.staggerTimer = Math.max(target.staggerTimer ?? 0, staggerTime);
+  if (target.ai) target.ai.staggerTimer = Math.max(target.ai.staggerTimer ?? 0, staggerTime);
+}
+
 export function applyHitStaggerAndKnockback(world: World, target: Entity, sourceX: number, sourceY: number, damage: number): void {
   if (damage <= 0 || !target.alive) return;
   const maxHp = target.maxHp || 100;
   const ratio = damage / maxHp;
   if (ratio <= KNOCKBACK_MIN_HP_RATIO) return;
 
-  // Asymptotic stagger up to 1 second
+  applyHitStagger(target, damage);
+  /* Сила толчка растёт с той же болью, что и оглушение, — поэтому считается по
+   * той же формуле, а не по второй. Отдельного числа у отдачи нет. */
   const staggerTime = Math.min(1.0, (ratio * 1.5) / (ratio * 1.5 + 0.2));
-
-  if (ratio > STAGGER_MIN_HP_RATIO && combatClock >= (staggerRefractory.get(target) ?? -Infinity)) {
-    staggerRefractory.set(target, combatClock + staggerTime * 2);
-    target.staggerTimer = Math.max(target.staggerTimer ?? 0, staggerTime);
-    if (target.ai) target.ai.staggerTimer = Math.max(target.ai.staggerTimer ?? 0, staggerTime);
-  }
 
   // Knockback. Направление считается через тор: сырое вычитание на шве
   // (стрелок у x=1023, цель у x=0) даёт нормаль в минус и толкает жертву

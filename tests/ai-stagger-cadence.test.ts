@@ -23,7 +23,17 @@ import { setEntityMap, updateMonster } from '../src/systems/ai/monster';
 import { setPathContext } from '../src/systems/ai/pathfinding';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { setCurrentPlayerEntity } from '../src/systems/player_actor';
-import { makeGameState } from './helpers';
+import { makeGameState, makeTestNpc } from './helpers';
+import { applyHitStagger, applyHitStaggerAndKnockback, setCombatClock } from '../src/systems/combat';
+
+/** Тело с полем боевого такта: зеркало `ai.staggerTimer` обязано быть, иначе
+ *  проверять второй канал не на чем. */
+function makeVictim() {
+  return makeTestNpc({
+    id: 8100, x: 10.5, y: 10.5, hp: 100, maxHp: 100,
+    ai: { goal: AIGoal.IDLE, tx: 0, ty: 0, path: [], pi: 0, stuck: 0, timer: 0 },
+  });
+}
 
 const OX = 500;
 const OY = 500;
@@ -216,3 +226,50 @@ test('орбита дышит непрерывно: полоса радиуса 
 });
 
 type Msgs = Parameters<typeof setCombatContext>[0];
+
+/* ── Оглушение — один писатель ────────────────────────────────────
+ *
+ * До 2026-09-12 «оглушает ли удар» имело ТРИ ответа: канон
+ * `applyHitStaggerAndKnockback` (оба поля, порог по доле HP, рефрактерный
+ * период), урезанная копия на пути ближнего удара пира (одно поле, плоские
+ * 0.15) и НИЧЕГО на руке игрока. Та же сталь в той же руке давала разный мир,
+ * и, как обычно, в пользу игрока.
+ *
+ * ЧЕГО В ЭТОМ ЗАМКЕ НЕТ, и это честно: сами две руки живут в `main.ts`, а его
+ * из узла не импортировать — это точка входа браузера. Здесь заперта ДВЕРЬ,
+ * которую обе руки теперь зовут (`applyHitStagger`), и её тождество с половиной
+ * канона. Что руки её зовут, держит компилятор: плоской записи в одно поле
+ * в проекте больше нет ни одной.
+ */
+test('оглушение пишет ОБА поля и слушает порог с рефрактерным периодом', () => {
+  setCombatClock(100);
+  const victim = makeVictim();
+
+  // Царапина ниже порога «заметного удара» боли не даёт вовсе.
+  applyHitStagger(victim, 1);
+  assert.equal(victim.staggerTimer ?? 0, 0, 'царапина оглушила — порог доли HP снова не спрашивается');
+
+  applyHitStagger(victim, 40);
+  const first = victim.staggerTimer ?? 0;
+  assert.ok(first > 0, 'заметный удар обязан оглушать');
+  assert.equal(victim.ai?.staggerTimer, first, 'зеркало для боевого такта не заполнено — запись живёт один кадр');
+
+  // Рефрактерный период: пока боль не отошла, второй удар её не продлевает.
+  applyHitStagger(victim, 40);
+  assert.equal(victim.staggerTimer, first, 'стан-лок: боль продлилась внутри собственного рефрактерного периода');
+});
+
+test('оглушение от ближнего удара и от отдачи — одно и то же число', () => {
+  /* Тождество половин: у отдачи своя формула быть не вправе, иначе кувалда и
+   * нож разойдутся не силой, а тем, какую из двух дверей позвали. */
+  setCombatClock(200);
+  const world = new World();
+  const melee = makeVictim();
+  const knocked = makeVictim();
+
+  applyHitStagger(melee, 55);
+  applyHitStaggerAndKnockback(world, knocked, melee.x + 2, melee.y, 55);
+
+  assert.ok((melee.staggerTimer ?? 0) > 0);
+  assert.equal(knocked.staggerTimer, melee.staggerTimer, 'две двери оглушают по-разному — писатель снова не один');
+});
