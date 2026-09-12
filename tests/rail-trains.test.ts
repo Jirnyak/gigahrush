@@ -184,3 +184,80 @@ test('rebuild install retires the segments of the trains it replaced', () => {
     assert.equal(liveEntities.find(e => e.id === id)?.alive, true);
   }
 });
+
+/* ── Состав давит ─────────────────────────────────────────────────
+ *
+ * Главное, что поезд делает с тем, кто стоит не там, — и единственное, на что
+ * не было замка. Цена пробела уже платилась: состав был ЕДИНСТВЕННЫМ средовым
+ * уроном с `lethal: true`, и пока смерть игрока объявлял каждый бьющий сам, он
+ * снимал свои 260 и оставлял игрока живым на нуле, а кулдаун по `victim.alive`
+ * не ставился — и молол его каждый кадр (разбор в `systems/actor_damage.ts`).
+ *
+ * Проверяется весь путь целиком: предупреждение раньше удара, урон через
+ * единую дверь, кулдаун между переездами и неприкосновенность СВОЕГО пассажира.
+ */
+function runTrainSeconds(
+  world: World, entities: Entity[], player: Entity, state: ReturnType<typeof makeGameState>, seconds: number,
+): void {
+  const dt = 1 / 30;
+  for (let i = 0; i < Math.round(seconds / dt); i++) {
+    updateRailTrains(world, entities, player, state, dt);
+    state.time += dt;
+  }
+}
+
+function victimOnRail(world: World, track: RailTrainTrack, id: number, hp = 400): Entity {
+  const ci = track.cells[22];
+  return {
+    id,
+    type: EntityType.NPC, persistentNpcId: 'player',
+    x: (ci % 1024) + 0.5,
+    y: Math.floor(ci / 1024) + 0.5,
+    angle: 0, pitch: 0, alive: true, speed: 0, sprite: 0,
+    hp, maxHp: hp, faction: Faction.PLAYER,
+  };
+}
+
+test('состав давит стоящего на рельсе и предупреждает раньше, чем бьёт', () => {
+  const { world, track } = makeRailWorld();
+  const entities: Entity[] = [];
+  const nextId = { v: getPlotNpcCount() + 1 };
+  addRailTrainRoute(world, entities, nextId, track, {
+    id: 'crush_train', label: 'Состав-давилка', speed: 8, length: 5, initialOffset: 0, stopSeconds: 0,
+  });
+  const player = victimOnRail(world, track, nextId.v++);
+  entities.push(player);
+  const state = makeGameState();
+
+  runTrainSeconds(world, entities, player, state, 12);
+
+  assert.ok((player.hp ?? 0) < 400, 'состав проехал сквозь человека и не тронул его');
+  const warned = state.msgs.findIndex(m => m.text.includes('Рельсы дрожат'));
+  const hit = state.msgs.findIndex(m => m.text.includes('ударил по костям'));
+  assert.ok(hit >= 0, 'переезд не объявлен игроку');
+  assert.ok(warned >= 0 && warned < hit, 'предупреждение обязано прийти раньше удара, иначе уворачиваться нечем');
+});
+
+test('свой пассажир под свой же состав не попадает', () => {
+  /* Пассажир едет ВНУТРИ поезда, то есть постоянно стоит на его клетках. Без
+   * этой развилки поездка убивала бы ездока на первом же такте. */
+  const { world, track } = makeRailWorld();
+  const entities: Entity[] = [];
+  const nextId = { v: getPlotNpcCount() + 1 };
+  addRailTrainRoute(world, entities, nextId, track, {
+    id: 'ride_train', label: 'Состав-перевозчик', speed: 8, length: 5, initialOffset: 10, stopSeconds: 2,
+  });
+  const player: Entity = {
+    id: nextId.v++, type: EntityType.NPC, persistentNpcId: 'player',
+    x: 21.5, y: 18.5, angle: 0, pitch: 0, alive: true, speed: 3, sprite: 0,
+    hp: 100, maxHp: 100, faction: Faction.PLAYER,
+  };
+  entities.push(player);
+  const state = makeGameState();
+
+  assert.equal(tryUseRailTrain(world, player, state, 20.5, 20.5), true, 'сесть не удалось — ехать нечем');
+  runTrainSeconds(world, entities, player, state, 12);
+
+  assert.equal(player.hp, 100, 'свой состав переехал собственного пассажира');
+  assert.equal(player.alive, true);
+});
