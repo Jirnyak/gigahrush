@@ -25,6 +25,12 @@ import {
   type AlifePopulationPlanDef,
   type AlifeReservedIdentityDef,
 } from '../data/alife_population_plan';
+import {
+  DEMOS_EDGE_ENEMY,
+  DEMOS_EDGE_FAMILY,
+  DEMOS_EDGE_FRIEND,
+  DEMOS_SOCIAL_NEARBY_RADIUS,
+} from '../data/demos_social';
 import { DESIGN_FLOOR_DEFAULT_DANGER, DESIGN_FLOOR_ROUTES, designFloorAtZ } from '../data/design_floors';
 import { npcWealthMultiplier } from '../data/economy_rules';
 // import { getPlotNpcNumericId, id } from '../data/npc_packages';
@@ -73,7 +79,7 @@ import {
 import { FLOOR_RUN_MAX_Z, FLOOR_RUN_MIN_Z, floorRunZAllowsNpcs } from '../data/procedural_floors';
 import { cleanFloorKey, floorKeyForDesign, floorKeyForProcedural, floorKeyZ } from './floor_keys';
 import { factionToTerritoryOwner } from '../data/factions';
-import { territoryOwnerAtIndex } from './territory';
+import { territoryOwnerAt, territoryOwnerAtIndex } from './territory';
 import { generateNpcLoadout, generateMerchantStock } from './procedural_loot';
 import { ITEMS } from '../data/catalog';
 import { getStack, itemEquipSlot } from '../data/items';
@@ -3119,12 +3125,64 @@ function ensureAlifeFloorCaps(alife: AlifeState): Record<string, number> {
  */
 interface AlifeTemplatePool {
   take(faction: Faction | undefined): Entity | undefined;
+  /**
+   * Место рядом с уже посаженным связанным, на земле СВОЕЙ стороны и не ближе
+   * радиуса связи к перечисленным врагам. Не нашлось — обычная раздача.
+   */
+  takeNear(faction: Faction | undefined, x: number, y: number, avoid: readonly Entity[]): Entity | undefined;
   taken(): number;
+}
+
+/* ── Граф связей в расстановке ───────────────────────────────────
+ *
+ * Раздача мест обязана знать, кто кому родня: иначе семья садится по разным
+ * концам этажа и социальный слой не читается нигде. Знание приходит ИНЪЕКЦИЕЙ,
+ * а не импортом: `demos_social` уже импортирует A-Life, и обратный импорт завёл
+ * бы новый рантайм-цикл между системами. Регистрирует источник сам граф.
+ */
+export interface AlifeSeatingBond {
+  targetAlifeId?: number;
+  flags: number;
+}
+
+type AlifeSeatingBondSource = (state: GameState, alifeId: number) => readonly AlifeSeatingBond[];
+
+let seatingBondSource: AlifeSeatingBondSource | undefined;
+
+export function registerAlifeSeatingBondSource(source: AlifeSeatingBondSource | undefined): void {
+  seatingBondSource = source;
+}
+
+/** Отладочный след последней раздачи мест: сколько людей вообще имели якорь и
+ *  скольких удалось посадить к нему вплотную. Без него «связанные сидят рядом»
+ *  проверялось бы только итоговой долей, в которой не видно, что именно отказало. */
+const seatingStats = { anchored: 0, seatedNear: 0, plain: 0 };
+
+export function peekAlifeSeatingStats(): Readonly<typeof seatingStats> {
+  return seatingStats;
+}
+
+/** Клетка сетки мест: радиус связи целиком, чтобы кольцо поиска было одно. */
+const ALIFE_SEAT_GRID_CELL = DEMOS_SOCIAL_NEARBY_RADIUS;
+const ALIFE_SEAT_GRID_SPAN = Math.ceil(W / ALIFE_SEAT_GRID_CELL);
+const SEAT_NEARBY_DIST2 = DEMOS_SOCIAL_NEARBY_RADIUS * DEMOS_SOCIAL_NEARBY_RADIUS;
+
+/** Ключ клетки сетки мест по КООРДИНАТАМ СЕТКИ, с заворотом тора. */
+function seatGridKey(gx: number, gy: number): number {
+  const wx = ((gx % ALIFE_SEAT_GRID_SPAN) + ALIFE_SEAT_GRID_SPAN) % ALIFE_SEAT_GRID_SPAN;
+  const wy = ((gy % ALIFE_SEAT_GRID_SPAN) + ALIFE_SEAT_GRID_SPAN) % ALIFE_SEAT_GRID_SPAN;
+  return wy * ALIFE_SEAT_GRID_SPAN + wx;
+}
+
+function seatGridCoord(value: number): number {
+  return Math.floor(value / ALIFE_SEAT_GRID_CELL);
 }
 
 function createAlifeTemplatePool(world: World, templates: readonly Entity[]): AlifeTemplatePool {
   const used = new Uint8Array(templates.length);
+  const owners = new Int32Array(templates.length);
   const byOwner = new Map<number, number[]>();
+  const byCell = new Map<number, number[]>();
   for (let i = templates.length - 1; i >= 0; i--) {
     const template = templates[i];
     /* Сторону слота решает ЗЕМЛЯ, а не поле `faction` шаблона: у большинства
@@ -3134,32 +3192,121 @@ function createAlifeTemplatePool(world: World, templates: readonly Entity[]): Al
     const list = byOwner.get(owner);
     if (list) list.push(i);
     else byOwner.set(owner, [i]);
+    owners[i] = owner;
+    const cellKey = seatGridKey(seatGridCoord(template.x), seatGridCoord(template.y));
+    const cell = byCell.get(cellKey);
+    if (cell) cell.push(i);
+    else byCell.set(cellKey, [i]);
   }
   let cursor = 0;
   let count = 0;
+  const claim = (index: number): Entity => {
+    used[index] = 1;
+    count++;
+    return templates[index];
+  };
   return {
     take(faction: Faction | undefined): Entity | undefined {
       const own = faction === undefined ? undefined : byOwner.get(factionToTerritoryOwner(faction));
       while (own !== undefined && own.length > 0) {
         const index = own.pop()!;
         if (used[index]) continue;
-        used[index] = 1;
-        count++;
-        return templates[index];
+        return claim(index);
       }
       while (cursor < templates.length) {
         const index = cursor++;
         if (used[index]) continue;
-        used[index] = 1;
-        count++;
-        return templates[index];
+        return claim(index);
       }
       return undefined;
+    },
+    takeNear(faction: Faction | undefined, x: number, y: number, avoid: readonly Entity[]): Entity | undefined {
+      if (faction === undefined) return this.take(faction);
+      const owner = factionToTerritoryOwner(faction);
+      const gx = seatGridCoord(x);
+      const gy = seatGridCoord(y);
+      let best = -1;
+      let bestDist = Number.POSITIVE_INFINITY;
+      /* Одно кольцо соседних клеток сетки: сторона клетки и есть радиус связи,
+       * поэтому всё, что ближе радиуса, лежит здесь. Расширять кольцо нельзя —
+       * «рядом» дальше радиуса поведение уже не читает. */
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const cell = byCell.get(seatGridKey(gx + dx, gy + dy));
+          if (!cell) continue;
+          for (const index of cell) {
+            if (used[index] || owners[index] !== owner) continue;
+            const template = templates[index];
+            const dist = world.dist2(template.x, template.y, x, y);
+            if (dist >= bestDist || dist > SEAT_NEARBY_DIST2) continue;
+            if (avoid.some(enemy => world.dist2(template.x, template.y, enemy.x, enemy.y) <= SEAT_NEARBY_DIST2)) continue;
+            best = index;
+            bestDist = dist;
+          }
+        }
+      }
+      return best >= 0 ? claim(best) : this.take(faction);
     },
     taken(): number {
       return count;
     },
   };
+}
+
+interface AlifeSeatingChoice {
+  /** Уже посаженный связанный, к которому тянет. */
+  anchor?: Entity;
+  /** Уже посаженные враги, ближе радиуса к которым садиться нельзя. */
+  enemies: Entity[];
+}
+
+const NO_SEATING_BONDS: AlifeSeatingChoice = { enemies: [] };
+
+/**
+ * Куда тянет и от кого отталкивает уже объявленный граф связей.
+ *
+ * Якорем становится ПЕРВЫЙ посаженный родственник или друг: родня оказывается в
+ * одной квартире потому, что ближайшее свободное место к уже сидящему — соседняя
+ * койка той же комнаты. Второго якоря не ищем — важно попасть в радиус связи, а
+ * угождать сразу всем значит не угодить никому.
+ */
+function seatingBondsForRecord(
+  state: GameState,
+  world: World,
+  alifeId: number,
+  faction: Faction | undefined,
+  seated: ReadonlyMap<number, Entity>,
+): AlifeSeatingChoice {
+  if (!seatingBondSource || seated.size === 0) return NO_SEATING_BONDS;
+  const bonds = seatingBondSource(state, alifeId);
+  if (bonds.length === 0) return NO_SEATING_BONDS;
+  const owner = faction === undefined ? undefined : factionToTerritoryOwner(faction);
+  let anchor: Entity | undefined;
+  let anchorOnOwnLand = false;
+  const enemies: Entity[] = [];
+  for (const bond of bonds) {
+    const other = bond.targetAlifeId === undefined ? undefined : seated.get(bond.targetAlifeId);
+    if (!other) continue;
+    if ((bond.flags & DEMOS_EDGE_ENEMY) !== 0) {
+      enemies.push(other);
+      continue;
+    }
+    if (anchorOnOwnLand || (bond.flags & (DEMOS_EDGE_FAMILY | DEMOS_EDGE_FRIEND)) === 0) continue;
+    /* Якорем лучше берётся тот родственник, кто уже сидит на МОЕЙ земле: место
+     * рядом с ним я занять вправе, а рядом с роднёй на чужой земле — нет, и
+     * поиск там всё равно закончится ничем. */
+    const ownLand = owner !== undefined &&
+      territoryOwnerAt(world, other.x, other.y) === owner;
+    if (!anchor || ownLand) {
+      anchor = other;
+      anchorOnOwnLand = ownLand;
+    }
+  }
+  /* Без якоря врагов разводить нечем: обычная раздача мест не умеет «подальше
+   * от», а заводить ей отталкивание ради редкого случая дороже, чем он стоит.
+   * Врагов поэтому читает только посадка к связанному — там они вето на место. */
+  if (!anchor) return NO_SEATING_BONDS;
+  return { anchor, enemies };
 }
 
 export function materializeAlifeFloorPopulation(
@@ -3184,6 +3331,10 @@ export function materializeAlifeFloorPopulation(
       }
 
       const pool = createAlifeTemplatePool(world, templates);
+      const seated = new Map<number, Entity>();
+      seatingStats.anchored = 0;
+      seatingStats.seatedNear = 0;
+      seatingStats.plain = 0;
       for (const recordIndex of floorIds) {
         if (pool.taken() >= templates.length) break;
         const record = alife.npcs[recordIndex];
@@ -3196,11 +3347,24 @@ export function materializeAlifeFloorPopulation(
           pool.take(recordFaction(alife, record));
           continue;
         }
-        const template = pool.take(recordFaction(alife, record));
+        const faction = recordFaction(alife, record);
+        const bonds = seatingBondsForRecord(state, world, record.id, faction, seated);
+        let template: Entity | undefined;
+        if (bonds.anchor) {
+          seatingStats.anchored++;
+          template = pool.takeNear(faction, bonds.anchor.x, bonds.anchor.y, bonds.enemies);
+          if (template && world.dist2(template.x, template.y, bonds.anchor.x, bonds.anchor.y) <= SEAT_NEARBY_DIST2) {
+            seatingStats.seatedNear++;
+          }
+        } else {
+          seatingStats.plain++;
+          template = pool.take(faction);
+        }
         if (!template) break;
         const entity = materializeEntity(record, template, world, alife, nextId);
         if (!entity) continue;
         entities.push(entity);
+        seated.set(record.id, entity);
       }
 
       if (pool.taken() < templates.length) {

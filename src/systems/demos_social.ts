@@ -38,9 +38,11 @@ import {
   alifeNpcFaction,
   alifeNpcRecordCount,
   alifeSeed,
+  currentAlifeFloorRecordIds,
   findAlifeNpcIdByReservedIdentityId,
   getAlifeNpcRecordSnapshot,
   packageIdFromReservedIdentityId,
+  registerAlifeSeatingBondSource,
   setAlifeNpcPlayerRelation,
   type AlifeNpcSnapshot,
 } from './alife';
@@ -116,6 +118,14 @@ interface DemosSocialGraph {
   packageAlifeIds: Map<string, number>;
   socialRef?: DemosSocialSaveState;
   socialOverrideCount: number;
+  floorRosters: Map<string, DemosFloorRoster>;
+}
+
+/** Перепись одного этажа: кто на нём числится и кто там кому родня. */
+interface DemosFloorRoster {
+  ids: number[];
+  /** familyId → участники семьи, по возрастанию id. */
+  byFamily: Map<number, number[]>;
 }
 
 interface DemosSocialHost {
@@ -123,6 +133,11 @@ interface DemosSocialHost {
 }
 
 const DEMOS_FULL_GRAPH_BUILD_LIMIT = 2048;
+
+/* Переписей этажей держим ровно столько, сколько этажей одновременно спрашивают:
+ * активный, соседний по лифту и тот, о ком пишет лента. Больше — память впустую,
+ * меньше — перепись строится заново на каждый чужой профиль в ленте. */
+const DEMOS_FLOOR_ROSTER_CACHE = 3;
 
 interface AlifeStateLike {
   floorKeys?: unknown[];
@@ -876,6 +891,7 @@ function createGraph(state: GameState, seed: number, total: number, signature: s
     packageAlifeIds: new Map(),
     socialRef: social,
     socialOverrideCount: social?.relationOverrides.length ?? 0,
+    floorRosters: new Map(),
   };
   graph.relations.fill(RELATION_UNSET);
   if (total > DEMOS_FULL_GRAPH_BUILD_LIMIT) return graph;
@@ -896,9 +912,124 @@ function createGraph(state: GameState, seed: number, total: number, signature: s
   return graph;
 }
 
-function lazyCandidateId(graph: DemosSocialGraph, sourceId: number, slot: number, attempt: number): number {
+/* ── Перепись этажа для ленивой строки ───────────────────────────
+ *
+ * Полный граф строится только на маленьком населении (`DEMOS_FULL_GRAPH_BUILD_LIMIT`),
+ * а в настоящем прогоне записей сто тысяч, и каждая строка строится лениво. Ленивая
+ * ветка при этом брала знакомых РАВНОМЕРНО ПО ВСЕМУ ПУЛУ: замерено — из 1600 рёбер
+ * на жилом этаже свои оказывались у 92, родни не было ни одной. То есть у всех связи
+ * были, а встретить связанного было не с кем.
+ *
+ * Перепись даёт ленивой строке то же, что полной сборке дают `buildBuckets`: список
+ * своего этажа и семьи внутри него. Строится один раз на этаж и живёт в кэше.
+ */
+function buildFloorRoster(state: GameState, floorKey: string): DemosFloorRoster {
+  const ids = [...currentAlifeFloorRecordIds(state, floorKey)];
+  const byFamily = new Map<number, number[]>();
+  for (const id of ids) {
+    const snapshot = getAlifeNpcRecordSnapshot(state, id);
+    if (!snapshot || snapshot.familyId <= 0) continue;
+    pushBucket(byFamily, snapshot.familyId, id);
+  }
+  // Семью обе стороны обязаны видеть одинаково: роли раздаются по порядку id,
+  // и порядок не вправе зависеть от того, чья строка строится первой.
+  for (const family of byFamily.values()) family.sort((a, b) => a - b);
+  return { ids, byFamily };
+}
+
+function floorRoster(state: GameState, graph: DemosSocialGraph, floorKey: string | undefined): DemosFloorRoster | undefined {
+  if (!floorKey) return undefined;
+  const cached = graph.floorRosters.get(floorKey);
+  if (cached) return cached;
+  const roster = buildFloorRoster(state, floorKey);
+  if (graph.floorRosters.size >= DEMOS_FLOOR_ROSTER_CACHE) {
+    const oldest = graph.floorRosters.keys().next();
+    if (!oldest.done) graph.floorRosters.delete(oldest.value);
+  }
+  graph.floorRosters.set(floorKey, roster);
+  return roster;
+}
+
+/** Ребро ленивой строки: без зеркала — родство симметрично уже по построению,
+ *  а зеркало стёрло бы направленную роль (родитель/ребёнок) отношением. */
+function addLazyEdge(
+  graph: DemosSocialGraph,
+  sourceId: number,
+  targetId: number,
+  relation: number,
+  flags: number,
+  role: DemosSocialRoleId,
+): boolean {
+  if (!validAlifeId(graph, sourceId) || !validAlifeId(graph, targetId)) return false;
+  if (sourceId === targetId || edgeTargetExists(graph, sourceId, targetId)) return false;
+  const slot = firstEmptySlot(graph, sourceId);
+  if (slot < 0) return false;
+  return setEdgeAtSlot(graph, sourceId, slot, targetId, relation, flags, role);
+}
+
+/** Двое старших семьи — родители; остальные взрослые просто живут рядом. */
+function familyParents(state: GameState, source: AlifeNpcSnapshot, family: readonly number[]): number[] {
+  const adults: AlifeNpcSnapshot[] = [];
+  for (const id of family) {
+    const snapshot = id === source.id ? source : getAlifeNpcRecordSnapshot(state, id);
+    if (!snapshot || snapshot.occupation === Occupation.CHILD) continue;
+    adults.push(snapshot);
+  }
+  adults.sort((a, b) => (a.dead === b.dead ? a.id - b.id : (a.dead ? 1 : -1)));
+  return adults.slice(0, 2).map(snapshot => snapshot.id);
+}
+
+function addLazyFamilyEdges(
+  state: GameState,
+  graph: DemosSocialGraph,
+  source: AlifeNpcSnapshot,
+  roster: DemosFloorRoster | undefined,
+  seed: number,
+): void {
+  const family = source.familyId > 0 ? roster?.byFamily.get(source.familyId) : undefined;
+  if (!family || family.length < 2) return;
+  const parents = familyParents(state, source, family);
+  if (parents.length === 0) return;
+  const sourceIsParent = parents.includes(source.id);
+  /* Семья — ЗВЕЗДА вокруг двух старших: каждый связан с ними, они — со всеми.
+   * Полный перебор пар съел бы три слота из четырёх начальных и не оставил места
+   * ни друзьям, ни врагам; звезда держит двойку у рядового жильца и тройку у
+   * старшего. Обе стороны считают `parents` одинаково, поэтому ребро выходит
+   * взаимным по построению и зеркалить его не нужно. */
+  const kin = sourceIsParent ? family : parents;
+  for (const id of kin) {
+    if (id === source.id) continue;
+    const child = getAlifeNpcRecordSnapshot(state, id)?.occupation === Occupation.CHILD;
+    const relation = familyRelation(seed, Math.min(source.id, id), Math.max(source.id, id), child || source.occupation === Occupation.CHILD ? 92 : 86);
+    let role = DemosSocialRoleId.ACQUAINTANCE;
+    if (child && sourceIsParent) role = DemosSocialRoleId.CHILD;
+    else if (source.occupation === Occupation.CHILD) role = DemosSocialRoleId.PARENT;
+    else if (sourceIsParent && parents.includes(id)) role = DemosSocialRoleId.PARTNER;
+    addLazyEdge(graph, source.id, id, relation, DEMOS_EDGE_FAMILY | DEMOS_EDGE_FRIEND, role);
+  }
+}
+
+/* Последняя из начальных ячеек оставлена ЧУЖОМУ ЭТАЖУ — дальней родне, старому
+ * сослуживцу, должнику сверху. Без неё этажный отбор знакомых обнулил бы
+ * социальные поездки (`requestOneSocialJourney` ищет связанного на ДРУГОМ этаже
+ * и иначе не нашёл бы ни одного), а с ней у каждого ровно один такой человек. */
+const DEMOS_SOCIAL_DISTANT_SLOT = DEMOS_SOCIAL_NPC_SLOT_START + DEMOS_SOCIAL_INITIAL_NPC_SLOTS - 1;
+
+function lazyCandidateId(
+  graph: DemosSocialGraph,
+  roster: DemosFloorRoster | undefined,
+  sourceId: number,
+  slot: number,
+  attempt: number,
+): number {
+  const hash = hash32(graphSeed(graph), sourceId ^ (slot * 7919), attempt * 104729);
+  const pool = slot === DEMOS_SOCIAL_DISTANT_SLOT || !roster || roster.ids.length <= 1 ? undefined : roster.ids;
+  if (pool) {
+    const id = pool[hash % pool.length];
+    return id === sourceId ? pool[(hash + 1) % pool.length] : id;
+  }
   if (graph.total <= 1) return 0;
-  let targetId = (hash32(graphSeed(graph), sourceId ^ (slot * 7919), attempt * 104729) % graph.total) + 1;
+  let targetId = (hash % graph.total) + 1;
   if (targetId === sourceId) targetId = (targetId % graph.total) + 1;
   return targetId;
 }
@@ -916,13 +1047,15 @@ function initializeLazyRow(state: GameState, graph: DemosSocialGraph, alifeId: n
   if (!source) return;
   initializePlayerSlot(graph, source);
   const seed = graphSeed(graph);
+  const roster = floorRoster(state, graph, source.floorKey);
   applyAuthoredRelationsForSource(state, graph, source);
   applyPackageRelationsForLazySource(state, graph, source);
+  addLazyFamilyEdges(state, graph, source, roster, seed);
   for (let slot = DEMOS_SOCIAL_NPC_SLOT_START; slot < npcSlotEnd(); slot++) {
     if (npcEdgeCount(graph, alifeId) >= DEMOS_SOCIAL_INITIAL_NPC_SLOTS) break;
     if (graph.targets[edgeOffset(alifeId, slot)] !== 0) continue;
     for (let attempt = 0; attempt < DEMOS_SOCIAL_CANDIDATE_TRIES; attempt++) {
-      const targetId = lazyCandidateId(graph, alifeId, slot, attempt);
+      const targetId = lazyCandidateId(graph, roster, alifeId, slot, attempt);
       const target = getAlifeNpcRecordSnapshot(state, targetId);
       if (!target || edgeTargetExists(graph, alifeId, targetId)) continue;
       const mode = hash32(seed, alifeId, slot * 131 + attempt * 17) % 5;
@@ -1013,6 +1146,11 @@ export function getDemosNpcOnlySocialEdges(state: GameState, alifeId: number): r
   }
   return out;
 }
+
+/* Расстановка A-Life спрашивает граф о связях через инъекцию: обратный импорт
+ * из `alife` завёл бы новый рантайм-цикл систем. Регистрируем на импорте — граф
+ * и так поднимается вместе с A-Life. */
+registerAlifeSeatingBondSource((state, alifeId) => getDemosNpcOnlySocialEdges(state, alifeId));
 
 export function getDemosOutgoingSocialEdges(state: GameState, alifeId: number): readonly DemosSocialEdgeView[] {
   const player = getDemosRelationToPlayerSlot(state, alifeId);

@@ -7,6 +7,7 @@ import {
   DEMOS_EDGE_ENEMY,
   DEMOS_EDGE_FAMILY,
   DEMOS_EDGE_FRIEND,
+  DEMOS_SOCIAL_NEARBY_RADIUS,
   RELATION_FRIENDLY_THRESHOLD,
   RELATION_HOSTILE_THRESHOLD,
 } from '../data/demos_social';
@@ -25,8 +26,7 @@ export interface DemosAiSocialContext {
   targetHostilityBias: number;
 }
 
-const SOCIAL_NEARBY_RADIUS = 24;
-const SOCIAL_NEARBY_RADIUS2 = SOCIAL_NEARBY_RADIUS * SOCIAL_NEARBY_RADIUS;
+const SOCIAL_NEARBY_RADIUS2 = DEMOS_SOCIAL_NEARBY_RADIUS * DEMOS_SOCIAL_NEARBY_RADIUS;
 
 function wrappedDelta(from: number, to: number): number {
   return ((to - from + W / 2) % W + W) % W - W / 2;

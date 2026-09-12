@@ -28,6 +28,11 @@ export const DEMOS_SOCIAL_NPC_SLOTS = 7;
 export const DEMOS_SOCIAL_INITIAL_NPC_SLOTS = 4;
 export const DEMOS_SOCIAL_PUBLIC_SLOTS = 8;
 export const DEMOS_SOCIAL_CANDIDATE_TRIES = 24;
+/* Расстояние, на котором связь вообще читается: на нём AI замечает родню, друга
+ * и врага (`demos_ai_social`), и в него же метит расстановка, рассаживая связанных
+ * (`alife`). Одна величина на обе стороны — иначе расстановка целилась бы в круг,
+ * которого поведение не видит. */
+export const DEMOS_SOCIAL_NEARBY_RADIUS = 24;
 export const DEMOS_SOCIAL_OVERRIDE_CAP = 8192;
 
 export {
