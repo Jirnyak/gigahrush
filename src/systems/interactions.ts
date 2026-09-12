@@ -11,6 +11,7 @@ import {
   type Entity,
   type GameState,
   type Item,
+  type Msg,
   type WorldContainer,
 } from '../core/types';
 import { World } from '../core/world';
@@ -476,13 +477,32 @@ export function findInteractionTarget(ctx: InteractionContext): InteractionTarge
  * и приводит на шум всех, кто в радиусе. Войлочная накладка здесь не тратится и
  * не помогает: она глушит защёлку, а не удар, поэтому `quiet = false`.
  */
-function bashBlockedDoor(ctx: InteractionContext, door: Door, idx: number, blockedText: string): void {
+/** Удар в заблокированную створку — один шаг на обе руки живого игрока.
+ *
+ *  Хозяин клавиатуры бил створку всегда, а гость, у которого нет ключа, не
+ *  делал НИЧЕГО: проламывание — законный путь внутрь, и у гостя его просто не
+ *  было. Строки уезжают в переданный приёмник (у гостя он выбрасывается —
+ *  решение владельца), а прочность и шум общие: слышно удар одинаково, чьей бы
+ *  рукой он ни был нанесён. */
+export function bashBlockedDoorFor(
+  world: World,
+  state: GameState,
+  actor: Entity,
+  door: Door,
+  idx: number,
+  blockedText: string,
+  msgs: Msg[],
+): void {
   const hermetic = door.state === DoorState.HERMETIC_CLOSED;
-  const broke = damageDoor(ctx.world, door, 5);
-  ctx.state.msgs.push(broke
-    ? msg('Дверь выбита!', ctx.state.time, '#4a4')
-    : msg(blockedText, ctx.state.time, hermetic ? '#f44' : '#f84'));
-  publishDoorNoise(ctx.state, ctx.player, idx, hermetic, false);
+  const broke = damageDoor(world, door, 5);
+  msgs.push(broke
+    ? msg('Дверь выбита!', state.time, '#4a4')
+    : msg(blockedText, state.time, hermetic ? '#f44' : '#f84'));
+  publishDoorNoise(state, actor, idx, hermetic, false);
+}
+
+function bashBlockedDoor(ctx: InteractionContext, door: Door, idx: number, blockedText: string): void {
+  bashBlockedDoorFor(ctx.world, ctx.state, ctx.player, door, idx, blockedText, ctx.state.msgs);
 }
 
 function activateDoor(ctx: InteractionContext, idx: number): InteractionResult {

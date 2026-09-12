@@ -607,6 +607,7 @@ import {
 import {
   activateInteraction,
   activateWorldInteractionForActor,
+  bashBlockedDoorFor,
   closeInteractableOverlay,
   findFriendlyNpcForActor,
   findInteractionTarget,
@@ -801,6 +802,17 @@ let onlinePeerFloorReady = false;
 const _peerMoveGen = new Map<number, number>();      // host: last received move gen per slot (echoed for snap gating)
 const _peerNextFireAt = new Map<number, number>();  // wall-clock ms gate: next allowed peer attack per slot
 const _peerNextToolAt = new Map<number, number>(); // host-side peer world-tool effect gate
+/* Приёмник строк, которые пишет рука ГОСТЯ, когда его обслуживает хозяин.
+ * Решение владельца: такие строки глотаются — гость их не увидит, а хозяину
+ * чужие сообщения не показываются. Мир, шум, износ и отношения при этом
+ * общие. Чистится перед каждым шагом: держать строки незачем, а расти списку
+ * нельзя. */
+const _peerMsgSink: Msg[] = [];
+
+function peerMsgSink(): Msg[] {
+  _peerMsgSink.length = 0;
+  return _peerMsgSink;
+}
 const _peerVisitEnded = new Set<number>();         // host: slots whose visit already ended (death/evac sent once)
 
 // Peer-side transient remote container copy: a single reserved synthetic id kept
@@ -1171,7 +1183,7 @@ function applyPeerToolUse(actor: Entity, slot: number, edge: boolean): void {
   if (now < (_peerNextToolAt.get(slot) ?? 0)) return;
   // v2 host authority: the host consumes durability/psi for real (the old
   // protocol restored them because the peer owned its own inventory).
-  const sink = peerToolMsgSink();
+  const sink = peerMsgSink();
   /* Такт принятого интента. Локальная рука жжёт заряд по кадру, у гостя кадра
    * нет — есть интервал, которым хозяин и сам себя ограничивает ниже. */
   const lightTickS = 0.125;
@@ -1409,10 +1421,16 @@ function onPeerIntentInteract(actor: Entity, slot: number): void
     } else if (door.state === DoorState.OPEN) {
       setDoorState(world, door, DoorState.CLOSED); handled = true;
       publishDoorNoise(state, actor, idx, false, quietDoor);
-    } else if (door.state === DoorState.HERMETIC_CLOSED && !state.samosborActive) {
-      setDoorState(world, door, DoorState.HERMETIC_OPEN);
-      door.timer = 0; handled = true;
-      publishDoorNoise(state, actor, idx, true, quietDoor);
+    } else if (door.state === DoorState.HERMETIC_CLOSED) {
+      if (state.samosborActive) {
+        // Самосбор: гермостворка заперта для ВСЕХ, и бьют её тем же ударом.
+        bashBlockedDoorFor(world, state, actor, door, idx, 'Дверь герметично заперта! (Удар -5)', peerMsgSink());
+      } else {
+        setDoorState(world, door, DoorState.HERMETIC_OPEN);
+        door.timer = 0;
+        publishDoorNoise(state, actor, idx, true, quietDoor);
+      }
+      handled = true;
     } else if (door.state === DoorState.HERMETIC_OPEN) {
       setDoorState(world, door, DoorState.HERMETIC_CLOSED); handled = true;
       publishDoorNoise(state, actor, idx, true, quietDoor);
@@ -1423,7 +1441,7 @@ function onPeerIntentInteract(actor: Entity, slot: number): void
       const access = actorHasDoorKey(actor, door) ? undefined : findActorDoorPermit(actor, doorKeyId(door));
       if (actorHasDoorKey(actor, door) || access) {
         setDoorState(world, door, DoorState.OPEN);
-        door.timer = 0; handled = true;
+        door.timer = 0;
         state.msgs.push(msg(
           access ? access.permit.successLine : `Игрок ${actor.peerSlot} отпер дверь ключом`,
           state.time,
@@ -1431,7 +1449,13 @@ function onPeerIntentInteract(actor: Entity, slot: number): void
         ));
         publishDoorNoise(state, actor, idx, false, quietDoor);
         if (access) recordPermitAccess(state, actor, world, access.permit, 'Запертая дверь', access.tag);
+      } else {
+        /* Без ключа и без бумаги гость раньше не делал НИЧЕГО: створка не
+         * получала удара, мир не слышал ни звука, и внутрь попасть было нечем.
+         * Проламывание — законный путь, и он общий с хозяином клавиатуры. */
+        bashBlockedDoorFor(world, state, actor, door, idx, 'Заперто. Нужен ключ. (Удар -5)', peerMsgSink());
       }
+      handled = true;
     }
   }
   // Компьютер под взглядом гостя: хост только называет цель (реестр терминалов
@@ -7060,15 +7084,6 @@ function cleanSurfaceArea(cx: number, cy: number, radiusCells: number): number {
  * («хочет ли», «отпустил ли кнопку», «не рано ли») остаётся у вызывающего: у
  * руки гостя он один на всё, и это его собственное правило против сети.
  */
-
-/** Приёмник строк руки гостя. Чистится перед каждым шагом: сообщения гостю не
- *  показываются, а держать их незачем — расти списку нельзя. */
-const PEER_TOOL_MSG_SINK: Msg[] = [];
-
-function peerToolMsgSink(): Msg[] {
-  PEER_TOOL_MSG_SINK.length = 0;
-  return PEER_TOOL_MSG_SINK;
-}
 
 /** Луч сам себе сообщение: строк у него нет, поэтому приёмник ему не нужен. */
 function handleUvSpotlightTool(actor: Entity): number {
