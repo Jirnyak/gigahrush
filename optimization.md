@@ -669,14 +669,15 @@ Date: 2026-08-22.
 снесли), `cellVersion` (замена на месте: редактор карты сносит и ставит за один кадр, и
 размер возвращается к прежнему). Обязанность взамен: любой рантайм-путь, меняющий вид
 створки, идёт через `setDoorState` / `damageDoor`. Единственный обход был в
-`wrong_door.ts` — он же терял пометку навигации. Замок — `tests/door-version.test.ts`.
+`wrong_door.ts` — он же терял пометку навигации. Сама система СНЕСЕНА 2026-09-10
+(решение владельца), вместе с ней ушла и эта площадка. Замок — `tests/door-version.test.ts`.
 
 ## Applied Optimizations
 
 **Date:** 2026-07-09
 **Target:** FPS drop in dense areas (e.g., Kvartiry).
 **Changes:**
-1. **`getWeaponStats` Fast Path:** Skipped evaluating `govnyakAimSpreadMult` and `sporeHazeAimSpreadMult` for entities without statuses or for melee weapons. This prevents allocating empty arrays `(e.statuses ?? [])` and doing `.findIndex()` multiple times per frame per NPC.
+1. **`getWeaponStats` Fast Path:** Skipped evaluating `playerStatusAimSpreadMult` (до 2026-09-10 — `govnyakAimSpreadMult`) and `sporeHazeAimSpreadMult` for entities without statuses or for melee weapons. This prevents allocating empty arrays `(e.statuses ?? [])` and doing `.findIndex()` multiple times per frame per NPC.
 2. **`queryRadiusCapped` / `queryPathRadius` In-Place Sort:** Replaced array `.push()`, `.pop()`, and `.length = cap` resizing in hot loops with a GC-free, in-place insertion sort logic. This eliminates major array reallocation overhead in V8 when spatial limits are hit.
 
 **Date:** 2026-08-20

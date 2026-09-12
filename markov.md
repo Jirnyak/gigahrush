@@ -46,7 +46,9 @@ Markov NPC Text уже является shipped-системой, а не пла
 - `src/systems/ai/barks.ts` routes non-critical ambient/lead/witness barks
   through `generateMarkovBark()`; alert/combat/flee/wounded/samosbor safety
   strings stay exact.
-- `src/systems/markov_log_speech.ts` defines the NPC log-speech adapter.
+- Адаптер речи для журнала СНЯТ 2026-09-10: `markov_log_speech.ts` не вызывался в
+  игре ни разу (только из тестов). Интент `log_speech` ЖИВ — его шлёт барк
+  свидетеля через `routeBarkSpeech`.
   Structural `world_log.ts` event text remains exact; only explicit spoken NPC
   lines may use `log_speech`.
 - `src/systems/demos.ts`, `src/systems/demos_runtime.ts` and
@@ -223,11 +225,11 @@ src/systems/markov_dialogue.ts
 src/systems/markov_rumor.ts
 src/systems/markov_procedural_quests.ts
 src/systems/markov_barks.ts
-src/systems/markov_log_speech.ts
 src/systems/demos_posts.ts
   narrow adapters owned by domain surfaces
 
-src/systems/markov_router_adapters.ts
+src/systems/speech_router.ts   (сюда слит бывший markov_router_adapters:
+                                три копии одной функции поверхности)
   surface-specific wrappers over routeSpeech()
 
 src/data/demos_posts.ts
@@ -440,7 +442,7 @@ view output, not save payload.
 | Rumor flavor | `src/systems/rumor.ts`, `src/data/rumors.ts` | `rumor_flavor`, `generated_markov` | Selected `rumorId`, lead and reveal facts remain authoritative; Markov only rephrases short flavor around them. |
 | Procedural quest speech | `src/systems/quests.ts`, `src/data/contracts.ts` | `procedural_quest`, `generated_markov` | Quest target, reward, deadline and route facts come from `Quest`/`ContractDef`; authored plot and side quests remain locked. |
 | NPC bark ambient/lead/witness | `src/systems/ai/barks.ts` | `bark_ambient`, `log_speech`, `generated_markov` | Ambient, arrival/lead and non-critical witness flavor may route through Markov. Combat alerts, flee/wounded critical lines and samosbor shelter instructions stay exact. |
-| NPC speech in log/HUD | `src/systems/markov_log_speech.ts`, `pushNpcBarkMessage()` call chain | `log_speech` | Only text spoken by an NPC goes through router. Radius, HUD priority and audibility remain owned by bark/log systems. `pushNpcBarkMessage()` itself stays exact/low-level. |
+| NPC speech in log/HUD | `pushNpcBarkMessage()` call chain → `routeBarkSpeech` | `log_speech` | Only text spoken by an NPC goes through router. Radius, HUD priority and audibility remain owned by bark/log systems. `pushNpcBarkMessage()` itself stays exact/low-level. |
 | Structured world log | `src/systems/world_log.ts` | usually exact system text | `eventText()` stays exact for gameplay telemetry, warnings, item pickup/use, quest status, samosbor, hazards and monster mechanics. Optional NPC social paraphrase can be a separate event-derived speech line. |
 | Notes/documents | `src/data/notes.ts`, explicit `note` drops in `src/gen/**` | mostly `locked_author_text`; future `procedural_note` only if added deliberately | Existing lore notes are authored content. Do not Markov-regenerate them by default. Future procedural notes must be grounded in existing item/room/event facts. |
 | Demos profile labels | `src/systems/demos.ts`, `src/render/demos_ui.ts` | exact UI labels | Relation/faction/occupation/location labels stay exact view-model text. |

@@ -11,7 +11,9 @@
 Все нескриптованные (не написанные вручную сценаристом для сюжетных квестов) текстовые поверхности игры обслуживаются **одним универсальным движком**:
 1. **Диалоги с NPC** (`src/systems/dialogue.ts`)
 2. **Баблы и Ambient Barks в мире** (`src/systems/ai/barks.ts`)
-3. **Стеносводка / Логи речи** (`src/systems/markov_log_speech.ts`, `src/systems/world_log.ts`)
+3. **Стеносводка / Логи речи** (`src/systems/world_log.ts`; отдельный адаптер
+   `markov_log_speech.ts` СНЯТ 2026-09-10 — он не вызывался в игре ни разу,
+   интент `log_speech` живёт через барк свидетеля)
 4. **Инфосеть Демос: посты и реакции** (`src/systems/demos_posts.ts`, `src/systems/demos.ts`)
 5. **Процедурные слухи и квесты** (`src/systems/rumor.ts`, `src/systems/quests.ts`)
 6. **[НОВОЕ] Процедурные записки, дневники и документы** (`document_flavor`, `lore_note`)

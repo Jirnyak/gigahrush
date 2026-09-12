@@ -628,7 +628,7 @@ No actor should query "who knows me?" by scanning `100_000` records during frame
 
 ## Social Visits
 
-Shipped "friend goes to friend" behavior uses existing migration concepts through Demos social journey requests. `demos_social_runtime` may request at most one bounded journey from inspected social edges, and `demos_social_feedback.ts` queues it through A-Life migration-compatible data.
+Shipped "friend goes to friend" behavior uses existing migration concepts through Demos social journey requests. `demos_social_runtime` may request at most one bounded journey from inspected social edges, and разбор событий (с 2026-09-10 внутри `demos_runtime.ts`) ставит её в очередь через данные, совместимые с миграцией A-Life.
 
 Registered migration intents:
 
@@ -920,7 +920,7 @@ Core files:
 
 - `src/data/demos_posts.ts`;
 - `src/systems/demos_posts.ts`;
-- `src/systems/demos_social_director.ts`;
+- `src/systems/demos_runtime.ts` (режиссёр ленты и разбор событий с 2026-09-10);
 - `src/systems/demos_runtime.ts`;
 - `src/render/demos_ui.ts` feed tab;
 - tests.
@@ -946,8 +946,7 @@ Core files:
 
 - `src/systems/demos_social.ts`;
 - `src/systems/demos_posts.ts`;
-- `src/systems/demos_social_director.ts`;
-- `src/systems/demos_social_feedback.ts`;
+- `src/systems/demos_runtime.ts` (режиссёр ленты и разбор событий с 2026-09-10);
 - `src/systems/demos_save.ts`;
 - `src/systems/save_payload.ts`;
 - `src/systems/save_runtime.ts`;
@@ -998,7 +997,6 @@ Core files:
 
 - `src/data/demos_social_visits.ts`;
 - `src/systems/demos_runtime.ts`;
-- `src/systems/demos_social_feedback.ts`;
 - `src/systems/demos_social.ts`;
 - tests.
 
