@@ -8,9 +8,7 @@
  *
  * Что здесь живёт и чего нельзя потерять при следующей правке: NPC ПОКУПАЕТ за
  * деньги и ВОРУЕТ через `putIntoContainer`/`takeFromContainer` — со свидетелями
- * и аудитом; квестовая вещь неотчуждаема (`itemRoleForNpc`, теги
- * `quest|persistent|cannot_drop`), и это ЕДИНСТВЕННОЕ, что не даёт сдать
- * квестовый предмет на склад; вставший цех кормится входами; вещь едет по
+ * и аудитом; вставший цех кормится входами; вещь едет по
  * своему природному адресу; уборщик чистит поверхности; патроны — причина
  * рейса, и после них человек перевооружается.
  *
@@ -196,7 +194,10 @@ function itemRoleForNpc(e: Entity, defId: string): NpcItemRole {
   const def = ITEMS[defId];
   if (!def) return 'own';
   if (def.value <= 0) return 'own';
-  if (def.tags?.some(tag => tag === 'quest' || tag === 'persistent' || tag === 'cannot_drop')) return 'own';
+  /* Правило «вещь с тегом quest/persistent/cannot_drop неотчуждаема» СНЯТО
+   * 2026-09-12 по решению владельца: таких тегов не несёт ни один из 457
+   * предметов, и охранять было нечего. Квестовая вещь защищена формой квеста;
+   * спросить живой журнал отсюда нельзя — модуль не получает GameState. */
   switch (def.type) {
     case ItemType.KEY:
     case ItemType.NOTE:

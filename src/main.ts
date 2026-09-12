@@ -1829,23 +1829,21 @@ function onOnlineFloorSnapshotChunk(msgData: any, chunks: (string | undefined)[]
     // Never mint a local id that collides with a host-authored entity.
     nextEntityId.v = Math.max(nextEntityId.v, unpacked.meta.nextEntityId, syncNextEntityId(entities, nextEntityId.v));
 
-    // Create local player actor for camera attachment
+    // Create local player actor for camera attachment. Тело собирается тем же
+    // шагом, что и в одиночной игре; своими у гостя остаются только сетевые
+    // поля — номер из слотового диапазона, поколение сети и сам слот. Имя
+    // остаётся «Вы»: на стороне гостя его читает HUD, а не мир хозяина.
     const localPlayer: Entity = {
-      ...playerBodyDefaults(),
-      id: PEER_LOCAL_PLAYER_ID_BASE + (peerMySlot ?? 0),
-      x: spawnX, y: spawnY,
-      angle: -Math.PI / 2,
-      needs: freshNeeds(),
-      hp: 100, maxHp: 100,
-      money: 100,
-      inventory: [],
-      weapon: '', tool: '',
+      ...buildPlayerBody(
+        PEER_LOCAL_PLAYER_ID_BASE + (peerMySlot ?? 0),
+        freshPlayerCarry(),
+        spawnX,
+        spawnY,
+      ),
       name: 'Вы',
       netGen: getNetSphereSnapshot().netGen,
-      rpg: freshRPG(1),
       peerSlot: peerMySlot,
-      ...playerAlifeFields(),
-    } as Entity;
+    };
     entities.push(localPlayer);
     player = localPlayer;
     setCurrentPlayerEntity(player);
@@ -2886,6 +2884,70 @@ function playerAlifeFields(source: Partial<Entity> = {}): PlayerAlife {
   };
 }
 
+/* Что игрок уносит через границу мира: лифт, возврат из Пустоты, загрузка сейва
+ * и начало прогона — четыре входа в одну механику «тело появляется в мире».
+ *
+ * Список был выписан дважды дословно (одиннадцать `saved*` и литерал в
+ * семнадцать полей на каждой стороне), и обе копии теряли ОДНО и то же:
+ * `currentMag`. Патроны в стволе — живое число на сущности, а на границе
+ * строится НОВОЕ тело, поэтому заряженный магазин пропадал на каждом переезде,
+ * и в сейв не уезжал вовсе. Чинится не новым полем переноса, а той же парой,
+ * что уже описана в `systems/inventory.ts` для смены оружия: магазин убирается
+ * в слот предмета ДО границы (`stashEquippedMagazine`) и достаётся из него
+ * ПОСЛЕ (`loadEquippedMagazine`). Слоты и есть инвентарь, а инвентарь
+ * переносится — своего канала магазину не нужно. */
+type PlayerCarry = Pick<Entity,
+  'angle' | 'needs' | 'hp' | 'maxHp' | 'inventory' | 'weapon' | 'tool'
+  | 'armorDefId' | 'money' | 'rpg' | 'statuses'>;
+
+function capturePlayerCarry(): PlayerCarry {
+  stashEquippedMagazine(player);
+  return {
+    angle: player.angle,
+    needs: player.needs ? { ...player.needs } : freshNeeds(),
+    hp: player.hp ?? 100,
+    maxHp: player.maxHp ?? 100,
+    inventory: player.inventory ? [...player.inventory] : [],
+    weapon: player.weapon ?? '',
+    tool: player.tool ?? '',
+    armorDefId: player.armorDefId,
+    money: player.money ?? 100,
+    rpg: player.rpg ? { ...player.rpg } : freshRPG(1),
+    statuses: player.statuses ? [...player.statuses] : undefined,
+  };
+}
+
+/** Жилец, который только что вошёл в структуру: ни вещей, ни ствола. */
+function freshPlayerCarry(): PlayerCarry {
+  return {
+    angle: -Math.PI / 2, // лицом на север — к слайдам
+    needs: freshNeeds(),
+    hp: 100,
+    maxHp: 100,
+    inventory: [],
+    weapon: '',
+    tool: '',
+    armorDefId: undefined,
+    money: 100,
+    rpg: freshRPG(1),
+    statuses: undefined,
+  };
+}
+
+function buildPlayerBody(id: number, carry: PlayerCarry, x: number, y: number, alifeSource?: Partial<Entity>): Entity {
+  const body: Entity = {
+    ...playerBodyDefaults(),
+    id,
+    x,
+    y,
+    ...carry,
+    name: playerDisplayName(),
+    ...playerAlifeFields(alifeSource),
+  };
+  loadEquippedMagazine(body);
+  return body;
+}
+
 let pageHiddenPause = smokeDebug ? false : typeof document !== 'undefined' ? document.hidden : false;
 let pageHiddenInputCleared = false;
 let platformPause = false;
@@ -3556,17 +3618,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
   const departure = beginVoidReturn(state, player, portal);
 
   captureCurrentAlifeFloor();
-  const savedInventory = player.inventory ? [...player.inventory] : [];
-  const savedNeeds = player.needs ? { ...player.needs } : freshNeeds();
-  const savedHp = player.hp ?? 100;
-  const savedMaxHp = player.maxHp ?? 100;
-  const savedWeapon = player.weapon ?? '';
-  const savedTool = player.tool ?? '';
-  const savedArmor = player.armorDefId;
-  const savedRpg = player.rpg ? { ...player.rpg } : freshRPG(1);
-  const savedStatuses = player.statuses ? [...player.statuses] : undefined;
-  const savedMoney = player.money ?? 100;
-  const savedAngle = player.angle;
+  const carry = capturePlayerCarry();
 
   state.currentZ = VOID_RETURN_TARGET_Z;
   state.gameWon = false;
@@ -3591,25 +3643,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     resetEntityIdCursorToEntities();
     materializeCurrentAlifeFloor(currentFloorMemoryKey());
 
-    player = {
-      ...playerBodyDefaults(),
-      id: nextEntityId.v++,
-      x: gen.spawnX,
-      y: gen.spawnY,
-      angle: savedAngle,
-      needs: savedNeeds,
-      hp: savedHp,
-      maxHp: savedMaxHp,
-      inventory: savedInventory,
-      weapon: savedWeapon,
-      tool: savedTool,
-      armorDefId: savedArmor,
-      money: savedMoney,
-      rpg: savedRpg,
-      statuses: savedStatuses,
-      name: playerDisplayName(),
-      ...playerAlifeFields(player),
-    };
+    player = buildPlayerBody(nextEntityId.v++, carry, gen.spawnX, gen.spawnY, player);
     entities.push(player);
     applyContractFloorHooks(state, world, entities, nextEntityId, player);
     syncPlayerRuntimeBaselines();
@@ -4076,22 +4110,7 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   entities = gen.entities;
   resetEntityIdCursorToEntities();
 
-  player = {
-    ...playerBodyDefaults(),
-    id: nextEntityId.v++,
-    x: gen.spawnX,
-    y: gen.spawnY,
-    angle: -Math.PI / 2, // face north — toward slides
-    needs: freshNeeds(),
-    hp: 100, maxHp: 100,
-    money: 100,
-    inventory: [],
-    weapon: '',
-    tool: '',
-    name: playerDisplayName(),
-    rpg: freshRPG(1),
-    ...playerAlifeFields(),
-  };
+  player = buildPlayerBody(nextEntityId.v++, freshPlayerCarry(), gen.spawnX, gen.spawnY);
   entities.push(player);
   syncPlayerRuntimeBaselines();
 
@@ -6288,19 +6307,7 @@ function switchFloor(
   // Save player position for same-xy spawn
   const savedX = player.x;
   const savedY = player.y;
-  const savedAngle = player.angle;
-
-  // Save player state
-  const savedInventory = player.inventory ? [...player.inventory] : [];
-  const savedNeeds = player.needs ? { ...player.needs } : freshNeeds();
-  const savedHp = player.hp ?? 100;
-  const savedMaxHp = player.maxHp ?? 100;
-  const savedWeapon = player.weapon ?? '';
-  const savedTool = player.tool ?? '';
-  const savedArmor = player.armorDefId;
-  const savedRpg = player.rpg ? { ...player.rpg } : freshRPG(1);
-  const savedStatuses = player.statuses ? [...player.statuses] : undefined;
-  const savedMoney = player.money ?? 100;
+  const carry = capturePlayerCarry();
 
   state.currentZ = nextFloor;
   // Адрес возврата из Пустоты. Сравнение с 200 (снятая шкала) не срабатывало
@@ -6346,25 +6353,7 @@ function switchFloor(
       gen.spawnX,
       gen.spawnY,
     );
-    player = {
-      id: nextEntityId.v++,
-      ...playerBodyDefaults(),
-      x: spawn.x,
-      y: spawn.y,
-      angle: savedAngle,
-      needs: savedNeeds,
-      hp: savedHp,
-      maxHp: savedMaxHp,
-      inventory: savedInventory,
-      weapon: savedWeapon,
-      tool: savedTool,
-      armorDefId: savedArmor,
-      money: savedMoney,
-      rpg: savedRpg,
-      statuses: savedStatuses,
-      name: playerDisplayName(),
-      ...playerAlifeFields(player),
-    };
+    player = buildPlayerBody(nextEntityId.v++, carry, spawn.x, spawn.y, player);
     entities.push(player);
     for (const pa of travelingPeers) {
       pa.id = nextEntityId.v++;
@@ -6910,11 +6899,7 @@ function loadGame(): boolean {
         gen.spawnY,
       );
 
-      player = {
-        ...playerBodyDefaults(),
-        id: nextEntityId.v++,
-        x: spawn.x,
-        y: spawn.y,
+      player = buildPlayerBody(nextEntityId.v++, {
         angle: finiteNumber(dataPlayer.angle, 0),
         needs: normalizedNeeds,
         hp: clampNumber(dataPlayer.hp, normalizedMaxHp, 1, normalizedMaxHp),
@@ -6926,13 +6911,9 @@ function loadGame(): boolean {
         money: clampInt(dataPlayer.money, 100, 0, MAX_SAVE_MONEY),
         rpg: normalizedRpg,
         statuses: normalizePlayerStatuses(dataPlayer.statuses),
-        name: playerDisplayName(),
-        ...playerAlifeFields(dataPlayer as Partial<Entity>),
-      };
+      }, spawn.x, spawn.y, dataPlayer as Partial<Entity>);
       entities.push(player);
       applyContractFloorHooks(state, world, entities, nextEntityId, player);
-      // Патроны в стволе лежат в `data` слота оружия: поднимаем их в живой счётчик.
-      loadEquippedMagazine(player);
       syncPlayerRuntimeBaselines();
       resetPsiState();
 

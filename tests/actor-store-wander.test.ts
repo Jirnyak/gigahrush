@@ -2,9 +2,8 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import {
-  AIGoal, ItemType, NpcState, Occupation, type Entity, type ItemDef,
+  AIGoal, NpcState, Occupation, type Entity,
 } from '../src/core/types';
-import { ITEMS } from '../src/data/items';
 import { roomAffordanceWeight } from '../src/data/room_affordances';
 import { DRIVE_BY_ID, driveWeight, scoreDrive, type DriveView } from '../src/systems/actor/drives';
 import { createActorNeeds, readActorNeeds } from '../src/systems/actor/needs';
@@ -117,29 +116,25 @@ test('нечем стрелять — сильнейшая причина рей
   assert.equal(score('store', viewAt(armed, 12)), 0, 'с патронами в кармане склад не нужен');
 });
 
-test('квестовая вещь неотчуждаема: на склад её не сдают', () => {
-  const relicId = 'test_actor_store_relic';
-  const relic: ItemDef = {
-    id: relicId,
-    name: 'Тестовая реликвия',
-    type: ItemType.MISC,
-    value: 500,
-    tags: ['quest'],
-  } as ItemDef;
-  ITEMS[relicId] = relic;
-  try {
-    const e = makeActor();
-    e.inventory = [
-      { defId: relicId, count: 1 },
-      { defId: 'armor_light', count: 1 },
-      { defId: 'armor_medium', count: 1 },
-    ];
-    const spare = scanSpareInventory(e);
-    assert.equal(spare.count, 2, 'реликвия попала в излишки — её сдадут в первый же ящик');
-    assert.ok(spare.first > 0, 'первым лишним слотом оказалась защищённая вещь');
-  } finally {
-    delete ITEMS[relicId];
-  }
+test('своё оружие и ключ не излишек, а хабар — излишек', () => {
+  /* Здесь стоял второй, БЛИЗНЕЦОВЫЙ замок правила «вещь с тегом quest
+   * неотчуждаема» — он завёл свою реликвию и охранял ту же строку, что замок в
+   * `actor-routine.test.ts`. Правило снято 2026-09-12 (тегов не несёт ни один
+   * из 457 предметов), и вместе с ним ушли обе фикстуры. Остаётся то, что
+   * решает состав рейса по-настоящему, на вещах из реестра. */
+  const e = makeActor({ weapon: 'makarov' });
+  e.tool = 'flashlight';
+  e.inventory = [
+    { defId: 'makarov', count: 1 },
+    { defId: 'flashlight', count: 1 },
+    { defId: 'key', count: 1 },
+    { defId: 'armor_light', count: 1 },
+    { defId: 'armor_medium', count: 1 },
+  ];
+  const spare = scanSpareInventory(e);
+  assert.equal(spare.count, 2, 'в излишке не две вещи из пяти: своё или ключ уедет на склад');
+  assert.equal(e.inventory[spare.first].defId, 'armor_light',
+    `первым лишним слотом оказалась ${e.inventory[spare.first]?.defId}, а не хабар`);
 });
 
 test('самосбор отменяет рейс целиком', () => {

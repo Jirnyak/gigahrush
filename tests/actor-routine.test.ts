@@ -190,33 +190,41 @@ test('в смену человек доходит до комнаты, кото�
   setActorCoreContext(undefined);
 });
 
-test('квестовая вещь неотчуждаема: на склад её не сдают', () => {
-  /* Единственное, что не даёт NPC сдать квестовый предмет в ящик, — теги вещи
-   * (`quest|persistent|cannot_drop`). Механика переехала в
-   * `systems/npc_work.ts`, и замок обязан переехать с ней. Сторож защитный: в
-   * реестре сегодня НЕТ ни одной вещи с такими тегами, поэтому образец заводим
-   * на время проверки и убираем за собой. */
-  const kept = ITEMS['test_quest_token'];
-  const plain = ITEMS['armor_light'];
-  assert.ok(plain && plain.value > 0, 'опорная вещь исчезла из реестра');
-  ITEMS['test_quest_token'] = { ...plain, id: 'test_quest_token', tags: ['quest'] };
-  try {
-    const e = makeActor({ id: 31 });
-    e.weapon = undefined;
-    e.tool = undefined;
-    e.inventory = [
-      { defId: 'test_quest_token', count: 1 },
-      { defId: 'armor_light', count: 1 },
-    ];
-    const spare = scanSpareInventory(e);
-    assert.ok(spare.first >= 0, 'хабар обязан оставаться лишним');
-    assert.notEqual(e.inventory[spare.first].defId, 'test_quest_token',
-      'квестовая вещь попала в излишек и уедет на склад');
-    assert.equal(spare.count, 1, 'в излишек попало больше одной вещи из двух');
-  } finally {
-    if (kept === undefined) delete ITEMS['test_quest_token'];
-    else ITEMS['test_quest_token'] = kept;
+test('излишек считается по настоящим вещам: своё, запас и хабар', () => {
+  /* Замок на НАСТОЯЩЕМ реестре. Прежний держал выдуманную вещь с тегом
+   * `quest` — правило по этим тегам снято 2026-09-12 (в реестре их не несёт
+   * ни один из 457 предметов), и вместе с ним ушёл смысл фикстуры. Охраняются
+   * четыре живых правила: своё оружие и инструмент не хабар, патрон ПОД СВОЁ
+   * оружие не хабар, а чужой патрон — хабар, и еды человек оставляет ровно
+   * одну, остальное едет на склад. */
+  const e = makeActor({ id: 31 });
+  e.weapon = 'makarov';
+  e.tool = 'flashlight';
+  e.inventory = [
+    { defId: 'makarov', count: 1 },
+    { defId: 'flashlight', count: 1 },
+    { defId: 'ammo_9mm', count: 12 },
+    { defId: 'key', count: 1 },
+    { defId: 'bread', count: 1 },
+    { defId: 'kasha', count: 1 },
+    { defId: 'ammo_shells', count: 4 },
+  ];
+  for (const slot of e.inventory) {
+    assert.ok(ITEMS[slot.defId], `вещь ${slot.defId} исчезла из реестра, замок ослеп`);
   }
+  const spare = scanSpareInventory(e);
+  assert.equal(e.inventory[spare.first]?.defId, 'kasha',
+    `первым излишком оказалась ${e.inventory[spare.first]?.defId}: своё, ключ или первая еда уехали на склад`);
+  assert.equal(spare.count, 2, `в излишке ${spare.count} вещей из семи, а не две (вторая еда и чужой патрон)`);
+
+  // Обе стороны правила патрона: тот же `ammo_9mm` без «Макарова» в руках
+  // становится хабаром. Иначе первая проверка проходила бы и на правиле
+  // «патроны никогда не хабар».
+  const unarmed = makeActor({ id: 32 });
+  unarmed.weapon = undefined;
+  unarmed.tool = undefined;
+  unarmed.inventory = [{ defId: 'ammo_9mm', count: 12 }];
+  assert.equal(scanSpareInventory(unarmed).count, 1, 'патрон без своего оружия человек держит как своё');
 });
 
 test('канал опасности читается снимком, а не миром: формула не ходит в мир', () => {

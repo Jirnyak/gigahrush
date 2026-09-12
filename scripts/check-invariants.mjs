@@ -76,7 +76,7 @@ const RUNTIME_CYCLE_BASELINE = 4;
 // `Math.random()` не даёт непредсказуемости, а коду комнаты нужна именно она.
 const MATH_RANDOM_BASELINE = 0;
 const MAX_FUNCTION_LINES = 200;
-const LONG_FUNCTION_BASELINE = 20;
+const LONG_FUNCTION_BASELINE = 19;
 
 function walk(dir) {
   if (!fs.existsSync(dir)) return [];

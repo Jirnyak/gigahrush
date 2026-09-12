@@ -13,6 +13,7 @@ import { demosSocialForSave } from './demos_save';
 import { economyForSave } from './economy';
 import { trimEventHistoryForSave } from './events';
 import { floorInstanceStateForSave } from './floor_instances';
+import { stashEquippedMagazine } from './inventory';
 import { liftArachnaStateForSave } from './lift_arachna';
 import { mapEditorPatchStateForSave } from './map_editor';
 import { netHackStateForSave } from './net_hack';
@@ -38,6 +39,12 @@ export function createGameSavePayload(
   containers: readonly WorldContainer[],
   extras: SaveRuntimeExtras = {},
 ): GameSavePayload {
+  /* Патроны в стволе живут числом на сущности (`currentMag`), а в файл уезжает
+   * инвентарь — значит магазин обязан убраться в слот предмета ДО упаковки.
+   * Без этого шага сейв не записывал заряд вовсе: `data.mag` писал только тот,
+   * кто снимал или бросал ствол, а загрузка честно доставала оттуда устаревшее
+   * число. Пара та же, что у смены оружия и у границы этажа. */
+  stashEquippedMagazine(player);
   const payload = buildSavePayload({
     player,
     state,

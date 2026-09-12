@@ -27,10 +27,14 @@ import {
 import { World } from '../src/core/world';
 import { WEAPON_STATS, type WeaponStats } from '../src/data/catalog';
 import { initFactionRelations } from '../src/data/relations';
-import { addItem, consumeAmmo, countAmmo, removeItem, useItem } from '../src/systems/inventory';
+import {
+  addItem, consumeAmmo, countAmmo, loadEquippedMagazine, removeItem, stashEquippedMagazine, useItem,
+} from '../src/systems/inventory';
 import { setCombatContext, tryFactionCombat } from '../src/systems/ai/combat';
 import { rebuildEntityIndex } from '../src/systems/entity_index';
 import { freshRPG } from '../src/systems/rpg';
+import { createGameSavePayload } from '../src/systems/save_runtime';
+import { makeGameState } from './helpers';
 
 const OX = 500;
 const OY = 500;
@@ -193,4 +197,56 @@ test('магазин NPC остаётся за боевым AI: инвентар
   assert.ok(entities.some(x => x.type === EntityType.PROJECTILE), 'NPC не выстрелил');
   assert.equal(shooter.currentMag, (WEAPON_STATS.ppsh.magazineSize ?? 1) - 1);
   assert.deepEqual(shooter.inventory![0].data, { mag: 0 }, 'бой переписал магазин в инвентаре');
+});
+
+/* ── Граница мира: смена тела, а не смена ствола ───────────────────────────
+ *
+ * Лифт, возврат из Пустоты, загрузка сейва и начало прогона строят НОВОЕ тело
+ * игрока и переносят в него список полей. `currentMag` в этот список не входил
+ * и не должен входить: патроны принадлежат стволу, и переносит их та же пара,
+ * что и смена оружия — убрать в слот предмета до границы, достать после.
+ * Здесь заперты обе стороны: пара переносит заряд, а без неё он пропадает.
+ *
+ * Что позван этот шаг в `main.ts`, охраняет `tests/player-body-defaults.test.ts`:
+ * браузерную точку входа в тесте не поднять. */
+
+test('магазин переживает смену тела на границе мира', () => {
+  const before = makePlayer();
+  addItem(before, 'ppsh', 1);
+  addItem(before, 'ammo_9mm', 71);
+  equip(before, 'ppsh');
+  reload(before, 'ppsh');
+  for (let i = 0; i < 31; i++) consumeAmmo(before, undefined, 'ppsh');
+  assert.equal(before.currentMag, 40, 'подготовка: в стволе должно остаться 40');
+
+  // Как это делает `capturePlayerCarry`/`buildPlayerBody`: снимок, новое тело,
+  // тот же инвентарь. Нового поля переноса у магазина нет намеренно.
+  stashEquippedMagazine(before);
+  const carried = { inventory: [...before.inventory!], weapon: before.weapon };
+  const after: Entity = { ...makePlayer(), id: 2, ...carried };
+  loadEquippedMagazine(after);
+  assert.equal(after.currentMag, 40, 'новое тело вышло на этаж с пустым стволом');
+  assert.equal(canFire(after, WEAPON_STATS.ppsh), true, 'ствол после переезда не стреляет');
+
+  // Обратная сторона: без пары заряд пропадает — ровно это и было в игре.
+  const naive: Entity = { ...makePlayer(), id: 3, inventory: [...before.inventory!], weapon: before.weapon };
+  delete naive.currentMag;
+  assert.equal(canFire(naive, WEAPON_STATS.ppsh), false,
+    'тело без пары stash→load стреляет — значит замок держит не то');
+});
+
+test('сейв записывает живой магазин, а не устаревший из слота', () => {
+  const player = makePlayer();
+  addItem(player, 'ppsh', 1);
+  addItem(player, 'ammo_9mm', 71);
+  equip(player, 'ppsh');
+  reload(player, 'ppsh');
+  for (let i = 0; i < 31; i++) consumeAmmo(player, undefined, 'ppsh');
+  assert.equal(player.currentMag, 40, 'подготовка: в стволе должно остаться 40');
+
+  const payload = createGameSavePayload(player, makeGameState({ time: 40 }), []);
+  const slot = payload.player.inventory?.find(s => s.defId === 'ppsh');
+  assert.ok(slot, 'ствол не попал в сейв');
+  assert.deepEqual(slot.data, { mag: 40 },
+    `в сейв уехал магазин ${JSON.stringify(slot.data)}: заряд ствола не записан`);
 });
