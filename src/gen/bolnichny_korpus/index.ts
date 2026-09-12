@@ -92,16 +92,6 @@ import { lightBolnichnyKorpus } from './lighting';
 export const BOLNICHNY_KORPUS_ROUTE_ID = 'bolnichny_korpus' as const;
 export const BOLNICHNY_KORPUS_Z = 16 as const;
 
-export const BOLNICHNY_KORPUS_META = {
-  routeId: BOLNICHNY_KORPUS_ROUTE_ID,
-  displayName: 'Больничный корпус',
-  z: BOLNICHNY_KORPUS_Z,
-  // The corpus is a converted apartment/ward band: beds, queues and patient
-  // bypasses drive the route, while Ministry-style control appears as papers.
-  baseReason: 'kvartiry_converted_residential_hospital',
-  debugEntry: 'generateBolnichnyKorpusDesignFloor()',
-} as const;
-
 export const BOLNICHNY_ROOM_NAMES = {
   triageEntrance: 'Сортировочный вход больничного корпуса',
   checkpoint: 'Карантинный пост чистой петли',

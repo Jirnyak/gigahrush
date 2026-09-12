@@ -5,7 +5,6 @@ export const CHARACTER_AGE_MAX = 100;
 export const DEFAULT_PLAYER_AGE = 25;
 export const DEFAULT_PLAYER_SEX: CharacterSex = 'male';
 
-export const CHARACTER_SEX_UNSET = 0;
 export const CHARACTER_SEX_MALE = 1;
 export const CHARACTER_SEX_FEMALE = 2;
 

@@ -156,47 +156,6 @@ export function getMeshPassDebugStats(): MeshPassStats {
   return glState?.meshPass?.stats() ?? createMeshPassStats();
 }
 
-/** GPU texture bytes this renderer allocated, for the crash heartbeat.
- *
- * iOS WebKit exposes no memory API at all (`performance.memory` is Chrome-only),
- * and a killed tab leaves no console — so the only way to see what the phone was
- * holding is to account for it ourselves. Counted exactly:
- *   • sprite textures — the variable term, and the one that dominates: three
- *     caches of SPRITE_TEX_BYTES entries each, two of them capped at 8192.
- *   • per-cell data textures — fixed per context: nine R8UI planes (cells,
- *     wallTex, floorTex, features, ceilHeight, lightBlinks, fog, doorStates)
- *     at 1 byte, light at R32F, the surface index at R16UI.
- *   • the surface-mark atlas.
- * Deliberately NOT counted: the tile atlas, dynamic sky and the ray/bloom FBOs.
- * Together they are under ~2 MB and none of them grow during play, so folding
- * them in would cost a glState field and buy no discrimination.
- */
-export function getGlTextureMemoryStats(): {
-  spriteTextures: number;
-  proceduralSprites: number;
-  itemSprites: number;
-  spriteBytes: number;
-  dataTextureBytes: number;
-  totalBytes: number;
-} {
-  const staticSprites = glState?.spriteTextures.length ?? 0;
-  const proceduralSprites = glState?.proceduralSpriteTextures.size ?? 0;
-  const itemSprites = glState?.itemSpriteTextures.size ?? 0;
-  const spriteBytes = (staticSprites + proceduralSprites + itemSprites) * SPRITE_TEX_BYTES;
-  const perCellBytes = 8 * 1 + 4 + 2; // 8×R8UI + light R32F + surface index R16UI
-  const dataTextureBytes = glState
-    ? W * W * perCellBytes + SURF_ATLAS_SIZE * SURF_ATLAS_SIZE * 4
-    : 0;
-  return {
-    spriteTextures: staticSprites,
-    proceduralSprites,
-    itemSprites,
-    spriteBytes,
-    dataTextureBytes,
-    totalBytes: spriteBytes + dataTextureBytes,
-  };
-}
-
 /* ── GLSL Shaders ─────────────────────────────────────────────── */
 
 const VERT_SRC = /* glsl */ `#version 300 es

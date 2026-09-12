@@ -201,10 +201,6 @@ export function getNetHackTerminalAt(world: World, x: number, y: number): NetHac
   return netHackRegistry.get(world.idx(Math.floor(x), Math.floor(y)));
 }
 
-export function isNetHackTerminalTarget(world: World, x: number, y: number): boolean {
-  return !!getNetHackTerminalAt(world, x, y);
-}
-
 export function placeNetHackTerminal(world: World, x: number, y: number, defId: NetHackTerminalDefId): NetHackTerminal | null {
   const def = getNetHackTerminalDef(defId);
   if (!def) return null;

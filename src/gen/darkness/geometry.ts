@@ -1867,33 +1867,6 @@ export function getDarknessState(world: World): DarknessFloorState | null {
   return darknessStateByWorld.get(world) ?? null;
 }
 
-export function publishDarknessLateWarning(
-  state: GameState,
-  warningId: DarknessLateWarningId,
-  options: DarknessReturnTraceOptions = {},
-): WorldEvent {
-  const warning = DARKNESS_LATE_WARNINGS.find(item => item.id === warningId);
-  return publishEvent(state, {
-    type: 'samosbor_warning',
-    z: state.currentZ,
-    zoneId: options.sourceZoneId,
-    roomId: options.sourceRoomId,
-    x: options.x,
-    y: options.y,
-    actorName: 'Темный отсек',
-    targetName: warning?.label,
-    severity: 4,
-    privacy: 'secret',
-    tags: ['darkness', 'late_warning', warningId, ...(warning?.tags ?? [])],
-    data: {
-      routeId: DARKNESS_DESIGN_FLOOR_ID,
-      z: DARKNESS_FUTURE_Z,
-      warningId,
-      warning: warning?.warning,
-    },
-  });
-}
-
 export function publishDarknessReturnTrace(
   state: GameState,
   options: DarknessReturnTraceOptions = {},

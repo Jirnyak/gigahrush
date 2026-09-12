@@ -161,12 +161,6 @@ export function liveWorldCount(): number {
   return liveWorlds;
 }
 
-/** Highest `liveWorldCount()` seen this session — survives the GC lag that makes
- *  a single reading unreliable, so this is the figure worth putting in a dump. */
-export function peakLiveWorldCount(): number {
-  return peakLiveWorlds;
-}
-
 /** Test-only: forget the peak so one case cannot poison the next. */
 export function resetPeakLiveWorldCount(): void {
   peakLiveWorlds = liveWorlds;

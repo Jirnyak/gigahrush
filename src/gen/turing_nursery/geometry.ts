@@ -104,29 +104,6 @@ export interface TuringNurseryMetrics {
  * на постройке: там и `paintRoomTerritory`, и `decorateHqCore`. Подключать его
  * было бы не «починкой забытого вызова», а вторым проходом по уже покрашенному. */
 
-export function hardenTuringHqRoom(world: World, room: Room, owner: TerritoryOwner, wallTex: Tex, floorTex: Tex): void {
-  room.type = RoomType.HQ;
-  room.sealed = true;
-  room.wallTex = wallTex;
-  room.floorTex = floorTex;
-  for (let dy = -1; dy <= room.h; dy++) {
-    for (let dx = -1; dx <= room.w; dx++) {
-      const idx = world.idx(room.x + dx, room.y + dy);
-      const interior = dx >= 0 && dx < room.w && dy >= 0 && dy < room.h;
-      if (interior) {
-        if (world.roomMap[idx] === room.id) {
-          world.factionControl[idx] = owner;
-          world.floorTex[idx] = floorTex;
-        }
-      } else if (world.cells[idx] === Cell.WALL && !world.aptMask[idx]) {
-        world.hermoWall[idx] = 1;
-        world.wallTex[idx] = wallTex;
-      }
-    }
-  }
-  for (const idx of room.doors) world.factionControl[idx] = owner;
-}
-
 export function carveTuringMacroNetwork(world: World, field: ReactionField): void {
   carvePointRoute(world, [
     { x: 104, y: 168 },

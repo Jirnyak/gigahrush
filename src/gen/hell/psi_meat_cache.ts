@@ -185,20 +185,6 @@ export function generatePsiMeatCache(
   };
 }
 
-export function getPsiMeatCacheDebugSite(): PsiCacheSite | null {
-  return activeSite ? {
-    ...activeSite,
-    branches: { ...activeSite.branches },
-    backlashIds: [...activeSite.backlashIds],
-  } : null;
-}
-
-export function resetPsiMeatCacheForTests(): void {
-  activeWorld = null;
-  activeEntities = null;
-  activeSite = null;
-}
-
 function handlePsiMeatCacheEvent(state: GameState, event: WorldEvent): void {
   if (event.tags.includes(CACHE_EVENT_TAG)) return;
   const site = activeSite;

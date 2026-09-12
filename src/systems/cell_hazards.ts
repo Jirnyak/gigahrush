@@ -465,32 +465,6 @@ export function clearCellHazards(world: World): void {
   runtimes.delete(world);
 }
 
-export function deactivateCellHazardSite(
-  world: World,
-  id: string,
-  state?: GameState,
-  actor?: Entity,
-  reason: CellHazardCleanReason = 'tool',
-): number {
-  const runtime = runtimes.get(world);
-  if (!runtime) return 0;
-  const site = runtime.sites.find(candidate => candidate.id === id);
-  if (!site || site.cells.length === 0) return 0;
-
-  const cleaned = site.activeCells.size > 0 ? site.activeCells.size : site.cells.length;
-  site.activeCells.clear();
-  site.cells = [];
-  rebuildCellIndex(runtime);
-  if (state) {
-    publishHazardEvent(state, 'hazard_cleaned', site, 4, actor, {
-      cleanedCells: cleaned,
-      remainingCells: 0,
-      reason,
-    });
-  }
-  return cleaned;
-}
-
 export function getCellHazardMoveMultiplier(world: World, e: Entity): number {
   if (!isPlayerEntity(e) && e.type !== EntityType.NPC) return 1;
   const runtime = runtimes.get(world);

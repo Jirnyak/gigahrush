@@ -628,12 +628,6 @@ export function adjustMapEditorZoom(delta: number): void {
   runtime.zoom = Math.max(1, Math.min(64, runtime.zoom + delta));
 }
 
-export function cycleMapEditorTool(delta = 1): void {
-  const idx = TOOLS.indexOf(runtime.tool);
-  runtime.tool = TOOLS[(idx + delta + TOOLS.length) % TOOLS.length];
-  runtime.error = '';
-}
-
 export function cycleMapEditorBrush(delta = 1): void {
   const max = brushCount(runtime.tool);
   runtime.brushIndex[runtime.tool] = (runtime.brushIndex[runtime.tool] + delta + max) % max;

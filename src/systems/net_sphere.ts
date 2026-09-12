@@ -170,7 +170,6 @@ const MARKET_POLL_MS = 30_000;
 const NET_FETCH_TIMEOUT_MS = 10_000;
 const CHAT_LIMIT = 300;
 const DRAFT_LIMIT = 160;
-const MARKET_IMPULSE_LIMIT = 16;
 const INVADE_POLL_MS = 5_000;
 const INVADE_POLL_TRIES = 36;
 const INVASION_REWARN_MS = 180_000;
@@ -335,48 +334,9 @@ function cleanNickname(value: string): string {
   return looksLikeNetGen(clean) ? '' : clean;
 }
 
-function cleanMarketEventKey(value: string): string {
-  return value.trim().replace(/[^A-Za-z0-9:_-]/g, '').slice(0, 96);
-}
-
 function cleanMarketCorpId(value: string): string {
   const clean = value.trim().toLowerCase().replace(/[^a-z0-9:_-]/g, '').slice(0, 64);
   return /^[a-z0-9][a-z0-9:_-]{0,63}$/.test(clean) ? clean : '';
-}
-
-function cleanMarketKind(value: string): string {
-  const clean = value.trim().toLowerCase().replace(/[^a-z0-9:_-]/g, '').slice(0, 32);
-  return /^[a-z][a-z0-9:_-]{0,31}$/.test(clean) ? clean : '';
-}
-
-function cleanMarketMagnitude(value: number): number | null {
-  if (!Number.isFinite(value)) return null;
-  const bounded = Math.max(-100, Math.min(100, value));
-  return Math.round(bounded * 100) / 100;
-}
-
-function normalizeMarketImpulse(impulse: NetMarketImpulse): NetMarketImpulse | null {
-  const eventKey = cleanMarketEventKey(impulse.eventKey);
-  const corpId = cleanMarketCorpId(impulse.corpId);
-  const kind = cleanMarketKind(impulse.kind);
-  const magnitude = cleanMarketMagnitude(impulse.magnitude);
-  if (!eventKey || !corpId || !kind || magnitude === null) return null;
-  return { eventKey, corpId, kind, magnitude };
-}
-
-function normalizeMarketImpulses(impulses: readonly NetMarketImpulse[]): NetMarketImpulse[] {
-  const clean: NetMarketImpulse[] = [];
-  for (const impulse of impulses) {
-    const normalized = normalizeMarketImpulse(impulse);
-    if (!normalized) continue;
-    const prefix = `${runtime.netGen}:`;
-    clean.push({
-      ...normalized,
-      eventKey: normalized.eventKey.startsWith(prefix) ? normalized.eventKey : `${prefix}${normalized.eventKey}`,
-    });
-    if (clean.length >= MARKET_IMPULSE_LIMIT) break;
-  }
-  return clean;
 }
 
 function normalizeMarketSnapshot(value: unknown): NetMarketSnapshot | null {
@@ -655,29 +615,6 @@ async function pollMarketSnapshot(): Promise<void> {
     runtime.status = 'offline';
     if (!runtime.error || runtime.error.startsWith('Маркет')) runtime.error = netFailureText(err, 'market');
     runtime.nextMarketPollAt = performance.now() + 10_000;
-  } finally {
-    runtime.marketBusy = false;
-  }
-}
-
-async function postMarketImpulses(impulses: readonly NetMarketImpulse[], progress: NetSphereProgress): Promise<void> {
-  if (runtime.marketBusy) return;
-  const cleanImpulses = normalizeMarketImpulses(impulses);
-  if (cleanImpulses.length === 0) return;
-  runtime.marketBusy = true;
-  try {
-    const data = await postJson('/market', {
-      netGen: runtime.netGen,
-      sessionId: runtime.sessionId,
-      progress,
-      impulses: cleanImpulses,
-    });
-    applyServerPayload(data);
-    runtime.status = 'online';
-    runtime.nextMarketPollAt = performance.now() + MARKET_POLL_MS;
-  } catch (err) {
-    runtime.status = 'offline';
-    if (!runtime.error || runtime.error.startsWith('Маркет')) runtime.error = netFailureText(err, 'market_post');
   } finally {
     runtime.marketBusy = false;
   }
@@ -1087,16 +1024,6 @@ export function pollNetMarketSnapshot(): void {
 
 export function getNetMarketSnapshot(): NetMarketSnapshot | null {
   return runtime.market;
-}
-
-export function sendNetMarketImpulses(
-  impulses: readonly NetMarketImpulse[],
-  state: GameState,
-  player: Entity,
-): void {
-  if (!portalAllowsOptionalNetwork()) return;
-  ensureIdentity();
-  void postMarketImpulses(impulses, progressFromState(state, player));
 }
 
 export function reportNetSphereEvent(

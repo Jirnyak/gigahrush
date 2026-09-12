@@ -258,12 +258,6 @@ export function replaceEmergencyPanelStateForRebuild(target: World, source?: Wor
   if (menuState && (menuState.world === target || menuState.world === source)) menuState = null;
 }
 
-export function emergencyPanelInteractionTargetId(world: World, lookX: number, lookY: number): number | null {
-  const panel = getEmergencyPanelAt(world, lookX, lookY);
-  if (!panel) return null;
-  return panel.idx + 620000;
-}
-
 export function tryUseEmergencyPanel(world: World, _player: Entity, state: GameState, lookX: number, lookY: number): boolean {
   const panel = getEmergencyPanelAt(world, lookX, lookY);
   if (!panel) return false;

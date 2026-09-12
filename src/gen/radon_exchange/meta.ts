@@ -15,13 +15,6 @@ export const RADON_EXCHANGE_Z = 44 as const;
 
 export const RADON_EXCHANGE_PROJECTION_KEY = 'key' as const;
 
-export const RADON_EXCHANGE_META = {
-  routeId: RADON_EXCHANGE_ROUTE_ID,
-  displayName: 'Радоновый обменник',
-  z: RADON_EXCHANGE_Z,
-  debugEntry: 'generateRadonExchangeDesignFloor()',
-} as const;
-
 export const RADON_EXCHANGE_ROOM_NAMES = {
   exchangeHall: 'Радоновый обменный зал',
   zeroRadius: 'Узел нулевого радиуса',

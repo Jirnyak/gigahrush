@@ -75,11 +75,6 @@ export function resetRaionsovetArchiveDecisions(): void {
   announcedTargets.clear();
 }
 
-/** Для замка: что этаж уже объявил миру. */
-export function announcedRaionsovetArchiveEvents(): readonly string[] {
-  return [...announcedQuests, ...announcedTargets];
-}
-
 function checkForItem(itemId: string | undefined) {
   if (!itemId) return undefined;
   return RAIONSOVET_ARCHIVE_ACCESS_CHECKS.find(c => c.legalItemId === itemId || c.illegalItemId === itemId);

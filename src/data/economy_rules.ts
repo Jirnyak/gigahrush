@@ -92,21 +92,6 @@ export function npcWealthMultiplier(z: number, floorKey: string): number {
 
 export const ECONOMY_ROUTE_BLACK_MARKET_88 = 'black_market_88';
 
-export const BLACK_MARKET_88_ROUTE_RESOURCE_IDS = [
-  'slime_samples',
-  'contraband',
-  'zhelemish',
-  'documents',
-  'paper',
-  'food',
-  'ammo',
-  'medicine',
-  'tools',
-  'electronics',
-  'industrial_slurry',
-  'psi',
-] as const;
-
 export const ECONOMY_DEMAND_RULES: readonly EconomyDemandRule[] = [
   { floor: 30, resourceId: 'documents', multiplier: 1.36, reason: 'ministry_document_demand', tags: ['ministry', 'documents'] },
   { floor: 30, resourceId: 'paper', multiplier: 1.28, reason: 'ministry_paper_queue', tags: ['ministry', 'paper'] },
@@ -143,113 +128,6 @@ export const ECONOMY_DEMAND_RULES: readonly EconomyDemandRule[] = [
   { floor: -50, resourceId: 'psi', multiplier: 1.42, reason: 'void_psi_demand', tags: ['void', 'psi'] },
   { floor: -50, resourceId: 'electronics', multiplier: 1.22, reason: 'void_signal_demand', tags: ['void', 'electronics'] },
   { floor: -50, resourceId: 'documents', multiplier: 1.18, reason: 'void_record_demand', tags: ['void', 'documents'] },
-];
-
-export const ECONOMY_ROUTE_DECISION_RULES: readonly EconomyRouteDecisionRule[] = [
-  {
-    routeId: ECONOMY_ROUTE_BLACK_MARKET_88,
-    id: 'sell_sample',
-    label: 'Сдать пробу или контрабанду',
-    heatDelta: 4,
-    trustDelta: 1,
-    debtDelta: -6,
-    demandDelta: 0.06,
-    severity: 3,
-    rumorIds: ['market88_white_sample_no_lamp', 'market88_nii_receipt_silver', 'govnyak_trade', 'faction_scientist_zhelemish_sample'],
-    tags: ['market88', 'sale', 'sample', 'contraband'],
-  },
-  {
-    routeId: ECONOMY_ROUTE_BLACK_MARKET_88,
-    id: 'pay_debt',
-    label: 'Погасить долг',
-    heatDelta: -5,
-    trustDelta: 1,
-    debtDelta: -88,
-    demandDelta: -0.04,
-    severity: 2,
-    rumorIds: ['smoking_debt_notebook', 'floor69_market88_line'],
-    tags: ['market88', 'debt', 'payment'],
-  },
-  {
-    routeId: ECONOMY_ROUTE_BLACK_MARKET_88,
-    id: 'steal',
-    label: 'Украсть из рыночного ящика',
-    heatDelta: 18,
-    trustDelta: -2,
-    debtDelta: 32,
-    demandDelta: 0.08,
-    severity: 5,
-    rumorIds: ['container_black_market_88_locker', 'market88_cold_storage_theft'],
-    tags: ['market88', 'theft', 'debt'],
-  },
-  {
-    routeId: ECONOMY_ROUTE_BLACK_MARKET_88,
-    id: 'risky_job',
-    label: 'Взять опасную работу',
-    heatDelta: 8,
-    trustDelta: 1,
-    debtDelta: 12,
-    demandDelta: 0.05,
-    severity: 4,
-    rumorIds: ['contract_black_market_88_counter', 'contract_scarcity_pressure'],
-    tags: ['market88', 'contract', 'risk'],
-  },
-  {
-    routeId: ECONOMY_ROUTE_BLACK_MARKET_88,
-    id: 'report',
-    label: 'Сдать рынок или улику',
-    heatDelta: 14,
-    trustDelta: -2,
-    debtDelta: -24,
-    demandDelta: -0.06,
-    severity: 4,
-    rumorIds: ['event_govnyak_den_report', 'market88_liquidator_protection_token'],
-    tags: ['market88', 'report', 'authority'],
-  },
-];
-
-export const ECONOMY_ROUTE_SAMOSBOR_DEMAND_RULES: readonly EconomyRouteSamosborDemandRule[] = [
-  {
-    routeId: ECONOMY_ROUTE_BLACK_MARKET_88,
-    variantId: 'classic',
-    heatDelta: 4,
-    resourcePressure: [
-      { resourceId: 'ammo', multiplier: 1.20, reason: 'classic_samosbor_ammo_bid', tags: ['samosbor', 'classic', 'ammo'] },
-      { resourceId: 'medicine', multiplier: 1.18, reason: 'classic_samosbor_medicine_bid', tags: ['samosbor', 'classic', 'medicine'] },
-    ],
-    rumorIds: ['economy_black_market_88_medicine', 'contract_scarcity_pressure'],
-  },
-  {
-    routeId: ECONOMY_ROUTE_BLACK_MARKET_88,
-    variantId: 'wet',
-    heatDelta: 3,
-    resourcePressure: [
-      { resourceId: 'tools', multiplier: 1.22, reason: 'wet_samosbor_filter_bid', tags: ['samosbor', 'wet', 'filters'] },
-      { resourceId: 'food', multiplier: 1.12, reason: 'wet_samosbor_dry_food_bid', tags: ['samosbor', 'wet', 'dry_food'] },
-    ],
-    rumorIds: ['samosbor_wet_variant', 'market88_filter_stall_route'],
-  },
-  {
-    routeId: ECONOMY_ROUTE_BLACK_MARKET_88,
-    variantId: 'electric',
-    heatDelta: 5,
-    resourcePressure: [
-      { resourceId: 'electronics', multiplier: 1.24, reason: 'electric_samosbor_battery_bid', tags: ['samosbor', 'electric', 'battery'] },
-      { resourceId: 'ammo', multiplier: 1.10, reason: 'electric_samosbor_energy_ammo', tags: ['samosbor', 'electric', 'ammo'] },
-    ],
-    rumorIds: ['samosbor_electric_variant', 'market88_floor69_fuse_flip'],
-  },
-  {
-    routeId: ECONOMY_ROUTE_BLACK_MARKET_88,
-    variantId: 'meat',
-    heatDelta: 10,
-    resourcePressure: [
-      { resourceId: 'zhelemish', multiplier: 1.22, reason: 'meat_samosbor_cult_reagent_bid', tags: ['samosbor', 'meat', 'zhelemish'] },
-      { resourceId: 'contraband', multiplier: 1.16, reason: 'meat_samosbor_cult_trade', tags: ['samosbor', 'meat', 'contraband'] },
-      { resourceId: 'psi', multiplier: 1.12, reason: 'meat_samosbor_psi_bid', tags: ['samosbor', 'meat', 'psi'] },
-    ],
-    rumorIds: ['samosbor_meat_variant', 'faction_cult_zhelemish_first_gift'],
-  },
 ];
 
 export const ECONOMY_TARIFF_RULES: readonly EconomyTariffRule[] = [

@@ -43,17 +43,6 @@ export type ServicePowerZoneId = 'machine_hall' | 'breaker_room' | 'staff_route'
 
 export const serviceUtilityGraphs = new WeakMap<World, ServiceUtilityGraph>();
 
-export function getServiceUtilityGraph(world: World): ServiceUtilityGraph | undefined {
-  const graph = serviceUtilityGraphs.get(world);
-  if (!graph) return undefined;
-  return {
-    routeId: graph.routeId,
-    nodes: graph.nodes.map(node => ({ ...node })),
-    edges: graph.edges.map(edge => ({ ...edge })),
-    drainageBasins: graph.drainageBasins.map(basin => ({ ...basin })),
-  };
-}
-
 export function ensureServiceUtilityGraph(world: World): ServiceUtilityGraph {
   let graph = serviceUtilityGraphs.get(world);
   if (!graph) {

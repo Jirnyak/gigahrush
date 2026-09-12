@@ -80,12 +80,6 @@ export function playerStatusDef(id: PlayerStatusId): PlayerStatusDef {
   return PLAYER_STATUS_DEFS[id];
 }
 
-/** Все метки одной группы. Пустой список — статус вне групп. */
-export function playerStatusGroupIds(group: string): PlayerStatusId[] {
-  return (Object.keys(PLAYER_STATUS_DEFS) as PlayerStatusId[])
-    .filter(id => PLAYER_STATUS_DEFS[id].group === group);
-}
-
 /* ── Говняк: что делает затяжка ─────────────────────────────────────
  * Чистые данные сделки. Механика — `systems/status.ts`; своей системы у говняка
  * больше нет, она была 337 строк и повторяла общую обвязку статусов.

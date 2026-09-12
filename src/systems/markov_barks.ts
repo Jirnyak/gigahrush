@@ -233,14 +233,6 @@ export function generateMarkovBark(request: MarkovBarkRequest): MarkovSpeechAdap
   return normalizeRouterResult(result, request.exactFallback, maxChars, MAX_MARKOV_BARK_CHARS);
 }
 
-export function generateAmbientBark(request: Omit<MarkovBarkRequest, 'signal'>): MarkovSpeechAdapterResult | undefined {
-  return generateMarkovBark({ ...request, signal: 'ambient' });
-}
-
-export function generateWitnessBark(request: Omit<MarkovBarkRequest, 'signal'>): MarkovSpeechAdapterResult | undefined {
-  return generateMarkovBark({ ...request, signal: 'witness' });
-}
-
 export function normalizeRouterResult(
   result: MarkovSpeechRouterResult,
   exactFallback: string | undefined,

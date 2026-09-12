@@ -80,8 +80,6 @@ export function nextIntentMsg(intent: PeerIntent): PeerIntentMsg {
 
 export function peerLastSentSeq(): number { return _nextIntentSeq - 1; }
 
-export function resetPeerIntentSeq(): void { _nextIntentSeq = 1; }
-
 /** Sanitize an incoming intent on the host. Returns null when malformed. */
 export function sanitizeIntent(raw: unknown): PeerIntent | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -300,10 +298,6 @@ let _touchedCells = new Set<number>();
 /** Host: mark a cell index as needing a net patch (bounded drain per tick). */
 export function markNetCellTouched(idx: number): void {
   _touchedCells.add(idx);
-}
-
-export function markNetCellsTouched(idxs: Iterable<number>): void {
-  for (const i of idxs) _touchedCells.add(i);
 }
 
 export function drainNetCellPatch(world: World): CellPatch[] {

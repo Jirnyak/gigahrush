@@ -751,12 +751,6 @@ export function mapColorMode(): MapColorMode {
   return settings.mapColorMode;
 }
 
-export function setMapColorMode(mode: MapColorMode): MapColorMode {
-  settings.mapColorMode = normalizeMapColorMode(mode);
-  saveUiSettings();
-  return settings.mapColorMode;
-}
-
 export function mapHighContrastEnabled(): boolean {
   if (typeof settings.mapHighContrast !== 'boolean') settings.mapHighContrast = MAP_HIGH_CONTRAST_DEFAULT;
   return settings.mapHighContrast;

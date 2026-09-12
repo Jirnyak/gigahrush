@@ -172,12 +172,6 @@ export function spawnHellAltarArena(world: World, entities: Entity[], nextId: { 
 }
 
 
-export function resetHellAltarArenaForTests(): void {
-  activeWorld = null;
-  activeEntities = null;
-  activeSite = null;
-}
-
 function findArenaSite(world: World): Site | null {
   const cx = W >> 1;
   const cy = W >> 1;

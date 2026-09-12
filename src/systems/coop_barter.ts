@@ -17,7 +17,7 @@
  * an abandoned barter must leave both inventories untouched.
  */
 
-import { type Entity, type GameState, type Item, msg } from '../core/types';
+import { type Entity, type GameState, msg } from '../core/types';
 import { ITEMS } from '../data/catalog';
 import { addItem, removeItem } from './inventory';
 import { publishEvent } from './events';
@@ -337,14 +337,6 @@ function stage(offer: BarterOfferItem[], slot: BarterOfferItem): boolean {
   if (offer.length >= MAX_OFFER_LINES) return false;
   offer.push({ defId: slot.defId, count: 1, data: slot.data });
   return true;
-}
-
-/** Peer: the staged basket to mirror to the host, bounded like the wire type. */
-export function coopBarterOfferForWire(seat: CoopSeat): Item[] {
-  const t = table;
-  if (!t) return [];
-  return seatState(t, seat).offer.slice(0, MAX_OFFER_LINES)
-    .map(line => ({ defId: line.defId, count: line.count, data: line.data }));
 }
 
 registerCoopActivity({

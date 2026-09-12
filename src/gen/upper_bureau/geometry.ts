@@ -15,7 +15,6 @@ import {
   Tex,
   ZoneFaction,
   type Entity,
-  type GameState,
   type Room,
   type TerritoryOwner,
   type WorldContainer,
@@ -23,7 +22,6 @@ import {
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerFloorSideQuest } from '../../data/plot';
 import { calcZoneLevel } from '../../systems/rpg';
-import { publishEvent } from '../../systems/events';
 import { setTerritoryOwnerAtIndex, syncZoneMetadataFromTerritory } from '../../systems/territory';
 import { ensureConnectivity, generateZones, stampRoom } from '../shared';
 import { placeProceduralScreens } from '../../world/procedural_screens';
@@ -735,79 +733,6 @@ export interface UpperBureauFlagChange {
 
 export function clampUpperBureauAuditHeat(value: number): number {
   return Math.max(0, Math.min(UPPER_BUREAU_AUDIT_HEAT_MAX, Math.floor(value)));
-}
-
-export function applyUpperBureauFlagChange(
-  state: GameState,
-  current: UpperBureauFlags,
-  change: UpperBureauFlagChange,
-): UpperBureauFlags {
-  const next: UpperBureauFlags = { ...current };
-  let auditChanged = false;
-  let recordChanged = false;
-  let routeChanged = false;
-
-  if (change.appointmentToken !== undefined && next.appointmentToken !== change.appointmentToken) {
-    next.appointmentToken = change.appointmentToken;
-    routeChanged = true;
-  }
-  if (change.staffRouteKnown !== undefined && next.staffRouteKnown !== change.staffRouteKnown) {
-    next.staffRouteKnown = change.staffRouteKnown;
-    routeChanged = true;
-  }
-  if (change.auditHeat !== undefined || change.auditHeatDelta !== undefined) {
-    const rawHeat = change.auditHeat ?? next.auditHeat + (change.auditHeatDelta ?? 0);
-    const heat = clampUpperBureauAuditHeat(rawHeat);
-    auditChanged = heat !== next.auditHeat;
-    next.auditHeat = heat;
-  }
-  if (change.nameErased !== undefined && next.nameErased !== change.nameErased) {
-    next.nameErased = change.nameErased;
-    recordChanged = true;
-  }
-
-  if (auditChanged || recordChanged || routeChanged) {
-    const severity = next.auditHeat >= 3 ? 5 : recordChanged ? 4 : 3;
-    publishEvent(state, {
-      type: 'faction_relation_changed',
-      z: UPPER_BUREAU_Z,
-      zoneId: change.zoneId,
-      roomId: change.roomId,
-      x: change.x,
-      y: change.y,
-      actorId: change.actor?.id,
-      actorName: change.actor?.name,
-      actorFaction: change.actor?.faction,
-      targetName: recordChanged ? UPPER_BUREAU_FLAG_IDS.nameErased : UPPER_BUREAU_FLAG_IDS.auditHeat,
-      itemId: change.documentItemId,
-      severity,
-      privacy: next.auditHeat >= 2 ? 'local' : 'private',
-      tags: [
-        'upper_bureau',
-        auditChanged ? 'audit_heat' : 'route_flag',
-        recordChanged ? 'record_edit' : 'access',
-      ],
-      data: {
-        routeId: UPPER_BUREAU_ROUTE_ID,
-        reason: change.reason,
-        appointmentToken: next.appointmentToken,
-        staffRouteKnown: next.staffRouteKnown,
-        auditHeat: next.auditHeat,
-        auditHeatMax: UPPER_BUREAU_AUDIT_HEAT_MAX,
-        nameErased: next.nameErased,
-        documentItemId: change.documentItemId,
-      },
-    });
-  }
-
-  return next;
-}
-
-export function upperBureauDebugLine(flags: UpperBureauFlags = createUpperBureauFlags()): string {
-  return `${UPPER_BUREAU_ROUTE_ID} z=${UPPER_BUREAU_ANCHOR_Z} `
-    + `token=${flags.appointmentToken ? 1 : 0} staff=${flags.staffRouteKnown ? 1 : 0} `
-    + `audit=${clampUpperBureauAuditHeat(flags.auditHeat)}/${UPPER_BUREAU_AUDIT_HEAT_MAX} `
-    + `erased=${flags.nameErased ? 1 : 0}`;
 }
 
 export function fillDefaultTextures(world: World): void {

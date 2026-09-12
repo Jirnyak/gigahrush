@@ -13,15 +13,6 @@ export const RAIONSOVET_ARCHIVE_ROUTE_ID = 'raionsovet_archive' as const;
 
 export const RAIONSOVET_ARCHIVE_Z = 22;
 
-export const RAIONSOVET_ARCHIVE_DEBUG_SEED = 602006;
-
-export const RAIONSOVET_ARCHIVE_META = {
-  routeId: RAIONSOVET_ARCHIVE_ROUTE_ID,
-  displayName: 'Райсовет и архив картотек',
-  z: RAIONSOVET_ARCHIVE_Z,
-  debugEntry: 'generateRaionsovetArchiveDesignFloor()',
-} as const;
-
 export const RAIONSOVET_ARCHIVE_DOCUMENTS: readonly RaionsovetArchiveDocument[] = [
   {
     id: 'doc_archive_floor_permit',

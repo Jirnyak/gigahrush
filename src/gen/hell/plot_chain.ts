@@ -24,10 +24,6 @@ const HELL_Z = -36;
  */
 export const HELL_ANCHOR_ZONE_ALIAS = PLOT_ROOMS.hell_anchor_zone.name;
 
-/** Те же адреса для двух других объявленных комнат Мясного низа. */
-export const HELL_CONTACT_CELL_ALIAS = PLOT_ROOMS.hell_contact_cell.name;
-export const HERALD_THRESHOLD_ALIAS = PLOT_ROOMS.herald_threshold.name;
-
 /**
  * Зонный тег порога. Им два культовых контракта (`data/contracts.ts`,
  * `exp_hell_threshold_inspect` и `exp_hell_herald_bounty`) адресуют цель, а

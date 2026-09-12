@@ -8,7 +8,6 @@ import {
   type WorldEvent,
   MonsterKind,
   type WorldEventType,
-  msgAt,
 } from "../core/types";
 import { getCurrentPlayerId } from "./player_actor";
 
@@ -128,19 +127,6 @@ export function worldLogLocationIsAudible(
   const radius = currentSpatialContext()?.audibleRadiusMeters;
   if (!Number.isFinite(radius)) return true;
   return distanceMeters <= Math.max(0, radius!);
-}
-
-export function pushLocalizedMessage(
-  msgs: Msg[],
-  text: string,
-  time: number,
-  color: string,
-  location: MsgLocation,
-): boolean {
-  const distanceMeters = worldLogDistanceForLocation(location);
-  if (!worldLogLocationIsAudible(location, distanceMeters)) return false;
-  msgs.push(msgAt(text, time, color, location, distanceMeters ?? 0));
-  return true;
 }
 
 function eventKey(e: WorldEvent): string {

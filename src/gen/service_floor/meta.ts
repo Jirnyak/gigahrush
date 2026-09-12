@@ -185,12 +185,6 @@ export interface ServiceFloorExpansionStyle {
   floorTex: DoorState | number;
 }
 
-export const SERVICE_FLOOR_MASTER_SCOPE = {
-  tag: MASTER_SCOPE_TAG,
-  rooms: [JANITOR_DEPOT, CLERK_OFFICE],
-  note: 'Scoped to recorded Service Floor doors and containers only; it does not use the generic key door path.',
-} as const;
-
 export const SERVICE_TRANSFER_ROUTES: readonly ServiceTransferRoute[] = [
   {
     id: 'service_to_production_belt_feed',

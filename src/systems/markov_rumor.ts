@@ -131,10 +131,6 @@ export function renderMarkovRumorFlavor(options: MarkovRumorFlavorOptions): Mark
   };
 }
 
-export function renderMarkovRumorText(options: MarkovRumorFlavorOptions): string {
-  return renderMarkovRumorFlavor(options).text;
-}
-
 function renderRumorFallback(rumor: RumorDef, options: MarkovRumorFlavorOptions): string {
   const memory = options.memory;
   const idxSeed = memory

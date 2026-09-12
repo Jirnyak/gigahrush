@@ -14,11 +14,7 @@ export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('pioneer_camp');
 
 export const PIONEER_CAMP_DESIGN_FLOOR_ID = 'pioneer_camp' as const;
 
-export const PIONEER_CAMP_ROUTE_Z = 38;
-
 export const PIONEER_CAMP_Z = 38;
-
-export const PIONEER_CAMP_DISPLAY_NAME = 'Пионерлагерь';
 
 export const CAMP_SEED = hashSeed(PIONEER_CAMP_DESIGN_FLOOR_ID);
 

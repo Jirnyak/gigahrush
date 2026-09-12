@@ -319,20 +319,6 @@ export function generateHell18ChoirTax(world: World, entities: Entity[], nextId:
   genLog(`[FLOOR18_HELL] ${room.name} at (${room.x}, ${room.y}) room #${room.id}; enemies ${HELL18_CHOIR_MONSTER_CAP + HELL18_CHOIR_CULTIST_CAP}, reward claims ${HELL18_CHOIR_REWARD_CLAIM_CAP}`);
 }
 
-export function getHell18ChoirTaxDebugSite(): ChoirSite | null {
-  return activeSite ? {
-    ...activeSite,
-    branches: { ...activeSite.branches },
-    backlashIds: [...activeSite.backlashIds],
-  } : null;
-}
-
-export function resetHell18ChoirTaxForTests(): void {
-  activeWorld = null;
-  activeEntities = null;
-  activeSite = null;
-}
-
 function handleHell18QuestOutcome(state: GameState, event: WorldEvent): void {
   if (event.tags.includes(BRANCH_EVENT_TAG)) return;
   if (event.type === 'quest_completed' && !event.tags.includes(OUTCOME_EVENT_TAG)) {

@@ -16,7 +16,6 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { publishEvent } from '../../systems/events';
-import { syncZoneMetadataFromTerritory } from '../../systems/territory';
 import {
   connectRoomsMST,
   ensureConnectivity,
@@ -32,7 +31,6 @@ import { finalizeExpandedFloor} from '../shared';
 
 import {
   RoofSkyTextureProvider,
-  applyRoofTerritoryField,
   clampSignalQuality,
   wrap01,
   clamp01,
@@ -369,17 +367,6 @@ export function expandRoofArchipelago(world: World, rng: () => number): void {
     eastLane, signalOutpost, southShelters, waterDeck, tarPocket,
   ]);
   applyUniformSkyLight(world);
-}
-
-export function retuneRoofPressureZones(world: World): void {
-  for (const zone of world.zones) {
-    const d = world.dist(zone.cx, zone.cy, CX, CY);
-    zone.level = d > 300 ? 5 : d > 150 ? 4 : 3;
-    zone.fogged = false;
-  }
-
-  applyRoofTerritoryField(world);
-  syncZoneMetadataFromTerritory(world);
 }
 
 export function buildRoofLosExposureHeatmap(world: World): Uint8Array {

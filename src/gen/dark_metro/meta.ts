@@ -20,7 +20,6 @@ import type { FloorGeneration } from '../floor_manifest';
 export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('dark_metro');
 
 export const DESIGN_FLOOR_ID = 'dark_metro' as const;
-export const DARK_METRO_DISPLAY_NAME = 'Темная пересадка';
 export const DARK_METRO_FUTURE_Z = -32;
 export const DARK_METRO_DEFAULT_SEED = 0x17da_4b0d;
 
@@ -372,46 +371,6 @@ export function createDarkMetroFloorState(packedState = initialDarkMetroState())
       .filter(route => route.tags.includes('shortcut'))
       .map(route => route.id),
   };
-}
-
-export function publishDarkMetroRouteEvent(
-  state: GameState,
-  world: World,
-  actor: Entity,
-  routeId: DarkMetroRouteId,
-  packedState = initialDarkMetroState(),
-): void {
-  const route = DARK_METRO_ROUTES.find(r => r.id === routeId) ?? DARK_METRO_ROUTES[3];
-  const parts = unpackDarkMetroState(packedState);
-  const wrongStop = route.id === parts.wrongRouteArmed && route.id !== 'dark_metro_platform_fallback';
-  const px = Math.floor(actor.x);
-  const py = Math.floor(actor.y);
-  const zoneId = world.zoneMap[world.idx(px, py)];
-  publishEvent(state, {
-    type: wrongStop ? 'metro_wrong_stop' : 'metro_route_taken',
-    zoneId: zoneId >= 0 ? zoneId : undefined,
-    x: actor.x,
-    y: actor.y,
-    actorId: actor.id,
-    actorName: actor.name ?? 'Вы',
-    actorFaction: actor.faction,
-    severity: wrongStop ? 4 : 3,
-    privacy: 'local',
-    tags: ['metro', 'dark_metro', route.id, wrongStop ? 'wrong_route' : 'route_taken'],
-    data: {
-      routeId: route.id,
-      routeLabel: route.label,
-      routeCostItem: route.costItem,
-      routeCostCount: route.costCount,
-      destinationHook: route.destinationHook,
-      fallbackRouteId: route.fallbackRouteId,
-      clue: route.clue,
-      platformLight: parts.platformLight,
-      signalBox: parts.signalBox,
-      strandedNpc: parts.strandedNpc,
-      futureHooks: route.tags,
-    },
-  });
 }
 
 /**

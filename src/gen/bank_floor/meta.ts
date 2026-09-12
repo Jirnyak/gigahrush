@@ -30,16 +30,6 @@ export const DESIGN_NPC_HOME_FLOOR_KEY = designNpcFloorKey('bank_floor');
 export const BANK_FLOOR_ROUTE_ID = 'bank_floor' as const;
 export const BANK_FLOOR_Z = 26;
 
-export const BANK_FLOOR_META = {
-  routeId: BANK_FLOOR_ROUTE_ID,
-  displayName: 'Банковский этаж',
-  z: BANK_FLOOR_Z,
-  // Bank B-22 lives in the Ministry band because money here is paperwork first:
-  // accounts, stamped debt, audits and liquidator-backed vault rules.
-  baseReason: 'ministry_bureaucratic_finance',
-  debugEntry: 'generateBankFloorDesignFloor()',
-} as const;
-
 export interface BankFloorState {
   routeId: typeof BANK_FLOOR_ROUTE_ID;
   anchorZ: typeof BANK_FLOOR_Z;
