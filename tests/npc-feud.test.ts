@@ -14,7 +14,7 @@ import {
   isDemosPersonalEnemy,
   setDemosSocialEdge,
 } from '../src/systems/demos_social';
-import { isHostile, isPersonalFeudEnemy, setFactionsSocialContext } from '../src/systems/factions';
+import { isHostile, isSideHostileToFaction, isPersonalFeudEnemy, setFactionsSocialContext } from '../src/systems/factions';
 import {
   isDuelLocked,
   notifyActorDamaged,
@@ -27,9 +27,12 @@ import { createWorldEventState, getRecentEvents } from '../src/systems/events';
 import { feudRoomHoldsEnemy, getFeudDebugStats, resetFeudDuels } from '../src/systems/npc_feud';
 import { makeGameState, makeTestNpc, addTestRoom } from './helpers';
 
-/* Личная вражда меняет ПОВЕДЕНИЕ, а не убивает: боевой целью она не делает,
-   помогать врагу никто не идёт, его комнату обходят, а копится она до одной
-   разборки один на один. */
+/* Личная вражда решает раньше фракции и делает пару боевыми целями (решение
+   владельца 2026-09-12). Помимо этого она меняет поведение: помогать врагу никто
+   не идёт, его комнату обходят, а копится она до одной разборки один на один.
+   Разборка не альтернатива бою, а его место и правила — поэтому её распорядитель
+   отсеивает только СТОРОННЮЮ вражду, иначе после правки не видел бы ни одной
+   законной пары. */
 
 function openWorld(): World {
   const world = new World();
@@ -86,7 +89,13 @@ test.afterEach(() => {
   resetCombatStimulus();
 });
 
-test('личная вражда больше не делает соседей боевой целью', () => {
+test('личная вражда делает боевой целью и при этом остаётся поводом для разборки', () => {
+  /* Две половины одного правила, и вторая — та, на которой механика разборки
+   * однажды умерла целиком. Личное ребро делает пару боевыми целями (решение
+   * владельца 2026-09-12), но распорядитель разборок обязан их ВИДЕТЬ: его
+   * фильтр «эти и так стреляют» спрашивает про СТОРОНЫ, а не про общий
+   * `isHostile`. Со старым фильтром ни один вызов больше не состоялся бы —
+   * замерено, ноль вызовов за двести тактов. */
   const state = socialState();
   setFactionsSocialContext(state);
   const a = neighbour(101, 1, 10, 10);
@@ -94,11 +103,13 @@ test('личная вражда больше не делает соседей б
 
   assert.equal(setDemosSocialEdge(state, 1, 2, RELATION_MIN), true);
   assert.equal(isDemosPersonalEnemy(state, 1, 2), true, 'ребро вражды в графе есть');
-  // Канал жив и читается — но отдельно от боевой цели.
   assert.equal(isPersonalFeudEnemy(a, b), true);
   assert.equal(isPersonalFeudEnemy(b, a), true);
-  assert.equal(isHostile(a, b), false, 'дружественные фракции — не враги');
-  assert.equal(isHostile(b, a), false);
+  assert.equal(isHostile(a, b), true, 'личное решает раньше фракции');
+  assert.equal(isHostile(b, a), true);
+  // Стороны при этом в мире — значит пара для распорядителя законная.
+  assert.equal(isSideHostileToFaction(a, Faction.CITIZEN, Faction.CITIZEN), false);
+  assert.equal(isSideHostileToFaction(b, Faction.CITIZEN, Faction.CITIZEN), false);
 });
 
 test('вражду с дикими решает личное число, а без личности — база таблицы', () => {

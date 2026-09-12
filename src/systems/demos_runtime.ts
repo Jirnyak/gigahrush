@@ -304,45 +304,75 @@ function applyFeedbackDelta(
   return 1;
 }
 
-function processDeathFeedback(
+/**
+ * Ответ круга близких на причинённый им вред.
+ *
+ * Одна дверь на смерть и на избиение, потому что закон один: цена — ровно то,
+ * чем пострадавший БЫЛ для оставшегося. Любил на всю шкалу — столько же и
+ * отнимется у обидчика; ненавидел — столько же прибавится. Ни деления, ни
+ * отдельных ставок за родню и друзей: вес связи и есть ставка, а «близость» —
+ * просто её величина.
+ *
+ * Отличаются только два входа, и оба — свойства СОБЫТИЯ, а не второй закон:
+ *
+ * - `share` — какая доля человека отнята. У смерти это единица. У удара — доля
+ *   снятого здоровья, поэтому полполоски стоит половины связи, и слабый со
+ *   сильным платят одинаково за одинаковое горе.
+ * - «узнали ли вообще». О смерти узнают по телу, поэтому она доходит всегда.
+ *   Об ударе — только через ОЧЕВИДЦА: избить человека наедине по-прежнему
+ *   ничего не стоит в глазах тех, кто его любит, и это решение владельца
+ *   (2026-09-12), а не недосмотр.
+ */
+function processHarmFeedback(
   state: GameState,
   event: WorldEvent,
   budget: { remaining: number; published: number },
-  maxDeathEdges: number,
+  maxEdges: number,
+  share: number,
 ): number {
   const victimAlifeId = targetAlifeId(event);
-  if (victimAlifeId === undefined) return 0;
-  // Игрок в графе — не запись A-Life, а собственный слот, поэтому убийца им
+  if (victimAlifeId === undefined || share <= 0) return 0;
+  // Игрок в графе — не запись A-Life, а собственный слот, поэтому обидчик им
   // опознаётся по типу события, а не по id.
-  const killerIsPlayer = event.type === 'player_kill_npc';
-  const killerAlifeId = actorAlifeId(event);
-  if (!killerIsPlayer && killerAlifeId === undefined) return 0;
+  const offenderIsPlayer = event.type.startsWith('player_');
+  const offenderAlifeId = actorAlifeId(event);
+  if (!offenderIsPlayer && offenderAlifeId === undefined) return 0;
   let changed = 0;
   let scanned = 0;
   for (const edge of getDemosNpcOnlySocialEdges(state, victimAlifeId)) {
-    if (scanned >= maxDeathEdges || budget.remaining <= 0) break;
+    if (scanned >= maxEdges || budget.remaining <= 0) break;
     scanned++;
-    if (edge.targetAlifeId === undefined || edge.targetAlifeId === killerAlifeId) continue;
-    // Цена смерти — ровно то, чем человек был для оставшегося. Любил на всю
-    // шкалу — столько же и отнимется у убийцы; ненавидел — столько же
-    // прибавится. Ни деления, ни отдельных ставок за родню и друзей: вес связи
-    // и есть ставка, а «близость» — просто её величина.
-    const delta = -edge.relation;
+    if (edge.targetAlifeId === undefined || edge.targetAlifeId === offenderAlifeId) continue;
+    const delta = Math.round(-edge.relation * share);
     if (delta === 0) continue;
     changed += applyFeedbackDelta(
       state,
       event,
       edge.targetAlifeId,
-      killerAlifeId,
+      offenderAlifeId,
       delta,
       0,
       delta < 0 ? 'bond_revenge' : 'bond_relief',
       budget,
-      // Только прямые связи убитого: расходиться дальше по знакомым весть не должна.
-      { toPlayer: killerIsPlayer, propagate: false },
+      // Только прямые связи пострадавшего: расходиться дальше по знакомым весть не должна.
+      { toPlayer: offenderIsPlayer, propagate: false },
     );
   }
   return changed;
+}
+
+/** Доля здоровья, снятая ударом; её считает публикатор события, у которого тело
+ *  в руках. Без очевидца круг об ударе не узнаёт вовсе. */
+function witnessedHurtShare(event: WorldEvent): number {
+  if (event.type !== 'player_hurt_npc' && event.type !== 'npc_hurt_npc') return 0;
+  const data = event.data as { witnesses?: unknown; hpShare?: unknown; killed?: unknown } | undefined;
+  // Добивающий удар платит кругу как СМЕРТЬ и только один раз: событие смерти
+  // выходит тем же кадром и несёт полный вес связи.
+  if (data?.killed === true) return 0;
+  const witnesses = typeof data?.witnesses === 'number' ? data.witnesses : 0;
+  if (!(witnesses > 0)) return 0;
+  const share = typeof data?.hpShare === 'number' ? data.hpShare : 0;
+  return Number.isFinite(share) ? Math.min(1, Math.max(0, share)) : 0;
 }
 
 function processEventFeedback(
@@ -361,7 +391,8 @@ function processEventFeedback(
   const actor = actorAlifeId(event);
   const target = targetAlifeId(event);
 
-  if (isDeathEvent(event)) changed += processDeathFeedback(state, event, localBudget, opts.maxDeathEdges);
+  if (isDeathEvent(event)) changed += processHarmFeedback(state, event, localBudget, opts.maxDeathEdges, 1);
+  else changed += processHarmFeedback(state, event, localBudget, opts.maxDeathEdges, witnessedHurtShare(event));
   if (event.type === 'quest_completed' || event.type === 'contract_completed') {
     changed += applyFeedbackDelta(state, event, target, actor, 6, DEMOS_EDGE_QUEST | DEMOS_EDGE_FRIEND, 'quest_gratitude', localBudget);
   }

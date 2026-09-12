@@ -415,6 +415,8 @@ function publishActorHurtEvent(
   source: CombatStimulusSource,
   time: number,
   engagedWithAttacker: boolean,
+  witnesses: number,
+  killed: boolean,
 ): void {
   if (!state || engagedWithAttacker) return;
   // Тварь бьёт молча: своего типа у неё нет, а `npc_hurt_npc` про неё соврал бы.
@@ -438,7 +440,24 @@ function publishActorHurtEvent(
     severity: cleanSeverity(damage >= 18 ? 4 : 3),
     privacy: 'local',
     tags: ['combat', 'damage', 'npc', source],
-    data: { damage: Math.round(damage * 10) / 10, source },
+    /* Личности сторон — чтобы круг близких избитого было кому адресовать, ровно
+     * как на слое убийств. `witnesses` — сколько человек УВИДЕЛИ удар: круг
+     * узнаёт об избиении только через очевидца, в отличие от смерти, о которой
+     * узнают по телу. Доля здоровья, а не абсолютный урон: полполоски слабому
+     * и сильному — одно и то же горе для того, кто его любит. */
+    data: {
+      damage: Math.round(damage * 10) / 10,
+      source,
+      witnesses,
+      /* Смертельный удар остаётся и ударом — его читают хоровая подать, пси-схрон
+       * и память комнаты, и отнимать у них событие незачем. Но КРУГУ близких он
+       * не платит: тем же кадром выходит событие смерти, и без этой пометки
+       * обидчик терял бы вес связи дважды за один удар. */
+      killed,
+      hpShare: Math.round(Math.min(1, Math.max(0, damage) / Math.max(1, victim.maxHp ?? victim.hp ?? damage)) * 100) / 100,
+      actorAlifeId: attacker.alifeId,
+      targetAlifeId: victim.alifeId,
+    },
   });
 }
 
@@ -521,8 +540,10 @@ export function notifyActorDamaged(
    * Смерть — исключение, и единственное: она случается один раз на жизнь, стоит
    * отдельной, более крупной дельты и обязана быть увиденной даже посреди уже
    * идущей схватки. Второй запрос по радиусу за драку, а не за попадание. */
-  if (!alreadyEngaged || killed) alertWitnesses(world, victim, attacker, damage, time, killed, state);
-  publishActorHurtEvent(world, state, attacker, victim, damage, source, time, engagedWithAttacker);
+  const witnesses = (!alreadyEngaged || killed)
+    ? alertWitnesses(world, victim, attacker, damage, time, killed, state)
+    : 0;
+  publishActorHurtEvent(world, state, attacker, victim, damage, source, time, engagedWithAttacker, witnesses, killed);
   if (killed) publishActorKillEvent(world, state, attacker, victim, source);
 }
 
@@ -575,11 +596,11 @@ function alertWitnesses(
   time: number,
   killed: boolean,
   state?: GameState,
-): void {
-  if (victim.type !== EntityType.NPC) return;
+): number {
+  if (victim.type !== EntityType.NPC) return 0;
   // Объявленный поединок — дело двоих. Ни свои жертвы, ни свои обидчика в него
   // не вступаются, иначе разборка тут же превращается в свалку.
-  if (isDuelLocked(victim) || isDuelLocked(attacker)) return;
+  if (isDuelLocked(victim) || isDuelLocked(attacker)) return 0;
   /* Вступаются и за УБЕГАЮЩЕГО. Раньше подъём своих был заведён на реакцию
    * жертвы (`reaction === 'fight'`), а безоружный житель по расчёту сил всегда
    * получает `flee`, — то есть за обычного человека не вставал никто и никогда,
@@ -589,7 +610,8 @@ function alertWitnesses(
   // Экология выпадает сама: у монстра без флага `sided` стороны нет, и крыса
   // никому репутацию не портит.
   const witnessed = attackerSide !== undefined;
-  if (!witnessed) return;
+  if (!witnessed) return 0;
+  let seen = 0;
   getEntityIndex().queryRadiusCapped(
     victim.x, victim.y, ASSIST_SIGHT_RADIUS, assistScratch, ENTITY_MASK_NPC, ASSIST_ALERT_CAP,
   );
@@ -607,6 +629,7 @@ function alertWitnesses(
      * же кадром и инвалидировать нечего. Цена — обход клеток отрезка, и она
      * платится дважды за схватку, а не на каждое попадание (см. вызов). */
     if (!hasLineOfSight(world, mate.x, mate.y, victim.x, victim.y, ASSIST_SIGHT_RADIUS)) continue;
+    seen++;
     applyWitnessedViolencePenalty(state, mate, attacker, victim, damage, killed);
     if (!mate.ai || !standsUpFor(mate, victim)) continue;
     // Личная неприязнь — отказ помочь: сосед, ненавидящий пострадавшего, не
@@ -615,6 +638,7 @@ function alertWitnesses(
     setThreatMemory(mate, attacker, 1, 'npc_melee', time, 'fight');
     applyFightHint(mate, attacker);
   }
+  return seen;
 }
 
 /**

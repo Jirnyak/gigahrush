@@ -55,6 +55,7 @@ import {
   setFactionsSocialContext,
 } from '../src/systems/factions';
 import { getDemosNpcOnlySocialEdges } from '../src/systems/demos_social';
+import { processDemosSocialFeedbackEvents } from '../src/systems/demos_runtime';
 import { setCurrentPlayerEntity } from '../src/systems/player_actor';
 import { RELATION_HOSTILE_THRESHOLD, getNpcPlayerRelation, isNpcPlayerHostile } from '../src/systems/npc_relations';
 import { notifyActorDamaged, resetCombatStimulus } from '../src/systems/combat_stimulus';
@@ -364,4 +365,111 @@ test('обида не рассасывается: механизма затух�
     assert.equal((relations as Record<string, unknown>)[name], undefined,
       `${name} снят вместе с механизмом затухания`);
   }
+});
+
+/* ── Избиение доходит до круга, но только через очевидца ──────────── */
+
+/* Решение владельца 2026-09-12: «побил любовь — рушит отношения с этим NPC».
+ * До него круг близких отвечал ТОЛЬКО на смерть, и избить чью-то родню в пустом
+ * коридоре было бесплатно: муж не узнавал никогда. Теперь удар оплачивается тем
+ * же законом, что смерть, — весом связи, — но взятым по ДОЛЕ снятого здоровья.
+ *
+ * Разница между смертью и ударом ровно одна и она про знание, а не про цену:
+ * о смерти узнают по телу, об ударе — только если кто-то ВИДЕЛ. Обе стороны
+ * правила проверяются здесь сквозным путём: настоящая дверь урона, настоящее
+ * событие, настоящий разбор ленты. */
+
+/** Ребро круга к обидчику после удара по близкому; `undefined` — связи нет. */
+function beatAndReadCircleEdge(
+  state: GameState,
+  world: World,
+  victim: Entity,
+  attacker: Entity,
+  relativeAlifeId: number,
+  damage: number,
+): { before: number; after: number; bond: number } {
+  const bond = edgeTo(state, relativeAlifeId, victim.alifeId!);
+  const before = edgeTo(state, relativeAlifeId, attacker.alifeId!);
+  notifyActorDamaged(world, victim, attacker, damage, 'npc_melee', 1, state);
+  processDemosSocialFeedbackEvents(state, { ignoreCursor: true });
+  return { before, after: edgeTo(state, relativeAlifeId, attacker.alifeId!), bond };
+}
+
+test('избиение близкого при очевидце стоит обидчику доли связи', () => {
+  const state = socialState();
+  const world = openWorld();
+  const victim = person(101, 1, Faction.CITIZEN, 10);
+  const attacker = person(102, 2, Faction.LIQUIDATOR, 11);
+  const relative = person(103, 3, Faction.CITIZEN, 12);
+  rebuildEntityIndexForSimulation([victim, attacker, relative], 1);
+
+  // Половина полоски: 30 из 60. Доля и есть множитель веса связи.
+  const { before, after, bond } = beatAndReadCircleEdge(state, world, victim, attacker, 3, 30);
+  assert.notEqual(bond, 0, 'у близкого нет связи с жертвой — опыт не о чем');
+  assert.equal(
+    after - before,
+    Math.round(-bond * 0.5),
+    `связь ${bond} при половине полоски обязана ответить ${Math.round(-bond * 0.5)}, а ответила ${after - before}`,
+  );
+});
+
+test('избиение без очевидца круг не узнаёт вовсе', () => {
+  const state = socialState();
+  const world = openWorld();
+  /* Тот же расклад, но между близким и жертвой — стена комнаты: он не видит
+   * удара, а больше видеть некому. Это и есть «побил в пустом коридоре». */
+  const victim = person(101, 1, Faction.CITIZEN, 10);
+  const attacker = person(102, 2, Faction.LIQUIDATOR, 11);
+  const relative = person(103, 3, Faction.CITIZEN, ROOM.x + ROOM.w + 6);
+  rebuildEntityIndexForSimulation([victim, attacker, relative], 1);
+
+  const { before, after, bond } = beatAndReadCircleEdge(state, world, victim, attacker, 3, 30);
+  assert.notEqual(bond, 0, 'у близкого нет связи с жертвой — опыт не о чем');
+  assert.equal(after, before, 'никто не видел удара, а круг всё равно узнал');
+});
+
+test('смерть доходит до круга и без очевидцев: тело находят', () => {
+  const state = socialState();
+  const world = openWorld();
+  const victim = person(101, 1, Faction.CITIZEN, 10);
+  const attacker = person(102, 2, Faction.LIQUIDATOR, 11);
+  const relative = person(103, 3, Faction.CITIZEN, ROOM.x + ROOM.w + 6);
+  rebuildEntityIndexForSimulation([victim, attacker, relative], 1);
+
+  const bond = edgeTo(state, 3, 1);
+  const before = edgeTo(state, 3, 2);
+  // Дверь урона только ОБЪЯВЛЯЕТ удар; здоровье снимает вызывающий, и «убит»
+  // она читает по нулю на жертве.
+  victim.hp = 0;
+  notifyActorDamaged(world, victim, attacker, victim.maxHp ?? 60, 'npc_melee', 1, state);
+  processDemosSocialFeedbackEvents(state, { ignoreCursor: true });
+  assert.notEqual(bond, 0, 'у близкого нет связи с жертвой — опыт не о чем');
+  assert.equal(
+    edgeTo(state, 3, 2) - before, -bond,
+    'смерть обязана стоить весь вес связи, даже когда её никто не видел',
+  );
+});
+
+test('добивающий удар стоит круга один раз, а не дважды', () => {
+  /* Смертельный удар выпускает ДВА события — «ранил» и «убил», — и оба несут
+   * личности сторон. Без пометки `killed` на первом обидчик терял бы вес связи
+   * дважды за один замах, и цена смерти при очевидце вдвое отличалась бы от
+   * цены смерти в одиночестве. */
+  const state = socialState();
+  const world = openWorld();
+  const victim = person(101, 1, Faction.CITIZEN, 10);
+  const attacker = person(102, 2, Faction.LIQUIDATOR, 11);
+  const relative = person(103, 3, Faction.CITIZEN, 12);
+  rebuildEntityIndexForSimulation([victim, attacker, relative], 1);
+
+  const bond = edgeTo(state, 3, 1);
+  const before = edgeTo(state, 3, 2);
+  victim.hp = 0;
+  notifyActorDamaged(world, victim, attacker, victim.maxHp ?? 60, 'npc_melee', 1, state);
+  processDemosSocialFeedbackEvents(state, { ignoreCursor: true });
+  assert.notEqual(bond, 0, 'у близкого нет связи с жертвой — опыт не о чем');
+  assert.equal(
+    edgeTo(state, 3, 2) - before, -bond,
+    'смерть на глазах у родни обязана стоить ровно вес связи — ни больше, ни меньше',
+  );
 });

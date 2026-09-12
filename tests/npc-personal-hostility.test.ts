@@ -13,11 +13,19 @@ import {
 import { isHostile, isPersonalFeudEnemy, setFactionsSocialContext } from '../src/systems/factions';
 import { makeGameState, makeTestNpc } from './helpers';
 
-/* Личная вражда — свойство пары людей, а не канал «к игроку». Читается она
-   отдельным каналом (`isPersonalFeudEnemy`) и меняет ПОВЕДЕНИЕ: отказ помочь,
-   избегание, разборка один на один (`systems/npc_feud.ts`). Боевой целью она
-   НЕ делает — иначе двое соседей дружественных фракций открывали бы огонь
-   посреди коридора, и мир выедал сам себя без игрока и без монстров. */
+/* Личная вражда — свойство пары людей, а не канал «к игроку», и РЕШАЕТ она
+   раньше фракций. Ненавидящий конкретного человека враждебен ему, даже когда их
+   нашивки в мире: `isHostile` спрашивает личное ребро (`isPersonalFeudEnemy`)
+   перед личным отношением к стороне, а глобальная матрица остаётся последней.
+   Помимо боя вражда по-прежнему платит поведением — отказ помочь, избегание
+   комнаты, разборка один на один (`systems/npc_feud.ts`).
+
+   ПОПРАВКА 2026-09-12, решение владельца. До неё правило было обратным: личное
+   ребро боевой целью НЕ делало (2026-08-23), и за этим стоял замер — двое из
+   ДРУЖЕСТВЕННЫХ фракций открывали огонь посреди коридора. Владелец выбрал
+   «личное решает всегда» и цену принял; она замерена на живых этажах и записана
+   в `problems.md`. Прежний замок стоял ровно на снятом правиле и переписан по
+   существу, а не подогнан порогом. */
 
 function makeSocialState() {
   seedGlobalRng(20260820);
@@ -56,26 +64,42 @@ test('без ребра Демоса соседи одной фракции ми
   assert.equal(isHostile(b, a), false);
 });
 
-test('резко отрицательное ребро Демоса заводит личную вражду, но не бой', () => {
+test('резко отрицательное ребро Демоса делает боевой целью вопреки общим нашивкам', () => {
   const state = makeSocialState();
   setFactionsSocialContext(state);
   const a = first();
   const b = second();
+  // Исходно — одна фракция и никакой личной истории: мир.
   assert.equal(isPersonalFeudEnemy(a, b), false);
+  assert.equal(isHostile(a, b), false);
 
   assert.equal(setDemosSocialEdge(state, 1, 2, RELATION_MIN), true);
   assert.equal(isDemosPersonalEnemy(state, 1, 2), true);
   assert.equal(isPersonalFeudEnemy(a, b), true);
   // Число зеркалится на встречное ребро, поэтому вражду видят оба.
   assert.equal(isPersonalFeudEnemy(b, a), true);
-  // И при этом ни один не считает другого боевой целью.
-  assert.equal(isHostile(a, b), false);
-  assert.equal(isHostile(b, a), false);
+  // И оба считают другого боевой целью, хотя фракция у них ОДНА.
+  assert.equal(isHostile(a, b), true, 'личное решает раньше фракции — иначе ненависть ничего не стоит');
+  assert.equal(isHostile(b, a), true);
 
-  // Третий сосед в ссоре не участвует.
+  // Третий сосед в ссоре не участвует и остаётся мирным обоим.
   const c = makeTestNpc({ id: 103, alifeId: 3, faction: Faction.CITIZEN, name: 'Сосед Третий' });
   assert.equal(isDemosPersonalEnemy(state, 1, 3), false);
   assert.equal(isPersonalFeudEnemy(a, c), false);
+  assert.equal(isHostile(a, c), false, 'вражда осталась делом двоих, а не объявлением войны всем');
+});
+
+test('неприязнь выше порога вражды боевой целью не делает', () => {
+  /* Граница на месте: «решают личные отношения» не значит «любая обида — повод
+   * стрелять». Целью делает только число ниже общего порога вражды, иначе
+   * прохладные соседи начали бы убивать друг друга. */
+  const state = makeSocialState();
+  setFactionsSocialContext(state);
+  const a = first();
+  const b = second();
+  assert.equal(setDemosSocialEdge(state, 1, 2, RELATION_HOSTILE_THRESHOLD + 1), true);
+  assert.equal(isPersonalFeudEnemy(a, b), false);
+  assert.equal(isHostile(a, b), false);
 });
 
 test('порог вражды — общий RELATION_HOSTILE_THRESHOLD', () => {

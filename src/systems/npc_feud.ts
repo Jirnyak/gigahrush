@@ -1,9 +1,11 @@
 /* ── Личная вражда: поведение и разборка ───────────────────────────
  *
- * Личная неприязнь двоих (ребро графа Демоса ниже порога вражды) НЕ делает их
- * боевыми целями друг для друга — см. `isPersonalFeudEnemy` в `factions.ts`.
- * Она меняет поведение и копится, пока не разрешится одним читаемым событием:
- * двое сходятся один на один.
+ * Личная неприязнь двоих (ребро графа Демоса ниже порога вражды) делает их
+ * боевыми целями друг для друга — см. `isPersonalFeudEnemy` в `factions.ts`,
+ * решение владельца 2026-09-12. Разборка не отменяет этот бой, а даёт ему МЕСТО
+ * И ПРАВИЛА: вызов, дорога, ринг, исход — вместо стрельбы посреди коридора.
+ * Поэтому распорядитель отсеивает пары, чья вражда не личная, а сторонняя: те
+ * стреляют как стороны, и звать их на ринг незачем.
  *
  * Три следствия вражды, все выражены весами и существующими механизмами:
  *   1. Не помогает в бою — зов своих (`alertFactionMates`) обходит врага.
@@ -25,14 +27,14 @@
  */
 
 import {
-  AIGoal, EntityType, type Entity, type GameState,
+  AIGoal, EntityType, Faction, type Entity, type GameState,
 } from '../core/types';
 import type { World } from '../core/world';
 import { RELATION_HOSTILE_THRESHOLD } from '../data/relations';
 import { roomIdsAroundInto } from '../world/room_index';
 import { ENTITY_MASK_NPC, getEntityIndex } from './entity_index';
 import { publishEvent } from './events';
-import { factionsSocialContextState, isHostile } from './factions';
+import { factionsSocialContextState, isSideHostileToFaction } from './factions';
 import { isPlayerEntity } from './player_actor';
 import {
   clearCombatThreat, forceCombatThreat, npcShouldFightThreat, setDuelLock,
@@ -336,14 +338,19 @@ function findChallenge(world: World, entities: readonly Entity[], state: GameSta
       if (targetAlifeId === undefined || edge.relation > RELATION_HOSTILE_THRESHOLD) continue;
       const b = byAlifeId.get(targetAlifeId);
       if (!b || !duelCandidate(b) || b.id === a.id) continue;
-      // Тем, кто и так стреляет друг в друга, разборка не нужна: она — способ
-      // выразить вражду там, где боя быть не должно.
-      //
-      // Спрашивается это у обоих поимённо, а не у их фракций. Враждебность стала
-      // ЛИЧНОЙ и направленной: два жителя одной фракции могут смотреть на
-      // ликвидатора по-разному, и общий ответ «фракции не враждуют» пропустил бы
-      // на разборку того, кто уже держит противника на мушке.
-      if (isHostile(a, b) || isHostile(b, a)) continue;
+      /* Разборка не нужна тем, чья вражда НЕ ЛИЧНАЯ: если стороны воюют, они
+       * стреляют как стороны, и звать их на ринг незачем.
+       *
+       * Спрашивается это у обоих поимённо, а не у их фракций: взгляд на сторону
+       * личный и направленный, и два жителя одной фракции смотрят на ликвидатора
+       * по-разному. Но спрашивается именно про СТОРОНУ — с 2026-09-12 личное
+       * ребро между людьми само делает боевой целью, и общий `isHostile` отсеял
+       * бы отсюда ровно тех, ради кого разборка и заведена: механика ушла бы в
+       * ноль целиком (замерено — ни одного вызова). Разборка не отменяет бой, а
+       * даёт ему место и правила: на ринге дерутся обычным боевым путём. */
+      const aFaction = a.faction ?? Faction.CITIZEN;
+      const bFaction = b.faction ?? Faction.CITIZEN;
+      if (isSideHostileToFaction(a, aFaction, bFaction) || isSideHostileToFaction(b, bFaction, aFaction)) continue;
       // Выясняют отношения с тем, на кого натыкаются, а не с тем, кто на другом
       // конце этажа: через полтысячи клеток к сроку никто не приходит, и вызов
       // весь свой срок стоит впустую. Дальнюю вражду сводит макрослой — визит
