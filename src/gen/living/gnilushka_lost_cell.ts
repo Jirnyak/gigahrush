@@ -55,9 +55,7 @@ function addContainer(
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,
     name,
-    inventory: inventory.map(item => ({ ...item })),
-    capacitySlots: Math.max(6, inventory.length + 3),
-    access: 'public',
+    inventory: inventory.map(item => ({ ...item })),    access: 'public',
     discovered: true,
     tags: ['gnilushka_lost_cell', 'gnilushka', 'monster', 'noncombat', ...tags],
   });

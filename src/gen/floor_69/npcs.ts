@@ -555,9 +555,7 @@ export function addContainer(
   dy: number,
   kind: ContainerKind,
   name: string,
-  access: ContainerAccess,
-  capacitySlots: number,
-  inventory: WorldContainer['inventory'],
+  access: ContainerAccess,  inventory: WorldContainer['inventory'],
   tags: string[],
   faction?: Faction,
   lockDifficulty?: number,
@@ -574,7 +572,6 @@ export function addContainer(
     kind,
     name,
     inventory: inventory.map(item => ({ ...item })),
-    capacitySlots,
     faction,
     access,
     lockDifficulty,
@@ -586,7 +583,7 @@ export function addContainer(
 export function seedContainers(world: World, rooms: Floor69Rooms): void {
   addContainer(
     world, rooms.clinic, 3, 2, ContainerKind.MEDICAL_CABINET, 'Шкаф тихой клиники 69',
-    'owner', 8,
+    'owner',
     [
       { defId: 'bandage', count: 3 },
       { defId: 'pills', count: 2 },
@@ -599,7 +596,7 @@ export function seedContainers(world: World, rooms: Floor69Rooms): void {
   );
   addContainer(
     world, rooms.debtOffice, 4, 3, ContainerKind.SAFE, 'Сейф компромата 69',
-    'locked', 7,
+    'locked',
     [
       { defId: 'denunciation', count: 1 },
       { defId: 'record_exposure_notice', count: 1 },
@@ -612,7 +609,7 @@ export function seedContainers(world: World, rooms: Floor69Rooms): void {
   );
   addContainer(
     world, rooms.ledger, 3, 2, ContainerKind.FILING_CABINET, 'Картотека долгов 69',
-    'locked', 8,
+    'locked',
     [
       { defId: 'voluntary_receipt', count: 3 },
       { defId: 'blank_form', count: 2 },
@@ -625,7 +622,7 @@ export function seedContainers(world: World, rooms: Floor69Rooms): void {
   );
   addContainer(
     world, rooms.checkpoint, 9, 2, ContainerKind.WEAPON_CRATE, 'Ящик поста 69',
-    'faction', 6,
+    'faction',
     [
       { defId: 'emergency_roster', count: 1 },
       { defId: 'liquidator_token', count: 1 },
@@ -637,7 +634,7 @@ export function seedContainers(world: World, rooms: Floor69Rooms): void {
   );
   addContainer(
     world, rooms.checkpoint, 3, 7, ContainerKind.CASHBOX, 'Тарелка входных расписок 69',
-    'faction', 5,
+    'faction',
     [
       { defId: 'voluntary_receipt', count: 2 },
       { defId: 'water_coupon', count: 1 },
@@ -648,7 +645,7 @@ export function seedContainers(world: World, rooms: Floor69Rooms): void {
   );
   addContainer(
     world, rooms.refuge, 2, 2, ContainerKind.EMERGENCY_BOX, 'Ящик тихой комнаты 69',
-    'public', 6,
+    'public',
     [
       { defId: 'water', count: 2 },
       { defId: 'bread', count: 2 },
@@ -661,7 +658,7 @@ export function seedContainers(world: World, rooms: Floor69Rooms): void {
   // --- НОВЫЙ ГЕЙМПЛЕЙНЫЙ КОНТЕНТ: Теневой Аукцион Расписок ---
   addContainer(
     world, rooms.ledger, 5, 5, ContainerKind.SAFE, 'Бронированный Сейф Теневого Аукциона 69',
-    'locked', 8,
+    'locked',
     [
       { defId: 'fake_pass', count: 1 },
       { defId: 'voluntary_receipt', count: 4 },
@@ -674,7 +671,7 @@ export function seedContainers(world: World, rooms: Floor69Rooms): void {
   );
   addContainer(
     world, rooms.refuge, 5, 2, ContainerKind.WEAPON_CRATE, 'Контрабандный Схрон Осведомителя',
-    'faction', 6,
+    'faction',
     [
       { defId: 'ammo_9mm', count: 16 },
       { defId: 'liquidator_token', count: 2 },

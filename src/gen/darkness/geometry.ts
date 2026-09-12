@@ -1204,9 +1204,7 @@ export function addContainer(
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,
     name,
-    inventory,
-    capacitySlots: 6,
-    access: 'public',
+    inventory,    access: 'public',
     discovered: true,
     tags,
   };

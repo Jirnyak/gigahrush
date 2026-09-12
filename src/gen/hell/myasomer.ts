@@ -362,9 +362,7 @@ function addQuietCache(world: World, room: Room): number {
       { defId: 'rawmeat', count: 2 },
       { defId: 'bandage', count: 1 },
       { defId: 'water', count: 1 },
-    ],
-    capacitySlots: 6,
-    access: 'public',
+    ],    access: 'public',
     discovered: true,
     tags: [MYASOMER_ID, 'monster', 'noise', 'samosbor_aftermath', 'meat', 'quiet_reward', 'quiet_route', 'counterplay'],
   };
@@ -388,9 +386,7 @@ function addShardCache(world: World, room: Room): number {
     inventory: [
       { defId: 'siren_shard', count: 1 },
       { defId: 'rawmeat', count: 1 },
-    ],
-    capacitySlots: 4,
-    faction: Faction.CULTIST,
+    ],    faction: Faction.CULTIST,
     access: 'faction',
     discovered: true,
     tags: [MYASOMER_ID, 'monster', 'noise', 'samosbor_aftermath', 'meat', 'siren_shard', 'loud_trigger', 'loud_route'],

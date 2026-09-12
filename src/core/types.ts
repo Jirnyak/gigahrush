@@ -692,8 +692,6 @@ export interface WorldContainer extends InventoryHolder {
   kind: ContainerKind;
   name: string;
   inventory: Item[];
-  /** @deprecated unified inventory uses MAX_INVENTORY_SLOTS (8x8) */
-  capacitySlots?: number;
   ownerNpcId?: number;
   ownerName?: string;
   faction?: Faction;

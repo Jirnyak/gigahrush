@@ -326,9 +326,7 @@ function addEkrannikContainer(
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,
     name,
-    inventory,
-    capacitySlots: 4,
-    access: 'public',
+    inventory,    access: 'public',
     discovered: true,
     tags: [EKRANNIK_ID, 'monster', 'screen', 'signal', 'misdirection', ...tags],
   };

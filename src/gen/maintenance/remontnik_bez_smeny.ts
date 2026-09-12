@@ -205,9 +205,7 @@ function addRemontnikContainers(ctx: MaintContentCtx, closet: Room, npcId: numbe
   const cartId = addContainer(ctx, closet, closet.x + 2, closet.y + 3, {
     kind: ContainerKind.TOOL_LOCKER,
     name: 'Наряд-тележка Ремонтника: положить деталь или герметик',
-    inventory: [{ defId: 'note', count: 1 }],
-    capacitySlots: 8,
-    access: 'public',
+    inventory: [{ defId: 'note', count: 1 }],    access: 'public',
     discovered: true,
     tags: [CONTENT_TAG, 'remontnik_cart', 'maintenance', 'repair', 'route_denial', 'tools'],
   });
@@ -219,9 +217,7 @@ function addRemontnikContainers(ctx: MaintContentCtx, closet: Room, npcId: numbe
       { defId: 'gear', count: 2 },
       { defId: 'sealant_tube', count: 2 },
       { defId: 'elevator_override_form', count: 1 },
-    ],
-    capacitySlots: 8,
-    ownerNpcId: npcId,
+    ],    ownerNpcId: npcId,
     ownerName: NPC_NAME,
     faction: Faction.WILD,
     access: 'owner',

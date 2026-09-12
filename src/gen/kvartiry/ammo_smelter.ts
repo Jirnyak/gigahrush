@@ -144,9 +144,7 @@ function addSmelterContainer(
   dy: number,
   kind: ContainerKind,
   name: string,
-  access: WorldContainer['access'],
-  capacitySlots: number,
-  inventory: WorldContainer['inventory'],
+  access: WorldContainer['access'],  inventory: WorldContainer['inventory'],
   tags: string[],
   owner?: { id?: number; name?: string; faction?: Faction; factoryId?: string },
 ): void {
@@ -164,7 +162,6 @@ function addSmelterContainer(
     kind,
     name,
     inventory: inventory.map(i => ({ ...i })),
-    capacitySlots,
     ownerNpcId: owner?.id,
     ownerName: owner?.name,
     faction: owner?.faction,
@@ -178,7 +175,7 @@ function addSmelterContainer(
 function seedSmelterContainers(world: World, poi: SocialPoiRoom, geshaId: number): void {
   addSmelterContainer(
     world, poi, poi.w - 3, 2, ContainerKind.WEAPON_CRATE, 'Горячий ящик гильзоплавки',
-    'owner', 5,
+    'owner',
     [
       { defId: 'ammo_9mm', count: 4 },
       { defId: 'metal_sheet', count: 1 },
@@ -189,7 +186,7 @@ function seedSmelterContainers(world: World, poi: SocialPoiRoom, geshaId: number
   );
   addSmelterContainer(
     world, poi, 2, poi.h - 3, ContainerKind.METAL_CABINET, 'Бочка патронного лома',
-    'faction', 8,
+    'faction',
     [
       { defId: 'metal_sheet', count: 1 },
       { defId: 'pipe', count: 1 },
@@ -200,7 +197,7 @@ function seedSmelterContainers(world: World, poi: SocialPoiRoom, geshaId: number
   );
   addSmelterContainer(
     world, poi, Math.floor(poi.w / 2), poi.h - 2, ContainerKind.SECRET_STASH, 'Тетрадь сбыта гильз',
-    'owner', 5,
+    'owner',
     [
       { defId: 'denunciation', count: 1 },
       { defId: 'homemade_ammo_instruction', count: 1 },

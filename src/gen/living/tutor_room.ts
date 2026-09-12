@@ -86,9 +86,7 @@ function addStarterLocker(world: World, room: Room, x: number, y: number): World
     zoneId: world.zoneMap[idx],
     kind: ContainerKind.EMERGENCY_BOX,
     name: 'Учебный шкафчик вылазки',
-    inventory: starterLockerLoot(),
-    capacitySlots: STARTER_LOCKER_LOOT.length + 1,
-    access: 'public',
+    inventory: starterLockerLoot(),    access: 'public',
     discovered: true,
     tags: ['tutorial', 'starter', 'public', 'low_level_loot'],
   };

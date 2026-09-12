@@ -98,9 +98,7 @@ function addContainer(
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.TOOL_LOCKER,
     name,
-    inventory: inventory.map(item => ({ ...item })),
-    capacitySlots: Math.max(6, inventory.length + 4),
-    access: 'public',
+    inventory: inventory.map(item => ({ ...item })),    access: 'public',
     discovered: true,
     tags: [CONTENT_TAG, 'plombirovshchik', 'monster', 'seal', 'hermodoor', 'route_denial', ...tags],
   });

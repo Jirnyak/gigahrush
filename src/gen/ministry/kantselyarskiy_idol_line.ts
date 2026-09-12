@@ -41,9 +41,7 @@ function addPaperCabinet(
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.FILING_CABINET,
     name,
-    inventory,
-    capacitySlots: 8,
-    access: 'public',
+    inventory,    access: 'public',
     discovered: true,
     tags: ['kantselyarskiy_idol', 'office_field', 'paper_drop', 'cover'],
   });

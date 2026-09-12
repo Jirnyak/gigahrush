@@ -335,21 +335,21 @@ registerBlackMarket88DesignFloorContent();
 
 export function seedBazaarCaches(world: World, rooms: Market88BazaarRooms, serviceGuts: readonly Market88ServiceGutPlacement[]): void {
   if (rooms.tunnelCacheWest) {
-    addContainer(world, rooms.tunnelCacheWest, 9, 5, ContainerKind.SECRET_STASH, 'Тайник западного обхода 88', 'secret', 5, [
+    addContainer(world, rooms.tunnelCacheWest, 9, 5, ContainerKind.SECRET_STASH, 'Тайник западного обхода 88', 'secret', [
       { defId: 'fake_pass', count: 1 },
       { defId: 'blank_form', count: 1 },
       { defId: 'cigs', count: 3 },
     ], ['market88', 'contraband_cache', 'smuggling_tunnel'], undefined, Faction.WILD, 4, false);
   }
   if (rooms.tunnelCacheEast) {
-    addContainer(world, rooms.tunnelCacheEast, 8, 5, ContainerKind.SECRET_STASH, 'Тайник восточного обхода 88', 'secret', 6, [
+    addContainer(world, rooms.tunnelCacheEast, 8, 5, ContainerKind.SECRET_STASH, 'Тайник восточного обхода 88', 'secret', [
       { defId: 'ammo_9mm', count: 10 },
       { defId: 'gasmask_filter', count: 1 },
       { defId: 'voluntary_receipt', count: 1 },
     ], ['market88', 'contraband_cache', 'raid_bypass'], undefined, Faction.WILD, 5, false);
   }
   if (rooms.coldStorage) {
-    addContainer(world, rooms.coldStorage, 11, 6, ContainerKind.METAL_CABINET, 'Холодный шкаф без накладной 88', 'locked', 7, [
+    addContainer(world, rooms.coldStorage, 11, 6, ContainerKind.METAL_CABINET, 'Холодный шкаф без накладной 88', 'locked', [
       { defId: 'pills', count: 2 },
       { defId: 'water', count: 2 },
       { defId: 'door_kit', count: 1 },
@@ -358,9 +358,7 @@ export function seedBazaarCaches(world: World, rooms: Market88BazaarRooms, servi
   const cacheDefs: readonly {
     name: string;
     kind: ContainerKind;
-    access: ContainerAccess;
-    capacitySlots: number;
-    inventory: Item[];
+    access: ContainerAccess;    inventory: Item[];
     tags: string[];
     faction?: Faction;
     lockDifficulty?: number;
@@ -369,9 +367,7 @@ export function seedBazaarCaches(world: World, rooms: Market88BazaarRooms, servi
     {
       name: 'Серый тюк поставщика 88',
       kind: ContainerKind.SECRET_STASH,
-      access: 'faction',
-      capacitySlots: 6,
-      inventory: [
+      access: 'faction',      inventory: [
         { defId: 'caravan_route', count: 1 },
         { defId: 'ration_registry_extract', count: 1 },
         { defId: 'govnyak_bad_batch', count: 1 },
@@ -383,9 +379,7 @@ export function seedBazaarCaches(world: World, rooms: Market88BazaarRooms, servi
     {
       name: 'Сейф черного маршрута 88',
       kind: ContainerKind.SAFE,
-      access: 'locked',
-      capacitySlots: 7,
-      inventory: [
+      access: 'locked',      inventory: [
         { defId: 'metro_ticket', count: 1 },
         { defId: 'forged_bank_debt_paper', count: 1 },
         { defId: 'container_key_label', count: 1 },
@@ -397,9 +391,7 @@ export function seedBazaarCaches(world: World, rooms: Market88BazaarRooms, servi
     {
       name: 'Шкаф панической медицины 88',
       kind: ContainerKind.MEDICAL_CABINET,
-      access: 'faction',
-      capacitySlots: 6,
-      inventory: [
+      access: 'faction',      inventory: [
         { defId: 'antibiotic', count: 1 },
         { defId: 'pills', count: 2 },
         { defId: 'morphine_ampoule', count: 1 },
@@ -411,9 +403,7 @@ export function seedBazaarCaches(world: World, rooms: Market88BazaarRooms, servi
     {
       name: 'Ящик рейдовой задвижки 88',
       kind: ContainerKind.TOOL_LOCKER,
-      access: 'locked',
-      capacitySlots: 6,
-      inventory: [
+      access: 'locked',      inventory: [
         { defId: 'door_kit', count: 1 },
         { defId: 'gasmask_filter', count: 1 },
         { defId: 'fuse', count: 2 },
@@ -426,7 +416,7 @@ export function seedBazaarCaches(world: World, rooms: Market88BazaarRooms, servi
   for (let i = 0; i < Math.min(cacheDefs.length, serviceGuts.length); i++) {
     const room = serviceGuts[i].room;
     const def = cacheDefs[i];
-    addContainer(world, room, Math.max(2, room.w - 4), Math.max(2, Math.floor(room.h / 2)), def.kind, def.name, def.access, def.capacitySlots, def.inventory, def.tags, undefined, def.faction, def.lockDifficulty, def.discovered ?? true);
+    addContainer(world, room, Math.max(2, room.w - 4), Math.max(2, Math.floor(room.h / 2)), def.kind, def.name, def.access, def.inventory, def.tags, undefined, def.faction, def.lockDifficulty, def.discovered ?? true);
   }
 }
 
@@ -516,7 +506,6 @@ export function seedBazaarExpansionCaches(world: World): void {
       def.kind,
       def.name,
       def.access,
-      6,
       def.inventory,
       def.tags,
       undefined,
@@ -626,13 +615,13 @@ export function spawnMarketQueueCrowd(
 }
 
 export function seedMarketContainers(world: World, rooms: MarketRooms, npcs: Record<string, Entity>): void {
-  addContainer(world, rooms.publicGate, 5, 3, ContainerKind.CASHBOX, 'Входная касса 88', 'owner', 5, [
+  addContainer(world, rooms.publicGate, 5, 3, ContainerKind.CASHBOX, 'Входная касса 88', 'owner', [
     { defId: 'metro_ticket', count: 1 },
     { defId: 'water_coupon', count: 1 },
     { defId: 'voluntary_receipt', count: 1 },
   ], ['market88', 'entry_toll', 'crowd_pressure', 'debt'], npcs.market88_uliana_cash);
 
-  addContainer(world, rooms.mainLane, 5, 12, ContainerKind.CASHBOX, 'Касса Ульяны 88', 'owner', 8, [
+  addContainer(world, rooms.mainLane, 5, 12, ContainerKind.CASHBOX, 'Касса Ульяны 88', 'owner', [
     { defId: 'water', count: 2 },
     { defId: 'bread', count: 2 },
     { defId: 'cigs', count: 4 },
@@ -640,21 +629,21 @@ export function seedMarketContainers(world: World, rooms: MarketRooms, npcs: Rec
     { defId: 'voluntary_receipt', count: 1 },
   ], ['market88', 'purchase', 'limited_stock', 'no_buyback'], npcs.market88_uliana_cash);
 
-  addContainer(world, rooms.debtOffice, 9, 5, ContainerKind.SAFE, 'Сейф долговой тетради 88', 'locked', 6, [
+  addContainer(world, rooms.debtOffice, 9, 5, ContainerKind.SAFE, 'Сейф долговой тетради 88', 'locked', [
     { defId: 'voluntary_receipt', count: 2 },
     { defId: 'denunciation', count: 1 },
     { defId: 'blank_form', count: 2 },
     { defId: 'govnyak_bad_batch', count: 1 },
   ], ['market88', 'debt', 'audit', 'raid_warning'], npcs.market88_mikhail_debt, Faction.CITIZEN, 4);
 
-  addContainer(world, rooms.documentBooth, 8, 6, ContainerKind.FILING_CABINET, 'Папка чужих печатей 88', 'owner', 7, [
+  addContainer(world, rooms.documentBooth, 8, 6, ContainerKind.FILING_CABINET, 'Папка чужих печатей 88', 'owner', [
     { defId: 'fake_pass', count: 1 },
     { defId: 'blank_form', count: 2 },
     { defId: 'denunciation', count: 1 },
     { defId: 'note', count: 1, data: '88: документ открывает дверь один раз, потом открывает дело.' },
   ], ['market88', 'documents', 'contract', 'steal_stamp'], npcs.market88_zlata_silence);
 
-  addContainer(world, rooms.weaponStall, 9, 5, ContainerKind.WEAPON_CRATE, 'Запертый оружейный ящик 88', 'faction', 6, [
+  addContainer(world, rooms.weaponStall, 9, 5, ContainerKind.WEAPON_CRATE, 'Запертый оружейный ящик 88', 'faction', [
     { defId: 'shock_baton', count: 1 },
     { defId: 'pushkin_shotgun', count: 1 },
     { defId: 'ammo_9mm', count: 18 },
@@ -662,14 +651,14 @@ export function seedMarketContainers(world: World, rooms: MarketRooms, npcs: Rec
     { defId: 'liquidator_token', count: 1 },
   ], ['market88', 'weapons', 'control', 'ovb', 'raid_lock', 'theft'], npcs.market88_zhoka_knife, Faction.LIQUIDATOR, 3);
 
-  addContainer(world, rooms.medicineLocker, 9, 5, ContainerKind.MEDICAL_CABINET, 'Лекарственный долг 88', 'owner', 6, [
+  addContainer(world, rooms.medicineLocker, 9, 5, ContainerKind.MEDICAL_CABINET, 'Лекарственный долг 88', 'owner', [
     { defId: 'pills', count: 2 },
     { defId: 'antibiotic', count: 1 },
     { defId: 'morphine_ampoule', count: 1 },
     { defId: 'sanitary_kit', count: 1 },
   ], ['market88', 'medicine', 'scarcity', 'debt'], npcs.market88_marta_broker);
 
-  addContainer(world, rooms.serviceHatch, 6, 3, ContainerKind.TOOL_LOCKER, 'Люк проводника 88', 'secret', 5, [
+  addContainer(world, rooms.serviceHatch, 6, 3, ContainerKind.TOOL_LOCKER, 'Люк проводника 88', 'secret', [
     { defId: 'gasmask_filter', count: 1 },
     { defId: 'metro_ticket', count: 1 },
     { defId: 'door_kit', count: 1 },
@@ -683,9 +672,7 @@ export function addContainer(
   dy: number,
   kind: ContainerKind,
   name: string,
-  access: ContainerAccess,
-  capacitySlots: number,
-  inventory: Item[],
+  access: ContainerAccess,  inventory: Item[],
   tags: string[],
   owner?: Entity,
   faction?: Faction,
@@ -704,7 +691,6 @@ export function addContainer(
     kind,
     name,
     inventory: inventory.map(i => ({ ...i })),
-    capacitySlots,
     ownerNpcId: owner?.id,
     ownerName: owner?.name,
     faction: faction ?? owner?.faction,

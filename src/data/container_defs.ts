@@ -5,7 +5,6 @@ export interface ContainerDef {
   kind: ContainerKind;
   name: string;
   /** @deprecated unified inventory uses MAX_INVENTORY_SLOTS (8x8) */
-  capacitySlots?: number;
   proceduralValueCap?: number;
   defaultAccess: ContainerAccess;
   roomTypes: RoomType[];
@@ -15,51 +14,51 @@ export interface ContainerDef {
 
 export const CONTAINER_DEFS: Record<ContainerKind, ContainerDef> = {
   [ContainerKind.WOODEN_CHEST]: {
-    kind: ContainerKind.WOODEN_CHEST, name: 'Деревянный сундук', capacitySlots: 10, proceduralValueCap: 75, defaultAccess: 'owner',
+    kind: ContainerKind.WOODEN_CHEST, name: 'Деревянный сундук', proceduralValueCap: 75, defaultAccess: 'owner',
     roomTypes: [RoomType.LIVING, RoomType.STORAGE, RoomType.SHOP, RoomType.MARKET], tags: ['home', 'food', 'paper'],
   },
   [ContainerKind.METAL_CABINET]: {
-    kind: ContainerKind.METAL_CABINET, name: 'Железный шкаф', capacitySlots: 12, proceduralValueCap: 120, defaultAccess: 'room',
+    kind: ContainerKind.METAL_CABINET, name: 'Железный шкаф', proceduralValueCap: 120, defaultAccess: 'room',
     roomTypes: [RoomType.STORAGE, RoomType.PRODUCTION], tags: ['tools', 'scrap'],
   },
   [ContainerKind.MEDICAL_CABINET]: {
-    kind: ContainerKind.MEDICAL_CABINET, name: 'Медицинский шкаф', capacitySlots: 10, proceduralValueCap: 150, defaultAccess: 'room',
+    kind: ContainerKind.MEDICAL_CABINET, name: 'Медицинский шкаф', proceduralValueCap: 150, defaultAccess: 'room',
     roomTypes: [RoomType.MEDICAL], tags: ['medical'],
   },
   [ContainerKind.WEAPON_CRATE]: {
-    kind: ContainerKind.WEAPON_CRATE, name: 'Оружейный ящик', capacitySlots: 8, proceduralValueCap: 260, defaultAccess: 'faction',
+    kind: ContainerKind.WEAPON_CRATE, name: 'Оружейный ящик', proceduralValueCap: 260, defaultAccess: 'faction',
     roomTypes: [RoomType.HQ, RoomType.STORAGE, RoomType.PRODUCTION], tags: ['weapon', 'locked', 'ammo'],
   },
   [ContainerKind.FRIDGE]: {
-    kind: ContainerKind.FRIDGE, name: 'Холодильник', capacitySlots: 8, proceduralValueCap: 60, defaultAccess: 'room',
+    kind: ContainerKind.FRIDGE, name: 'Холодильник', proceduralValueCap: 60, defaultAccess: 'room',
     roomTypes: [RoomType.KITCHEN, RoomType.BAR], tags: ['food'],
   },
   [ContainerKind.SAFE]: {
-    kind: ContainerKind.SAFE, name: 'Сейф', capacitySlots: 10, proceduralValueCap: 260, defaultAccess: 'locked',
+    kind: ContainerKind.SAFE, name: 'Сейф', proceduralValueCap: 260, defaultAccess: 'locked',
     roomTypes: [RoomType.OFFICE, RoomType.HQ], tags: ['valuable', 'locked', 'paper', 'tier2'],
   },
   [ContainerKind.FILING_CABINET]: {
-    kind: ContainerKind.FILING_CABINET, name: 'Картотека', capacitySlots: 10, proceduralValueCap: 125, defaultAccess: 'room',
+    kind: ContainerKind.FILING_CABINET, name: 'Картотека', proceduralValueCap: 125, defaultAccess: 'room',
     roomTypes: [RoomType.OFFICE, RoomType.STORAGE], tags: ['paper', 'tier1'],
   },
   [ContainerKind.CASHBOX]: {
-    kind: ContainerKind.CASHBOX, name: 'Касса', capacitySlots: 5, proceduralValueCap: 110, defaultAccess: 'owner',
+    kind: ContainerKind.CASHBOX, name: 'Касса', proceduralValueCap: 110, defaultAccess: 'owner',
     roomTypes: [RoomType.OFFICE, RoomType.KITCHEN, RoomType.SHOP, RoomType.MARKET, RoomType.BAR], tags: ['trade', 'valuable'],
   },
   [ContainerKind.SECRET_STASH]: {
-    kind: ContainerKind.SECRET_STASH, name: 'Тайник', capacitySlots: 8, proceduralValueCap: 220, defaultAccess: 'secret',
+    kind: ContainerKind.SECRET_STASH, name: 'Тайник', proceduralValueCap: 220, defaultAccess: 'secret',
     roomTypes: [RoomType.CORRIDOR, RoomType.SMOKING, RoomType.LIVING, RoomType.BAR], tags: ['secret', 'paper', 'forged', 'contraband'],
   },
   [ContainerKind.EMERGENCY_BOX]: {
-    kind: ContainerKind.EMERGENCY_BOX, name: 'Аварийный ящик', capacitySlots: 8, proceduralValueCap: 85, defaultAccess: 'public',
+    kind: ContainerKind.EMERGENCY_BOX, name: 'Аварийный ящик', proceduralValueCap: 85, defaultAccess: 'public',
     roomTypes: [RoomType.COMMON, RoomType.CORRIDOR], tags: ['public', 'samosbor', 'medical'],
   },
   [ContainerKind.TRASH_BIN]: {
-    kind: ContainerKind.TRASH_BIN, name: 'Мусорный бак', capacitySlots: 6, proceduralValueCap: 40, defaultAccess: 'public',
+    kind: ContainerKind.TRASH_BIN, name: 'Мусорный бак', proceduralValueCap: 40, defaultAccess: 'public',
     roomTypes: [RoomType.KITCHEN, RoomType.CORRIDOR], tags: ['trash', 'public'],
   },
   [ContainerKind.TOOL_LOCKER]: {
-    kind: ContainerKind.TOOL_LOCKER, name: 'Инструментальный шкаф', capacitySlots: 10, proceduralValueCap: 160, defaultAccess: 'room',
+    kind: ContainerKind.TOOL_LOCKER, name: 'Инструментальный шкаф', proceduralValueCap: 160, defaultAccess: 'room',
     roomTypes: [RoomType.PRODUCTION, RoomType.STORAGE], tags: ['tools', 'scrap'],
   },
 };

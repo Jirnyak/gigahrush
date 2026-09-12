@@ -318,9 +318,7 @@ function addMarketContainer(
   dy: number,
   kind: ContainerKind,
   name: string,
-  access: ContainerAccess,
-  capacitySlots: number,
-  inventory: WorldContainer['inventory'],
+  access: ContainerAccess,  inventory: WorldContainer['inventory'],
   tags: string[],
   faction?: Faction,
 ): void {
@@ -336,7 +334,6 @@ function addMarketContainer(
     kind,
     name,
     inventory: inventory.map(i => ({ ...i })),
-    capacitySlots,
     faction,
     access,
     discovered: true,
@@ -347,7 +344,7 @@ function addMarketContainer(
 function seedContainers(world: World, room: Room): void {
   addMarketContainer(
     world, room, 4, 2, ContainerKind.MEDICAL_CABINET, 'Прилавок дефицита 88',
-    'owner', 8,
+    'owner',
     [
       { defId: 'pills', count: 2 },
       { defId: 'antibiotic', count: 1 },
@@ -359,7 +356,7 @@ function seedContainers(world: World, room: Room): void {
   );
   addMarketContainer(
     world, room, ROOM_W - 5, 2, ContainerKind.WEAPON_CRATE, 'Долговой ящик 88',
-    'faction', 8,
+    'faction',
     [
       { defId: 'liquidator_token', count: 1 },
       { defId: 'denunciation', count: 1 },
@@ -371,7 +368,7 @@ function seedContainers(world: World, room: Room): void {
   );
   addMarketContainer(
     world, room, Math.floor(ROOM_W / 2), ROOM_H - 3, ContainerKind.CASHBOX, 'Касса расписок 88',
-    'owner', 6,
+    'owner',
     [
       { defId: 'voluntary_receipt', count: 2 },
       { defId: 'blank_form', count: 2 },

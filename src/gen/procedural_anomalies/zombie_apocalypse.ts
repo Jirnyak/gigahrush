@@ -16,7 +16,6 @@ import {
   type Room,
   type WorldContainer,
 } from '../../core/types';
-import { CONTAINER_DEFS } from '../../data/container_defs';
 import { activeActorSoftLimit } from '../../data/entity_limits';
 import { freshNeeds, randomName } from '../../data/catalog';
 import { generateContainerLoot } from '../../systems/procedural_loot';
@@ -176,7 +175,6 @@ function nextContainerId(ctx: ProceduralAnomalyGenContext): number {
 
 function addMedicalCounterplayContainer(ctx: ProceduralAnomalyGenContext, room: Room, pos: Point, index: number): WorldContainer | null {
   if (ctx.world.containersAt(pos.x, pos.y).length > 0) return null;
-  const def = CONTAINER_DEFS[ContainerKind.MEDICAL_CABINET];
   const inventory = index === 0
     ? [
       { defId: 'sterile_bandage', count: 2 },
@@ -199,9 +197,7 @@ function addMedicalCounterplayContainer(ctx: ProceduralAnomalyGenContext, room: 
     zoneId: ctx.world.zoneMap[ctx.world.idx(pos.x, pos.y)],
     kind: ContainerKind.MEDICAL_CABINET,
     name: `Карантинный шкаф: ${room.name}`,
-    inventory,
-    capacitySlots: def.capacitySlots,
-    access: 'public',
+    inventory,    access: 'public',
     discovered: true,
     tags: ['procedural', 'anomaly', 'zombie_apocalypse', 'medical_counterplay', 'quarantine'],
   };

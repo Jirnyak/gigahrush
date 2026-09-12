@@ -2010,7 +2010,7 @@ function findResidueContainer(world: World, zoneId: number, preferVisible: boole
   return null;
 }
 
-function addContainerItem(inventory: Item[], capacitySlots: number, item: Item): boolean {
+function addContainerItem(inventory: Item[], fillSlots: number, item: Item): boolean {
   const def = ITEMS[item.defId];
   if (!def) return false;
   const maxStack = getStack(def);
@@ -2019,7 +2019,7 @@ function addContainerItem(inventory: Item[], capacitySlots: number, item: Item):
     existing.count = Math.min(maxStack, existing.count + item.count);
     return true;
   }
-  if (inventory.length >= capacitySlots) return false;
+  if (inventory.length >= fillSlots) return false;
   inventory.push({ defId: item.defId, count: Math.min(maxStack, item.count), data: item.data });
   return true;
 }

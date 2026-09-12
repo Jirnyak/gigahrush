@@ -1051,7 +1051,6 @@ function spawnEditorContainer(world: World, state: GameState, op: Extract<MapEdi
     kind,
     name: op.def.name ?? containerDef?.name ?? containerName(kind),
     inventory,
-    capacitySlots: containerDef?.capacitySlots ?? 5,
     access: containerDef?.defaultAccess ?? 'public',
     discovered: true,
     tags: ['map_editor', 'net_terminal_gen', ...(containerDef?.tags ?? [])] };

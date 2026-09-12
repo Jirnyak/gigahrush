@@ -410,7 +410,7 @@ function addSvodContainer(
   kind: ContainerKind,
   access: WorldContainer['access'],
   inventory: Item[],
-  opts: { ownerId?: number; ownerName?: string; faction?: Faction; tags: string[]; capacitySlots?: number },
+  opts: { ownerId?: number; ownerName?: string; faction?: Faction; tags: string[] },
 ): void {
   const pos = findRoomFloorCell(world, poi, dx, dy);
   if (!pos) return;
@@ -423,9 +423,7 @@ function addSvodContainer(
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,
     name,
-    inventory: inventory.map(item => ({ ...item })),
-    capacitySlots: opts.capacitySlots ?? Math.max(8, inventory.length + 3),
-    ownerNpcId: opts.ownerId,
+    inventory: inventory.map(item => ({ ...item })),    ownerNpcId: opts.ownerId,
     ownerName: opts.ownerName,
     faction: opts.faction,
     access,
@@ -576,7 +574,7 @@ function seedSvodContainers(world: World, poi: SocialPoiRoom, custodianId: numbe
       { defId: 'siren_instruction', count: 1 },
       { defId: 'emergency_roster', count: 1 },
     ],
-    { ownerId: custodianId, ownerName: CUSTODIAN.name, faction: Faction.CULTIST, tags: ownedTags, capacitySlots: 10 },
+    { ownerId: custodianId, ownerName: CUSTODIAN.name, faction: Faction.CULTIST, tags: ownedTags, },
   );
   addSvodContainer(
     world,
@@ -592,7 +590,7 @@ function seedSvodContainers(world: World, poi: SocialPoiRoom, custodianId: numbe
       { defId: 'voluntary_receipt', count: 1 },
       { defId: 'container_key_label', count: 1 },
     ],
-    { faction: Faction.LIQUIDATOR, tags: [CHERNOBOZHIY_SVOD_TAG, 'evidence', 'black_hand', 'proof'], capacitySlots: 9 },
+    { faction: Faction.LIQUIDATOR, tags: [CHERNOBOZHIY_SVOD_TAG, 'evidence', 'black_hand', 'proof'], },
   );
   addSvodContainer(
     world,
@@ -608,7 +606,7 @@ function seedSvodContainers(world: World, poi: SocialPoiRoom, custodianId: numbe
       { defId: 'psi_dust', count: 1 },
       { defId: 'holy_water', count: 1 },
     ],
-    { ownerId: custodianId, ownerName: CUSTODIAN.name, faction: Faction.CULTIST, tags: ownedTags, capacitySlots: 8 },
+    { ownerId: custodianId, ownerName: CUSTODIAN.name, faction: Faction.CULTIST, tags: ownedTags, },
   );
 }
 

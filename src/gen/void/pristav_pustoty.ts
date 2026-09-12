@@ -418,9 +418,7 @@ function addPristavContainer(
     zoneId: world.zoneMap[world.idx(x, y)],
     kind: ContainerKind.SECRET_STASH,
     name,
-    inventory,
-    capacitySlots: 3,
-    access: 'public',
+    inventory,    access: 'public',
     discovered: true,
     tags,
   };

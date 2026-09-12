@@ -221,7 +221,7 @@ function addQueueContainer(
   kind: ContainerKind,
   access: WorldContainer['access'],
   inventory: Item[],
-  opts: { ownerId?: number; ownerName?: string; faction?: Faction; tags: string[]; capacitySlots?: number },
+  opts: { ownerId?: number; ownerName?: string; faction?: Faction; tags: string[] },
 ): void {
   const pos = findContainerCell(world, poi, dx, dy);
   if (!pos) return;
@@ -234,9 +234,7 @@ function addQueueContainer(
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,
     name,
-    inventory: inventory.map(i => ({ ...i })),
-    capacitySlots: opts.capacitySlots ?? Math.max(8, inventory.length + 2),
-    ownerNpcId: opts.ownerId,
+    inventory: inventory.map(i => ({ ...i })),    ownerNpcId: opts.ownerId,
     ownerName: opts.ownerName,
     faction: opts.faction,
     access,
@@ -350,9 +348,7 @@ function seedQueueContainers(world: World, poi: SocialPoiRoom, lyubaId: number, 
       ownerId: lyubaId,
       ownerName: LYUBA.name,
       faction: Faction.CITIZEN,
-      tags: ['theft', 'paper', 'ration_coupon_audit'],
-      capacitySlots: 8,
-    },
+      tags: ['theft', 'paper', 'ration_coupon_audit'],    },
   );
   addQueueContainer(
     world, poi, poi.w - 3, 2, 'Портфель первого номера',
@@ -367,15 +363,13 @@ function seedQueueContainers(world: World, poi: SocialPoiRoom, lyubaId: number, 
       ownerId: leaderId,
       ownerName: 'Первый номер',
       faction: Faction.CITIZEN,
-      tags: ['theft', 'forgery', 'paper', 'ration_coupon_audit'],
-      capacitySlots: 8,
-    },
+      tags: ['theft', 'forgery', 'paper', 'ration_coupon_audit'],    },
   );
   addQueueContainer(
     world, poi, 8, poi.h - 2, 'Обходная табуретка',
     ContainerKind.TRASH_BIN, 'public',
     [{ defId: 'note', count: 1, data: 'Обход: вдоль ламп, не через плечи. Талон держать видимым.' }],
-    { faction: Faction.CITIZEN, tags: ['public', 'side_route'], capacitySlots: 4 },
+    { faction: Faction.CITIZEN, tags: ['public', 'side_route'], },
   );
 }
 

@@ -169,9 +169,7 @@ function addContainer(
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.SECRET_STASH,
     name,
-    inventory,
-    capacitySlots: Math.max(3, inventory.length),
-    access: 'public',
+    inventory,    access: 'public',
     discovered: true,
     tags,
   };

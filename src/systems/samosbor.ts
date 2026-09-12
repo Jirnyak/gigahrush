@@ -1371,7 +1371,6 @@ function addIstotitSupplyContainer(world: World, state: GameState, roomId: numbe
     kind: ContainerKind.EMERGENCY_BOX,
     name: `Церковный свечной запас: ${room.name}`,
     inventory,
-    capacitySlots: 5,
     faction: Faction.CITIZEN,
     access: 'faction',
     discovered: true,

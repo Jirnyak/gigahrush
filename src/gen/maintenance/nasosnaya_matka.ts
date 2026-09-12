@@ -248,9 +248,7 @@ function addValveControl(
     inventory: [
       { defId: 'valve_tag', count: 1 },
       { defId: valveNo === 2 ? 'manometer' : 'wrench', count: 1 },
-    ],
-    capacitySlots: 4,
-    access: 'public',
+    ],    access: 'public',
     discovered: true,
     tags: [NASOSNAYA_MATKA_ID, 'valve', 'pressure', 'pump', 'water', 'boss', `valve_${valveNo}`],
   });
@@ -270,9 +268,7 @@ function addRewardLocker(ctx: MaintContentCtx, room: Room): void {
       { defId: 'filtered_water', count: 3 },
       { defId: 'ammo_harpoon', count: 3 },
       { defId: 'ammo_energy', count: 1 },
-    ],
-    capacitySlots: 8,
-    access: 'public',
+    ],    access: 'public',
     discovered: true,
     tags: [NASOSNAYA_MATKA_ID, 'reward', 'pressure', 'pump', 'water', 'boss'],
   });

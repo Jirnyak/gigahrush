@@ -78,6 +78,7 @@ import {
 import { gaussianLevel, getMaxHp, randomRPG } from '../systems/rpg';
 import { canSpawnEntityType, entitySpawnSlots } from '../systems/entity_limits';
 import { addRailTrainRoute } from '../systems/procedural_anomalies/rail_trains';
+import { MAX_INVENTORY_SLOTS } from '../data/inventory_limits';
 import { registerRouteCue } from '../systems/route_cues';
 import { placeEmergencyPanel } from '../systems/emergency_panels';
 import { HLADON_COLD_SHELL_RADIUS } from '../systems/procedural_anomalies/hladon';
@@ -2868,9 +2869,9 @@ function inventoryValue(items: readonly Item[]): number {
   return value;
 }
 
-function addCappedItem(inv: Item[], item: Item, valueCap: number, capacitySlots: number): boolean {
+function addCappedItem(inv: Item[], item: Item, valueCap: number, fillSlots: number): boolean {
   const def = ITEMS[item.defId];
-  if (!def || item.count <= 0 || inv.length >= capacitySlots) return false;
+  if (!def || item.count <= 0 || inv.length >= fillSlots) return false;
   const roomLeft = valueCap - inventoryValue(inv);
   let count = Math.min(item.count, getStack(def));
   if (def.value > 0) count = Math.min(count, Math.floor(roomLeft / def.value));
@@ -2888,12 +2889,11 @@ function proceduralContainerValueCap(kind: ContainerKind, spec: ProceduralFloorS
 }
 
 function seedProceduralLootInventory(room: Room, kind: ContainerKind, spec: ProceduralFloorSpec): Item[] {
-  const def = CONTAINER_DEFS[kind];
   const valueCap = proceduralContainerValueCap(kind, spec);
   const inv: Item[] = [];
-  const targetSlots = Math.min((def.capacitySlots ?? 9), 2 + Math.floor(spec.danger / 2) + (kind === ContainerKind.SAFE || kind === ContainerKind.SECRET_STASH ? 1 : 0));
+  const targetSlots = Math.min(MAX_INVENTORY_SLOTS, 2 + Math.floor(spec.danger / 2) + (kind === ContainerKind.SAFE || kind === ContainerKind.SECRET_STASH ? 1 : 0));
   const bias = spec.lootBiasIds[(room.id + kind + spec.danger) % Math.max(1, spec.lootBiasIds.length)];
-  if (bias && chance(0.72)) addCappedItem(inv, { defId: bias, count: 1 }, valueCap, (def.capacitySlots ?? 9));
+  if (bias && chance(0.72)) addCappedItem(inv, { defId: bias, count: 1 }, valueCap, MAX_INVENTORY_SLOTS);
 
   for (let attempt = 0; attempt < targetSlots * 4 && inv.length < targetSlots; attempt++) {
     const remaining = valueCap - inventoryValue(inv);
@@ -2901,7 +2901,7 @@ function seedProceduralLootInventory(room: Room, kind: ContainerKind, spec: Proc
     const picked = chooseItem(room, spec, remaining);
     if (!picked) break;
     const count = irng(1, Math.max(1, Math.min(spawnCount(picked), spec.danger + 2)));
-    addCappedItem(inv, { defId: picked.id, count }, valueCap, (def.capacitySlots ?? 9));
+    addCappedItem(inv, { defId: picked.id, count }, valueCap, MAX_INVENTORY_SLOTS);
   }
 
 
@@ -2998,7 +2998,6 @@ function addProceduralLootContainer(
     kind,
     name: name ?? `${def.name}: ${room.name}`,
     inventory,
-    capacitySlots: (def.capacitySlots ?? 9),
     ownerName: access === 'owner' ? proceduralOwnerName(spec) : undefined,
     faction: access === 'faction' || access === 'locked' ? majorityById(spec.majorityId).npcFaction : undefined,
     access,
@@ -6739,7 +6738,6 @@ function addCitizenMajorityContainer(
   tags: readonly string[],
 ): void {
   if (inventory.length === 0 || world.containersAt(pos.x, pos.y).length > 0) return;
-  const def = CONTAINER_DEFS[kind];
   world.addContainer({
     id: nextContainerId(world),
     x: pos.x,
@@ -6750,7 +6748,6 @@ function addCitizenMajorityContainer(
     kind,
     name,
     inventory: cloneItems(inventory),
-    capacitySlots: (def.capacitySlots ?? 9),
     ownerName: access === 'owner' ? 'соседская очередь' : undefined,
     faction: access === 'owner' || access === 'faction' ? Faction.CITIZEN : undefined,
     access,
@@ -8105,7 +8102,6 @@ function addLiquidatorControlContainer(
   lockDifficulty?: number,
   discovered = true,
 ): WorldContainer {
-  const def = CONTAINER_DEFS[kind];
   const container: WorldContainer = {
     id: nextContainerId(world),
     x: pos.x,
@@ -8116,7 +8112,6 @@ function addLiquidatorControlContainer(
     kind,
     name,
     inventory: inventory.map(item => ({ ...item })),
-    capacitySlots: (def.capacitySlots ?? 9),
     ownerName: access === 'owner' ? 'дежурный поста ликвидаторов' : undefined,
     faction: access === 'faction' || access === 'locked' ? Faction.LIQUIDATOR : undefined,
     access,
@@ -13160,7 +13155,6 @@ function applyWildMajorityGeometry(world: World, rooms: Room[], spec: Procedural
 }
 
 function wildMajorityRewardInventory(room: Room, kind: ContainerKind, spec: ProceduralFloorSpec, index: number): Item[] {
-  const def = CONTAINER_DEFS[kind];
   const valueCap = Math.floor(proceduralContainerValueCap(kind, spec) * 1.35);
   const inv: Item[] = [];
   const staples: readonly Item[] = [
@@ -13170,10 +13164,10 @@ function wildMajorityRewardInventory(room: Room, kind: ContainerKind, spec: Proc
     { defId: index % 2 === 0 ? 'ammo_nails' : 'grey_briquette', count: index % 2 === 0 ? 4 : 2 },
     { defId: index % 3 === 0 ? 'filter_receipt' : 'water_coupon', count: 1 },
   ];
-  for (const item of staples) addCappedItem(inv, item, valueCap, (def.capacitySlots ?? 9));
+  for (const item of staples) addCappedItem(inv, item, valueCap, MAX_INVENTORY_SLOTS);
   for (const item of seedProceduralLootInventory(room, kind, spec)) {
-    if (inv.length >= Math.min((def.capacitySlots ?? 9), 5 + spec.danger)) break;
-    addCappedItem(inv, item, valueCap, (def.capacitySlots ?? 9));
+    if (inv.length >= Math.min(MAX_INVENTORY_SLOTS, 5 + spec.danger)) break;
+    addCappedItem(inv, item, valueCap, MAX_INVENTORY_SLOTS);
   }
   return inv;
 }
@@ -13503,7 +13497,6 @@ function addCultMajorityContainer(
     kind,
     name,
     inventory,
-    capacitySlots: CONTAINER_DEFS[kind].capacitySlots,
     ownerName: 'Черная ладонь',
     faction: Faction.CULTIST,
     access,
@@ -13975,7 +13968,6 @@ function addFalseSafeContainer(
         { defId: 'bandage', count: 1 },
         { defId: 'siren_instruction', count: 1 },
       ],
-    capacitySlots: secret ? 8 : 10,
     ownerName: secret ? undefined : 'Черная ладонь',
     faction: Faction.CULTIST,
     access: secret ? 'secret' : 'owner',
@@ -14224,8 +14216,7 @@ function findReachableContainerCell(
 function convertDropInventory(drop: Entity, kind: ContainerKind, spec: ProceduralFloorSpec): Item[] {
   const inv: Item[] = [];
   const valueCap = proceduralContainerValueCap(kind, spec);
-  const capacitySlots = CONTAINER_DEFS[kind].capacitySlots ?? 9;
-  for (const item of drop.inventory ?? []) addCappedItem(inv, item, valueCap, capacitySlots);
+  for (const item of drop.inventory ?? []) addCappedItem(inv, item, valueCap, MAX_INVENTORY_SLOTS);
   return inv;
 }
 

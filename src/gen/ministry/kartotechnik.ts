@@ -300,7 +300,7 @@ function addKartotechnikContainer(
   access: WorldContainer['access'],
   inventory: WorldContainer['inventory'],
   tags: string[],
-  opts: { faction?: Faction; ownerNpcId?: number; ownerName?: string; capacitySlots?: number } = {},
+  opts: { faction?: Faction; ownerNpcId?: number; ownerName?: string } = {},
 ): void {
   const wx = world.wrap(x);
   const wy = world.wrap(y);
@@ -313,9 +313,7 @@ function addKartotechnikContainer(
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind,
     name,
-    inventory,
-    capacitySlots: opts.capacitySlots ?? Math.max(6, inventory.length + 2),
-    ownerNpcId: opts.ownerNpcId,
+    inventory,    ownerNpcId: opts.ownerNpcId,
     ownerName: opts.ownerName,
     faction: opts.faction,
     access,

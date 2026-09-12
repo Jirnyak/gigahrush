@@ -247,9 +247,7 @@ function addSignalContainer(
     zoneId: world.zoneMap[world.idx(wx, wy)],
     kind: ContainerKind.SECRET_STASH,
     name,
-    inventory,
-    capacitySlots: 3,
-    access: 'public',
+    inventory,    access: 'public',
     discovered: true,
     tags: [ENCOUNTER_ID, ...tags],
   };

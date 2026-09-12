@@ -114,9 +114,7 @@ function addFungusContainer(
     zoneId: world.zoneMap[ci],
     kind: ContainerKind.SECRET_STASH,
     name,
-    inventory: inventory.map(item => ({ ...item })),
-    capacitySlots: Math.max(6, inventory.length + 3),
-    access: 'secret',
+    inventory: inventory.map(item => ({ ...item })),    access: 'secret',
     discovered: true,
     tags: ['ag113_carnivorous_fungus', 'living_fungal_loop', 'carnivorous_fungus', 'zhelemish', 'salt', 'fire', 'medicine', 'harvest'],
   });

@@ -167,7 +167,7 @@ function addKitchenContainer(
   kind: ContainerKind,
   access: WorldContainer['access'],
   inventory: Item[],
-  opts: { ownerId?: number; ownerName?: string; faction?: Faction; tags: string[]; capacitySlots?: number },
+  opts: { ownerId?: number; ownerName?: string; faction?: Faction; tags: string[] },
 ): void {
   const pos = findContainerCell(world, poi, dx, dy);
   if (!pos) return;
@@ -180,9 +180,7 @@ function addKitchenContainer(
     zoneId: world.zoneMap[world.idx(pos.x, pos.y)],
     kind,
     name,
-    inventory: inventory.map(i => ({ ...i })),
-    capacitySlots: opts.capacitySlots ?? Math.max(8, inventory.length + 3),
-    ownerNpcId: opts.ownerId,
+    inventory: inventory.map(i => ({ ...i })),    ownerNpcId: opts.ownerId,
     ownerName: opts.ownerName,
     faction: opts.faction,
     access,
@@ -208,21 +206,19 @@ function seedKitchenContainers(world: World, poi: SocialPoiRoom, zinaId: number)
       ownerId: zinaId,
       ownerName: ZINA.name,
       faction: Faction.CULTIST,
-      tags: ['evidence_drop', 'sabotage_drop', 'theft', 'food', 'paper'],
-      capacitySlots: 11,
-    },
+      tags: ['evidence_drop', 'sabotage_drop', 'theft', 'food', 'paper'],    },
   );
   addKitchenContainer(
     world, poi, 2, poi.h - 3, 'Общая кастрюля жильцов',
     ContainerKind.EMERGENCY_BOX, 'public',
     [{ defId: 'tea', count: 1 }],
-    { faction: Faction.CITIZEN, tags: ['resident_relief', 'food', 'public'], capacitySlots: 10 },
+    { faction: Faction.CITIZEN, tags: ['resident_relief', 'food', 'public'], },
   );
   addKitchenContainer(
     world, poi, 2, 2, 'Жалобная сумка у двери',
     ContainerKind.FILING_CABINET, 'public',
     [{ defId: 'neighbor_complaint', count: 1 }],
-    { faction: Faction.LIQUIDATOR, tags: ['evidence_drop', 'paper', 'public'], capacitySlots: 8 },
+    { faction: Faction.LIQUIDATOR, tags: ['evidence_drop', 'paper', 'public'], },
   );
 }
 

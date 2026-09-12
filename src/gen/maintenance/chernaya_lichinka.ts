@@ -129,9 +129,7 @@ function addLichinkaContainer(
     zoneId: ctx.world.zoneMap[ctx.world.idx(wx, wy)],
     kind,
     name,
-    inventory: inventory.map(item => ({ ...item })),
-    capacitySlots: Math.max(4, inventory.length + 1),
-    access: 'public',
+    inventory: inventory.map(item => ({ ...item })),    access: 'public',
     discovered: true,
     tags: [TAG_SITE, ...tags],
   };
