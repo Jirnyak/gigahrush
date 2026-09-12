@@ -1932,6 +1932,8 @@ uniform sampler2D uBloomTex;   // blurred bright-pass glow (additive)
 uniform float uBloomStrength;  // 0 disables bloom entirely
 uniform float u_istotitLevel;
 uniform float u_veretarLevel;
+uniform sampler2D uHudTex;
+uniform int uHasHud;
 out vec4 fragColor;
 
 /* ── Noise helpers ────────────────────────────────────────────── */
@@ -1953,6 +1955,10 @@ void main() {
   if (postStrength <= 0.001) {
     vec3 baseColor = texture(uTex, vUV).rgb;
     baseColor += texture(uBloomTex, vUV).rgb * uBloomStrength;
+    if (uHasHud == 1) {
+      vec4 hud = texture(uHudTex, vec2(vUV.x, 1.0 - vUV.y));
+      baseColor = mix(baseColor, hud.rgb, hud.a);
+    }
     fragColor = vec4(clamp(baseColor, 0.0, 1.0), 1.0);
     return;
   }
@@ -2043,6 +2049,10 @@ void main() {
   }
 
   color += texture(uBloomTex, vUV).rgb * uBloomStrength;
+  if (uHasHud == 1) {
+    vec4 hud = texture(uHudTex, vec2(vUV.x, 1.0 - vUV.y));
+    color = mix(color, hud.rgb, hud.a);
+  }
   fragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }
 `;
@@ -2226,6 +2236,7 @@ interface GLState {
   shadowCasters: Float32Array; // 32 * 4 floats (x, y, height, radius)
 
   meshPass?: MeshPassHandle;
+  hudTex?: WebGLTexture | null;
 }
 
 interface ProceduralSpriteCacheEntry {
@@ -2239,6 +2250,7 @@ export let webglContextLost = false;
 /** Set when context is restored and main.ts should reinitialize WebGL */
 export let webglNeedsReinit = false;
 export function clearWebGLReinitFlag(): void { webglNeedsReinit = false; }
+export function getWebGLContext(): WebGL2RenderingContext | null { return glState?.gl ?? null; }
 let activeDynamicSky: DynamicSkyTexture | null = null;
 const visibleEntities: (Entity | null)[] = [];
 const visibleDx: number[] = [];
@@ -3226,7 +3238,7 @@ export function initWebGL(
   // ── Blit program ──
   const blitProgram = createProgram(gl, BLIT_VERT_SRC, BLIT_FRAG_SRC);
   const blitVAO = createQuadVAO(gl, blitProgram);
-  const blitUniforms = getUniforms(gl, blitProgram, ['uTex', 'uGlitch', 'uTime', 'uSamosborActive', 'uSamosborStyle', 'uSamosborPost', 'uSamosborTint', 'uScreenInterference', 'uBloomTex', 'uBloomStrength', 'u_istotitLevel', 'u_veretarLevel']);
+  const blitUniforms = getUniforms(gl, blitProgram, ['uTex', 'uGlitch', 'uTime', 'uSamosborActive', 'uSamosborStyle', 'uSamosborPost', 'uSamosborTint', 'uScreenInterference', 'uBloomTex', 'uBloomStrength', 'u_istotitLevel', 'u_veretarLevel', 'uHudTex', 'uHasHud']);
 
   // ── Bloom programs (bright-pass prefilter + separable blur) ──
   const bloomPrefilterProgram = createProgram(gl, BLIT_VERT_SRC, BLOOM_PREFILTER_FRAG_SRC);
@@ -3390,6 +3402,7 @@ export function initWebGL(
     shadowCasterCount: 0,
     shadowCasters: new Float32Array(32 * 4),
     meshPass,
+    hudTex: null,
   };
   world.clearPendingSurfaceDirtyCells();
   uploadDynamicSkyTexture();
@@ -3611,6 +3624,9 @@ export function renderSceneGL(
   visualSurfaceProfile: ResolvedVisualSurfaceProfile = EMPTY_RESOLVED_VISUAL_SURFACE_PROFILE,
   lightingQuality = 4,
   currentFps?: number,
+  targetFramebuffer: WebGLFramebuffer | null = null,
+  targetViewport?: { x: number; y: number; width: number; height: number },
+  hudSourceCanvas?: HTMLCanvasElement | null,
 ): void {
   lastRenderSceneDebugStats.meshEnabled = visualGeometryProfile.enabled;
   lastRenderSceneDebugStats.meshInstances = 0;
@@ -3799,8 +3815,12 @@ export function renderSceneGL(
   }
 
   // ── Pass 2: Blit FBO to screen with glitch ──
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, targetFramebuffer);
+  if (targetViewport) {
+    gl.viewport(targetViewport.x, targetViewport.y, targetViewport.width, targetViewport.height);
+  } else {
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+  }
 
   gl.useProgram(glState.blitProgram);
   gl.activeTexture(gl.TEXTURE0);
@@ -3824,6 +3844,27 @@ export function renderSceneGL(
   const veretarLevel = showStatusFx ? Math.min((thePlayer?.statusEffects?.veretar || 0) / 100, 1.0) : 0.0;
   gl.uniform1f(glState.blitUniforms['u_istotitLevel']!, istotitLevel);
   gl.uniform1f(glState.blitUniforms['u_veretarLevel']!, veretarLevel);
+
+  // Upload and bind HUD overlay texture if provided (VR / composite mode)
+  if (hudSourceCanvas) {
+    if (!glState.hudTex) {
+      glState.hudTex = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, glState.hudTex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    } else {
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, glState.hudTex);
+    }
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, hudSourceCanvas);
+    gl.uniform1i(glState.blitUniforms['uHudTex']!, 2);
+    gl.uniform1i(glState.blitUniforms['uHasHud']!, 1);
+  } else {
+    gl.uniform1i(glState.blitUniforms['uHasHud']!, 0);
+  }
 
   gl.bindVertexArray(glState.blitVAO);
   gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -4604,6 +4645,43 @@ export function disposeWebGL(): void {
   for (const t of glState.spriteTextures) gl.deleteTexture(t);
   for (const entry of glState.proceduralSpriteTextures.values()) gl.deleteTexture(entry.texture);
   for (const entry of glState.itemSpriteTextures.values()) gl.deleteTexture(entry.texture);
+  if (glState.hudTex) gl.deleteTexture(glState.hudTex);
   resetAnimatedEntityTextureOverride(gl);
   glState = null;
+}
+
+/* ── Render single eye pass for WebXR stereoscopic view ─────────── */
+export function renderXREyeGL(
+  world: World,
+  textures: TexData[],
+  sprites: SpriteData[],
+  entities: Entity[],
+  camera: CameraView,
+  fogDensity: number,
+  glitch: number,
+  flashlight: number,
+  time: number,
+  bloodParticles: BloodParticle[],
+  samosborActive: boolean,
+  ambientLight: number,
+  toolBeam: number,
+  toolBeamRange: number,
+  screenInterference: number,
+  visualDetailProfile: ResolvedVisualDetailProfile,
+  visualGeometryProfile: ResolvedVisualGeometryProfile,
+  visualSurfaceProfile: ResolvedVisualSurfaceProfile,
+  lightingQuality: number,
+  currentFps: number | undefined,
+  targetFramebuffer: WebGLFramebuffer | null,
+  targetViewport: { x: number; y: number; width: number; height: number },
+  hudSourceCanvas?: HTMLCanvasElement | null,
+): void {
+  renderSceneGL(
+    world, textures, sprites, entities, camera,
+    fogDensity, glitch, flashlight, time, bloodParticles,
+    samosborActive, ambientLight, toolBeam, toolBeamRange,
+    screenInterference, visualDetailProfile, visualGeometryProfile,
+    visualSurfaceProfile, lightingQuality, currentFps,
+    targetFramebuffer, targetViewport, hudSourceCanvas,
+  );
 }

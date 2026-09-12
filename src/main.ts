@@ -95,8 +95,9 @@ import { Spr, monsterSpr } from './render/sprite_index';
 import {
   SCR_W, SCR_H, initWebGL, renderSceneGL, updateWorldData, updateDynamicData,
   disposeWebGL, setDynamicSkyTexture, getRenderSceneDebugStats, rebuildProceduralSpriteCache, type DynamicSkyTexture,
-  webglContextLost, webglNeedsReinit, clearWebGLReinitFlag,
+  webglContextLost, webglNeedsReinit, clearWebGLReinitFlag, getWebGLContext, renderXREyeGL,
 } from './render/webgl';
+import { xrManager } from './systems/xr';
 import { drawHUD, drawPointerCaptureGate } from './render/hud';
 import { drawFeedbackMenu } from './render/feedback_ui';
 import {
@@ -684,7 +685,7 @@ const FULL_MAP_RADIUS_DEFAULT = 200;
 const FULL_MAP_RADIUS_MIN = 48;
 const FULL_MAP_RADIUS_MAX = W / 2;
 const FULL_MAP_ZOOM_STEP = 1.18;
-type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'trailer' | 'addNpc' | 'start' | 'continue' | 'feedback'>;
+type TitleInputField = Extract<TitleHitField, 'language' | 'name' | 'age' | 'sex' | 'seed' | 'actorCap' | 'trailer' | 'addNpc' | 'start' | 'continue' | 'feedback' | 'vr'>;
 const NPC_INTAKE_ENABLED = Boolean((globalThis as { __GIGAHRUSH_NPC_INTAKE_ENABLED__?: boolean }).__GIGAHRUSH_NPC_INTAKE_ENABLED__);
 const smokeDebug = new URLSearchParams(window.location.search).has('smoke');
 
@@ -704,7 +705,7 @@ function getTitleSetupFields(): readonly TitleInputField[] {
   if (hasValidSaveGame()) fields.push('continue');
   fields.push('start');
   if (NPC_INTAKE_ENABLED) fields.push('addNpc');
-  fields.push('language', 'name', 'age', 'sex', 'seed', 'feedback');
+  fields.push('language', 'name', 'age', 'sex', 'seed', 'feedback', 'vr');
   return fields;
 }
 let started = false;
@@ -1996,7 +1997,50 @@ function openNpcIntakePage(): void {
   window.open(target.href, '_blank', 'noopener,noreferrer');
 }
 
+async function toggleVRMode(): Promise<void> {
+  const btn = document.getElementById('btnVrToggle') as HTMLButtonElement | null;
+  if (xrManager.isActive()) {
+    await xrManager.endSession();
+    if (btn) {
+      btn.textContent = 'ВХОД В VR';
+      btn.classList.remove('vr-active');
+    }
+    if (!started) showTitle();
+  } else {
+    const gl = getWebGLContext();
+    if (!gl) return;
+    const ok = await xrManager.startSession(
+      gl,
+      (session) => {
+        if (btn) {
+          btn.textContent = 'ВЫХОД ИЗ VR';
+          btn.classList.add('vr-active');
+        }
+        if (!started) showTitle();
+        session.requestAnimationFrame((time, frame) => {
+          gameLoop(time, frame);
+        });
+      },
+      () => {
+        if (btn) {
+          btn.textContent = 'ВХОД В VR';
+          btn.classList.remove('vr-active');
+        }
+        if (!started) showTitle();
+        scheduleNextGameLoop();
+      }
+    );
+    if (!ok) {
+      console.warn('[WebXR] Failed to start VR session');
+    }
+  }
+}
+
 function editTitleFieldFromPointer(field: TitleInputField): void {
+  if (field === 'vr') {
+    void toggleVRMode();
+    return;
+  }
   if (field === 'feedback') {
     titleMode = 'feedback';
     showTitle();
@@ -2080,6 +2124,7 @@ function titleSetupRows(cursorOn: boolean): TitleSetupRowView[] {
     { field: 'sex', label: lang.sexLabel, value: shownSex, hint: lang.setupSexHint, selected: selected('sex') },
     { field: 'seed', label: lang.seedLabel, value: `${shownSeed}${seedCursor}`, hint: lang.setupSeedHint, selected: selected('seed') },
     { field: 'feedback', label: 'ОБРАТНАЯ СВЯЗЬ', value: 'ТИТРЫ И ТГ', hint: 'Команда разработчиков и комьюнити', selected: selected('feedback') },
+    { field: 'vr', label: 'РЕЖИМ VR', value: xrManager.isActive() ? 'ВЫХОД ИЗ VR' : 'ВХОД В VR', hint: 'WebXR стереоскопический режим для Meta Quest 2', selected: selected('vr') },
   );
   return rows;
 }
@@ -3815,6 +3860,20 @@ function bootInitialGameOrTitle(): void {
 }
 
 bootInitialGameOrTitle();
+
+function initVRButton(): void {
+  const btn = document.getElementById('btnVrToggle') as HTMLButtonElement | null;
+  if (!btn) return;
+  xrManager.isSupported().then((supported) => {
+    if (supported) {
+      btn.style.display = 'block';
+    }
+  });
+  btn.addEventListener('click', () => {
+    void toggleVRMode();
+  });
+}
+initVRButton();
 
 function sameOptionalNumber(a: number | undefined, b: number | undefined, scale = 1): boolean {
   const aa = Number.isFinite(a) ? Math.round(a! * scale) : undefined;
@@ -9774,7 +9833,18 @@ function clearExternalPauseInputsOnce(): void {
   if (platformPause) clearPlatformPauseInputsOnce();
 }
 
-function gameLoop(now: number): void {
+function scheduleNextGameLoop(): void {
+  const xrSession = xrManager.getSession();
+  if (xrManager.isActive() && xrSession) {
+    xrSession.requestAnimationFrame((time, frame) => {
+      gameLoop(time, frame);
+    });
+  } else {
+    requestAnimationFrame(gameLoop);
+  }
+}
+
+function gameLoop(now: number, xrFrame?: XRFrame): void {
   // Two-phase deferred loading:
   // Phase 1: pendingLoad exists but not drawn yet → draw loading screen, yield to browser
   // Phase 2: pendingLoad exists and was drawn → execute heavy generation
@@ -9791,18 +9861,18 @@ function gameLoop(now: number): void {
       pendingLoadStarted = true;
       pendingLoadWaitTime = performance.now();
       pendingLoadAckYielded = 0;
-      requestAnimationFrame(gameLoop);
+      scheduleNextGameLoop();
       return;
     }
     if (!loadingWorkerAck && performance.now() - pendingLoadWaitTime < 10000) {
       // wait up to 10 seconds for worker to initialize and ack
-      requestAnimationFrame(gameLoop);
+      scheduleNextGameLoop();
       return;
     }
     if (loadingWorkerAck && pendingLoadAckYielded < 2) {
       // Yield multiple frames so the browser compositor can present the worker's first frame!
       pendingLoadAckYielded++;
-      requestAnimationFrame(gameLoop);
+      scheduleNextGameLoop();
       return;
     }
     // Phase 1c: portal ad slot. We wait only for the overlay to actually appear,
@@ -9823,7 +9893,7 @@ function gameLoop(now: number): void {
       // keeps a silent slot from holding the load hostage.
       if (!adOpen && !pendingLoadAdSettled && now - pendingLoadAdWaitStart < PORTAL_AD_OPEN_WAIT_MS) {
         lastTime = now;
-        requestAnimationFrame(gameLoop);
+        scheduleNextGameLoop();
         return;
       }
       pendingLoadAdDone = true;
@@ -9837,7 +9907,7 @@ function gameLoop(now: number): void {
         syncPauseState();
       }
       lastTime = now;
-      requestAnimationFrame(gameLoop);
+      scheduleNextGameLoop();
       return;
     }
     // Phase 2: loading screen is visible, now do the heavy work
@@ -9860,7 +9930,7 @@ function gameLoop(now: number): void {
         if (loadingCanvas) loadingCanvas.style.display = 'none';
         isFirstBootLoading = false;
         lastTime = performance.now(); // reset dt so we don't get a huge spike
-        requestAnimationFrame(gameLoop);
+        scheduleNextGameLoop();
       };
       if (typeof world !== 'undefined') {
         prewarmNavigationTreeAsync(world, _navSolver).then(() => {
@@ -9889,6 +9959,12 @@ function gameLoop(now: number): void {
   // `started` so the title bridge owns its own accept/close mapping.
   beginInputFrame(inputFrame);
   gamepadAdapter.poll(inputFrame);
+  if (xrManager.isActive()) {
+    if (xrFrame) {
+      xrManager.updateFrame(xrFrame);
+    }
+    xrManager.pollControllers(inputFrame, input);
+  }
   resolveInputFrameToInputState(inputFrame, input, {
     writeMenuEdgesFromActions: started,
   });
@@ -9902,7 +9978,7 @@ function gameLoop(now: number): void {
     state.sleeping = false;
     syncPauseState();
     lastTime = now;
-    requestAnimationFrame(gameLoop);
+    scheduleNextGameLoop();
     return;
   }
 
@@ -10064,7 +10140,7 @@ function gameLoop(now: number): void {
   // Menu input always processed (even when paused)
   handleMenuInput();
   // If menu triggered new game / load, bail out to show loading screen
-  if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
+  if (pendingLoad) { scheduleNextGameLoop(); return; }
 
   if (!state.paused) {
     entityIndexFrame = (entityIndexFrame + 1) & 0x3fffffff;
@@ -10141,7 +10217,7 @@ function gameLoop(now: number): void {
     playerActions(dt);
     syncPlayerActorSwitchBaseline();
     // Skip the rest of this frame when switchFloor is triggered and pendingLoad is set
-    if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
+    if (pendingLoad) { scheduleNextGameLoop(); return; }
     updateLiftArachnaEncounter(world, entities, player, state, dt, nextEntityId);
     updatePseudolifts(world, entities, player, state);
     updateEquippedTool(dt, player);
@@ -10246,10 +10322,10 @@ function gameLoop(now: number): void {
         finishLoadedFloorVisuals(replacement);
         if (stitchPeers.length > 0) resyncAllPeersToCurrentFloor();
       });
-      requestAnimationFrame(gameLoop);
+      scheduleNextGameLoop();
       return;
     }
-    if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
+    if (pendingLoad) { scheduleNextGameLoop(); return; }
     syncMapExplorationAfterSamosborWave(world, state);
     // Faction cell capture
     const factionStart = performance.now();
@@ -10319,7 +10395,7 @@ function gameLoop(now: number): void {
       const pci = world.idx(Math.floor(player.x), Math.floor(player.y));
       if (tryUseVoidReturnPortal(pci)) {
         syncMsgLog();
-        requestAnimationFrame(gameLoop);
+        scheduleNextGameLoop();
         return;
       }
     }
@@ -10436,10 +10512,10 @@ function gameLoop(now: number): void {
         clearLiftArachnaActive(state);
         finishLoadedFloorVisuals(replacement);
       });
-      requestAnimationFrame(gameLoop);
+      scheduleNextGameLoop();
       return;
     }
-    if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
+    if (pendingLoad) { scheduleNextGameLoop(); return; }
     syncMapExplorationAfterSamosborWave(world, state);
     updateFactionCapture(world, entities, dt, state);
     updateFactionActivity(world, entities, player, state, nextEntityId, dt, currentFloorAllowsNpcPopulation());
@@ -10461,7 +10537,7 @@ function gameLoop(now: number): void {
     _prevMsgCount = state.msgs.length;
   }
 
-  if (pendingLoad) { requestAnimationFrame(gameLoop); return; }
+  if (pendingLoad) { scheduleNextGameLoop(); return; }
 
   if (!state.gameOver) {
     if (state.trailerMode) {
@@ -10571,18 +10647,6 @@ function gameLoop(now: number): void {
     }
   }
 
-  // WebGL raycaster + sprites
-  const floorRunEntry = currentFloorRunEntry(state);
-  const ambientLight = designFloorAmbientLight(floorRunEntry.designFloorId, 0.12);
-  const visualDetailProfile = currentVisualDetailProfile(floorRunEntry);
-  const visualGeometryProfile = currentVisualGeometryProfile(floorRunEntry);
-  const visualSurfaceProfile = currentVisualSurfaceProfile(floorRunEntry);
-  const renderSceneStart = performance.now();
-  renderSceneGL(world, textures, sprites, entities,
-    cameraView,
-    fogDensity, glitch, flashlight, uiTime, particles, state.samosborActive, ambientLight, toolBeam, state.uvBeamLen, screenInterference, visualDetailProfile, visualGeometryProfile, visualSurfaceProfile, lightingQualityIndex(), currentFps);
-  lastRenderSceneMs = performance.now() - renderSceneStart;
-
   // Draw HUD on 2D overlay canvas
   const textGlitchHp = typeof renderActor.hp === 'number' ? renderActor.hp : 100;
   const textGlitchMaxHp = typeof renderActor.maxHp === 'number' && renderActor.maxHp > 0 ? renderActor.maxHp : 100;
@@ -10605,7 +10669,48 @@ function gameLoop(now: number): void {
   }
   lastHudDrawMs = performance.now() - hudDrawStart;
 
-  requestAnimationFrame(gameLoop);
+  // WebGL raycaster + sprites + stereoscopic WebXR passes
+  const floorRunEntry = currentFloorRunEntry(state);
+  const ambientLight = designFloorAmbientLight(floorRunEntry.designFloorId, 0.12);
+  const visualDetailProfile = currentVisualDetailProfile(floorRunEntry);
+  const visualGeometryProfile = currentVisualGeometryProfile(floorRunEntry);
+  const visualSurfaceProfile = currentVisualSurfaceProfile(floorRunEntry);
+  const renderSceneStart = performance.now();
+
+  const xrSession = xrManager.getSession();
+  const xrLayer = xrManager.getGLLayer();
+  const viewerPose = xrManager.getViewerPose();
+
+  if (xrManager.isActive() && xrSession && xrLayer && viewerPose && viewerPose.views.length > 0) {
+    for (const view of viewerPose.views) {
+      const viewport = xrLayer.getViewport(view);
+      if (!viewport) continue;
+      const eyeCamera = xrManager.computeEyeCamera(cameraView, view, world);
+      renderXREyeGL(
+        world, textures, sprites, entities,
+        eyeCamera,
+        fogDensity, glitch, flashlight, uiTime, particles, state.samosborActive,
+        ambientLight, toolBeam, state.uvBeamLen, screenInterference,
+        visualDetailProfile, visualGeometryProfile, visualSurfaceProfile,
+        lightingQualityIndex(), currentFps,
+        xrLayer.framebuffer,
+        viewport,
+        hudCanvas,
+      );
+    }
+  } else {
+    renderSceneGL(
+      world, textures, sprites, entities,
+      cameraView,
+      fogDensity, glitch, flashlight, uiTime, particles, state.samosborActive,
+      ambientLight, toolBeam, state.uvBeamLen, screenInterference,
+      visualDetailProfile, visualGeometryProfile, visualSurfaceProfile,
+      lightingQualityIndex(), currentFps,
+    );
+  }
+  lastRenderSceneMs = performance.now() - renderSceneStart;
+
+  scheduleNextGameLoop();
 }
 
 /* ── Title screen ─────────────────────────────────────────────── */
@@ -10798,6 +10903,9 @@ function startHandler(e: KeyboardEvent): void {
       titleMode = 'feedback';
       showTitle();
     }
+    else if (titleInputField === 'vr') {
+      void toggleVRMode();
+    }
     else if (titleInputField === 'addNpc') openNpcIntakePage();
     else if (titleInputField === 'language') cycleTitleLanguage(1);
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);
@@ -10916,6 +11024,7 @@ function handleTitleGamepadInput(frame: InputFrame): void {
     else if (titleInputField === 'language') cycleTitleLanguage(1);
     else if (titleInputField === 'actorCap') adjustTitleActiveActorSoftLimit(1);
     else if (titleInputField === 'sex') cyclePlayerSex();
+    else if (titleInputField === 'vr') void toggleVRMode();
     else moveTitleSelection(1);
   }
 }
