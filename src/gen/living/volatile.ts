@@ -370,28 +370,11 @@ export function generateVolatileMaze(world: World): void {
   world.bakeLights();
 }
 
-export function pruneVolatileSideArrays(world: World): { screenCells: number; surfaceCells: number } {
-  let write = 0;
-  const seenScreens = new Set<number>();
-  for (const ci of world.screenCells) {
-    if (!world.aptMask[ci] || seenScreens.has(ci)) continue;
-    world.screenCells[write++] = ci;
-    seenScreens.add(ci);
-  }
-  const removedScreens = world.screenCells.length - write;
-  world.screenCells.length = write;
-
-  let removedSurfaces = 0;
-  for (const [ci] of world.surfaceMap) {
-    if (world.aptMask[ci]) continue;
-    world.surfaceMap.delete(ci);
-    world.surfaceFlags[ci] = 0;
-    removedSurfaces++;
-  }
-  if (removedSurfaces > 0) world.markSurfaceDirty();
-
-  return { screenCells: removedScreens, surfaceCells: removedSurfaces };
-}
+/* `pruneVolatileSideArrays` снята 2026-09-12, и снята по ЗАМЕРУ, а не по числу
+ * ссылок. Она оставляла в `screenCells`/`surfaceMap` только клетки внутри
+ * `aptMask`, а на свежесгенерированном жилом этаже таких — 1 из 126 (сиды 1 и
+ * 4242, дублей при этом ноль). То есть вызов не «починил бы побочные массивы», а
+ * снёс бы почти все экраны этажа: у функции неверна посылка, а не адресат. */
 
 /* ── Wipe all volatile (non-apartment) data ──────────────────── */
 /* Здесь стоял `wipeVolatile` — стирание волатильного объёма жилого этажа.

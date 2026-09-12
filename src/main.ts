@@ -1791,7 +1791,7 @@ function onOnlineFloorSnapshotChunk(msgData: any, chunks: (string | undefined)[]
     // (стены держали — они в cells). Зеркало restore-путей floor_memory.
     rebuildPathBlockersFromWorldObjects(unpacked.world);
     state.currentZ = unpacked.meta.z;
-    world = replaceWorldFromGeneration(world, { world: unpacked.world });
+    world = replaceWorldFromGeneration({ world: unpacked.world });
     entities = unpacked.entities;
     // Never mint a local id that collides with a host-authored entity.
     nextEntityId.v = Math.max(nextEntityId.v, unpacked.meta.nextEntityId, syncNextEntityId(entities, nextEntityId.v));
@@ -3408,7 +3408,7 @@ function continueDeathAsAlifePopulationNpc(): boolean {
     const loaded = loadFloorForTarget({ entry: targetEntry, instanceId: null, z: targetEntry.z });
     const gen = loaded.generation;
 
-    world = replaceWorldFromGeneration(null, gen);
+    world = replaceWorldFromGeneration(gen);
     entities = gen.entities;
     resetEntityIdCursorToEntities();
     materializeCurrentAlifeFloor(snapshot.floorKey);
@@ -3605,7 +3605,7 @@ function returnFromVoidPortalToLiving(portal: VoidReturnPortalState): void {
     resetGeneratedFloorPopulationState();
     const loaded = loadFloorForTarget({ entry: null, instanceId: null, z: VOID_RETURN_TARGET_Z });
     const gen = loaded.generation;
-    world = replaceWorldFromGeneration(null, gen);
+    world = replaceWorldFromGeneration(gen);
     entities = gen.entities;
     resetEntityIdCursorToEntities();
     materializeCurrentAlifeFloor(currentFloorMemoryKey());
@@ -4073,7 +4073,7 @@ function initGame(runSeedOverride?: number, initialZ: number = 0, isTutorial: bo
   loadingProgress('Подготовка мира', 50);
   injectFastElevators(gen.world);
   stampCeilingHeights(gen.world);
-  world = replaceWorldFromGeneration(null, gen);
+  world = replaceWorldFromGeneration(gen);
   entities = gen.entities;
   resetEntityIdCursorToEntities();
 
@@ -6291,7 +6291,7 @@ function switchFloor(
     const loaded = loadFloorForTarget({ entry: generatedRunEntry, instanceId: null, z: nextFloor });
     const gen = loaded.generation;
 
-    world = replaceWorldFromGeneration(null, gen);
+    world = replaceWorldFromGeneration(gen);
     entities = gen.entities;
     resetEntityIdCursorToEntities();
     loadingProgress('Заселяем этаж', 55);
@@ -6855,7 +6855,7 @@ function loadGame(): boolean {
       const loaded = loadFloorForTarget({ entry: generatedRunEntry, instanceId: loadedInstanceId, z: savedFloor });
       const gen = loaded.generation;
 
-      world = replaceWorldFromGeneration(null, gen);
+      world = replaceWorldFromGeneration(gen);
       entities = gen.entities;
       resetEntityIdCursorToEntities();
       materializeCurrentAlifeFloor(generatedRunEntry ? floorRunEntryFloorKey(generatedRunEntry) : currentFloorMemoryKey());

@@ -932,83 +932,30 @@ export function describeReachability(audit: ReachabilityAudit, world: World, idx
   return `unreachable (${classifyReachabilityCell(world, idx).reason})`;
 }
 
-export function replaceWorldFromGeneration(target: World | null | undefined, generation: WorldGenerationLike): World {
+/* Сгенерированный мир СТАНОВИТСЯ живым — объект, а не его содержимое.
+ *
+ * У функции была вторая ветка: «скопировать новый этаж ВНУТРЬ прежнего объекта
+ * и вернуть его же». Ею пользовался ровно один путь из шести — загрузка этажа
+ * у сетевого гостя, — и на нём молча отключалась вся разгрузка этажа, потому
+ * что она устроена на СРАВНЕНИИ объектов (`store.world() !== current`,
+ * `menuState?.world !== current`). Замерено: щитков на новом этаже стало 8
+ * вместо 3 — пять приехали с прошлого. Ветка снесена вместе с причиной: теперь
+ * у смены мира одна форма, и посылка «новый этаж — новый объект» верна всегда.
+ */
+export function replaceWorldFromGeneration(generation: WorldGenerationLike): World {
   const source = generation.world;
-  if (!target) {
-    markWorldReplaced(source, {
-      cellVersion: source.cellVersion,
-      surfaceVersion: source.surfaceVersion,
-      wallTexVersion: source.wallTexVersion,
-      floorTexVersion: source.floorTexVersion,
-      featureVersion: source.featureVersion,
-      lightVersion: source.lightVersion,
-      fogVersion: source.fogVersion,
-      visualSlotVersion: source.visualSlotVersion,
-      pathBlockerVersion: source.pathBlockerVersion,
-      ceilHeightVersion: source.ceilHeightVersion,
-      tissueVersion: source.tissueVersion,
-    });
-    return source;
-  }
-
-  const versions = {
-    cellVersion: target.cellVersion,
-    surfaceVersion: target.surfaceVersion,
-    wallTexVersion: target.wallTexVersion,
-    floorTexVersion: target.floorTexVersion,
-    featureVersion: target.featureVersion,
-    lightVersion: target.lightVersion,
-    fogVersion: target.fogVersion,
-    visualSlotVersion: target.visualSlotVersion,
-    pathBlockerVersion: target.pathBlockerVersion,
-    ceilHeightVersion: target.ceilHeightVersion,
-    tissueVersion: target.tissueVersion,
-  };
-
-  target.cells.set(source.cells);
-  target.roomMap.set(source.roomMap);
-  target.wallTex.set(source.wallTex);
-  target.floorTex.set(source.floorTex);
-  target.features.set(source.features);
-  target.light.set(source.light);
-  target.visualSlots.set(source.visualSlots);
-  target.pathBlockers.set(source.pathBlockers);
-  target.aptMask.set(source.aptMask);
-  target.hermoWall.set(source.hermoWall);
-  target.zoneMap.set(source.zoneMap);
-  target.factionControl.set(source.factionControl);
-  target.fog.set(source.fog);
-  target.tissue.set(source.tissue);
-  // Every perception plane at once (dangerField is plane 0). The bake flag rides
-  // along: a freshly generated source carries `false`, so a reused target
-  // re-bakes its static planes for the new geometry.
-  target.perceptionFields.set(source.perceptionFields);
-  target.perceptionBaked = source.perceptionBaked;
-  target.liftDir.set(source.liftDir);
-  target.lampBlinks.set(source.lampBlinks);
-  target.lightBlinks.set(source.lightBlinks);
-  target.ceilHeight.set(source.ceilHeight);
-
-  target.rooms = source.rooms.slice();
-  target.doors = new Map(source.doors);
-  target.apartmentRoomCount = source.apartmentRoomCount;
-  target.hasOpenSky = source.hasOpenSky;
-  target.globalCeilingTier = source.globalCeilingTier;
-  target.zones = source.zones.slice();
-  target.slideCells = source.slideCells.slice();
-  target.screenCells = source.screenCells.slice();
-  target.surfaceMap = new Map(source.surfaceMap);
-  target.surfaceFlags.set(source.surfaceFlags);
-  target.anomalyTeleports = new Map(source.anomalyTeleports);
-  target.anomalySmogSource = source.anomalySmogSource;
-  target.anomalySmogCells = source.anomalySmogCells.slice();
-  target.anomalySmogHandled = source.anomalySmogHandled;
-  target.railTracks = source.railTracks.slice();
-  target.railTrains = source.railTrains.slice();
-  target.railTrainCells = new Map(source.railTrainCells);
-  target.containers = source.containers.slice();
-  target.rebuildContainerMap();
-
-  markWorldReplaced(target, versions);
-  return target;
+  markWorldReplaced(source, {
+    cellVersion: source.cellVersion,
+    surfaceVersion: source.surfaceVersion,
+    wallTexVersion: source.wallTexVersion,
+    floorTexVersion: source.floorTexVersion,
+    featureVersion: source.featureVersion,
+    lightVersion: source.lightVersion,
+    fogVersion: source.fogVersion,
+    visualSlotVersion: source.visualSlotVersion,
+    pathBlockerVersion: source.pathBlockerVersion,
+    ceilHeightVersion: source.ceilHeightVersion,
+    tissueVersion: source.tissueVersion,
+  });
+  return source;
 }

@@ -245,18 +245,10 @@ export function placeEmergencyPanel(
   return panel;
 }
 
-export function replaceEmergencyPanelStateForRebuild(target: World, source?: World): void {
-  const sourceState = source ? panelStates.get(source) : undefined;
-  if (sourceState) {
-    const panels = new Map<number, EmergencyPanelInstance>();
-    for (const [idx, panel] of sourceState.panels) panels.set(idx, { ...panel });
-    panelStates.set(target, { panels });
-  } else {
-    panelStates.delete(target);
-  }
-  if (source && source !== target) panelStates.delete(source);
-  if (menuState && (menuState.world === target || menuState.world === source)) menuState = null;
-}
+/* `replaceEmergencyPanelStateForRebuild` снята 2026-09-12 вместе с причиной: она
+ * переносила карту щитков из старого объекта мира в новый, а объект мира больше
+ * не переиспользуется ни на одном пути (`replaceWorldFromGeneration`). Новый
+ * этаж — новый объект, и `WeakMap` по нему пуст по построению. */
 
 export function tryUseEmergencyPanel(world: World, _player: Entity, state: GameState, lookX: number, lookY: number): boolean {
   const panel = getEmergencyPanelAt(world, lookX, lookY);

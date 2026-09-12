@@ -533,11 +533,10 @@ export function queuePostSamosborHermodoorBorer(world: World, state: GameState):
   store.queuedPostCycle = state.samosborCount;
 }
 
-export function clearHermodoorBorerForRebuild(world: World): void {
-  const store = storeFor(world);
-  store.active = null;
-  store.doorRecords.clear();
-}
+/* `clearHermodoorBorerForRebuild` снята 2026-09-12: модуль чистит себя сам.
+ * `clearStaleRecords` (зовётся из `updateHermodoorBorer`) выбрасывает записи, у
+ * которых сменился этаж или исчезла дверь, — то есть и после ститча самосбора,
+ * и после смены этажа. Отдельная функция дублировала работающий путь. */
 
 function seedCompromiseLeak(world: World, rec: BorerDoorRecord): void {
   const x = doorX(rec.doorIdx);
