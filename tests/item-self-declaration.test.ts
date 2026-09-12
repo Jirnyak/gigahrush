@@ -28,27 +28,36 @@ import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { ITEMS, itemIdHasTag } from '../src/data/items';
+import { WEAPON_STATS } from '../src/data/catalog';
 import { droppedLightScore } from '../src/data/tool_lights';
+import { createWorldEventState } from '../src/systems/events';
+import { getRecentNoiseRecords, publishWeaponNoise, resetNoiseRecords } from '../src/systems/noise';
+import { makeGameState, makeTestPlayer } from './helpers';
 
 function taggedIds(tag: string): string[] {
   return Object.keys(ITEMS).filter(id => itemIdHasTag(id, tag)).sort();
 }
 
-/** Слепки, снятые с кода ДО перевода на метки. Менять их можно только вместе с
- *  осознанным решением о составе набора — это игровой вопрос, не технический. */
+/** Слепки наборов. Часть снята с кода ДО перевода на метки, часть расширена
+ *  решением владельца 2026-09-12 — и расширение здесь важнее сохранения: оно
+ *  было ПРОВЕРЕНО замером, потому что «просто спросить общую метку» теряло
+ *  семь авторских бумаг из тринадцати. Менять эти списки можно только вместе с
+ *  таким же решением: состав набора — игровой вопрос, не технический. */
 const SNAPSHOTS: ReadonlyArray<readonly [string, readonly string[]]> = [
-  ['evidence_drop', [
-    'chernobog_cell_map', 'chernobog_confiscation_act', 'chernobog_external_cell_index',
-    'chernobog_liquidator_memo', 'chernobog_redacted_central_note', 'chernobog_witness_correction',
-    'cult_supply_list', 'denunciation', 'ration_registry_extract', 'record_exposure_notice',
-    'sealed_complaint', 'voluntary_receipt', 'zhelemish_raw',
-  ]],
   ['sabotage_drop', ['acid_bottle', 'ammo_fuel', 'glass_shard', 'infected_mushroom', 'rawmeat', 'sealant_tube']],
   ['window_seal', ['cloth_roll', 'sealant_tube']],
-  ['loud_report', ['shotgun', 'toz_shotgun']],
   ['bait_ritual', ['meat_rune', 'psi_meat_hook']],
-  ['bait_meat_raw', ['rawmeat']],
+  ['bait_meat', ['canned', 'liquidator_ration', 'rawmeat']],
 ];
+
+/** Тринадцать названных бумаг, которые принимал ящик улик ДО расширения. Их
+ *  членство — та самая ловушка: семь из них общей метки `evidence` не носили. */
+const AUTHORED_EVIDENCE = [
+  'chernobog_cell_map', 'chernobog_confiscation_act', 'chernobog_external_cell_index',
+  'chernobog_liquidator_memo', 'chernobog_redacted_central_note', 'chernobog_witness_correction',
+  'cult_supply_list', 'denunciation', 'ration_registry_extract', 'record_exposure_notice',
+  'sealed_complaint', 'voluntary_receipt', 'zhelemish_raw',
+] as const;
 
 test('наборы перенесены на метки без потерь и добавок', () => {
   for (const [tag, expected] of SNAPSHOTS) {
@@ -57,13 +66,45 @@ test('наборы перенесены на метки без потерь и �
   }
 });
 
+test('расширенный набор улик не потерял ни одной авторской бумаги', () => {
+  /* Расширение набора — решение владельца, а вот ЛОВУШКА расширения
+   * техническая: общую метку `evidence` носят далеко не все названные бумаги,
+   * и «спросить общую метку» молча выкинуло бы семь из тринадцати. */
+  const missing = AUTHORED_EVIDENCE.filter(id => !itemIdHasTag(id, 'evidence'));
+  assert.deepEqual(missing, [], 'авторская бумага выпала из набора улик при расширении');
+  // И обратная сторона: набор действительно ОБЩИЙ, а не те же тринадцать.
+  const all = taggedIds('evidence');
+  assert.ok(all.length > AUTHORED_EVIDENCE.length * 3,
+    `набор улик ${all.length} предметов — расширение откатилось к авторскому списку`);
+});
+
+test('громкость выстрела — свойство ШУМА, а не имени ствола', () => {
+  /* Зелёный пёс держал `itemId === 'shotgun'` поимённо, потому что общий порог
+   * severity >= 4 дробовик не ловил. Порог громкости теперь объявляет
+   * производитель шума по радиусу, и пугает пса любой громкий ствол.
+   * Пороги severity для этого слишком грубы — severity >= 3 затянул бы
+   * пистолеты, 36 стволов из 48. */
+  resetNoiseRecords();
+  const state = makeGameState({ time: 5, worldEvents: createWorldEventState() });
+  const shooter = makeTestPlayer({ id: 1, x: 40.5, y: 40.5, angle: 0 });
+  publishWeaponNoise(state, shooter, 'shotgun', WEAPON_STATS.shotgun);
+  publishWeaponNoise(state, shooter, 'makarov', WEAPON_STATS.makarov);
+  const recs = getRecentNoiseRecords(state, {});
+  const shot = recs.find(r => r.itemId === 'shotgun');
+  const pistol = recs.find(r => r.itemId === 'makarov');
+  assert.ok(shot, 'выстрел дробовика не оставил записи в слухе мира');
+  assert.ok(pistol, 'выстрел пистолета не оставил записи в слухе мира');
+  assert.ok(shot.tags.includes('loud'), 'дробовик перестал объявлять свой выстрел громким');
+  assert.ok(!pistol.tags.includes('loud'), 'пистолет объявился громким — порог поехал и пёс боится всего');
+});
+
 test('метка читается из ОБОИХ мест, где живут метки предмета', () => {
   /* Ловушка, оплаченная на оружии: метки лежат и в `ITEM_TAGS`, и в поле `tags`
    * определения. Досье Чернобога носит свои только в первом. */
   const docket = 'chernobog_cell_map';
   assert.deepEqual(ITEMS[docket]?.tags ?? [], [],
     'у досье появилось собственное поле tags — проверка перестала охранять ловушку');
-  assert.ok(itemIdHasTag(docket, 'evidence_drop'),
+  assert.ok(itemIdHasTag(docket, 'evidence'),
     'метка из ITEM_TAGS не видна: читатель снова смотрит только def.tags');
 });
 
@@ -83,7 +124,7 @@ test('ни одна система не разбирает эти id вручн�
     'cult_supply_list', 'denunciation', 'sealed_complaint', 'record_exposure_notice',
     'voluntary_receipt', 'ration_registry_extract', 'infected_mushroom', 'acid_bottle',
     'glass_shard', 'cloth_roll', 'meat_rune', 'istotit_candle', 'lamp_bulb',
-    'toz_shotgun', 'noise_can', 'rebar',
+    'shotgun', 'toz_shotgun', 'noise_can', 'rebar', 'rawmeat',
   ];
   const offenders: string[] = [];
   for (const file of ['src/systems/containers.ts', 'src/systems/ai/monster.ts']) {

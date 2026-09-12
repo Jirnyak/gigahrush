@@ -612,9 +612,10 @@ function updateFogSharkPack(
 
 function scaryGreenDogNoise(noise: NoiseRecord): boolean {
   if (noise.source === 'explosion') return true;
-  // Громкий выстрел объявляет себя меткой предмета; шумовая банка приходит
-  // источником 'decoy' и метками 'can'/'counterplay' строкой ниже.
-  if (itemIdHasTag(noise.itemId, 'loud_report')) return true;
+  // Громкий выстрел объявляет себя меткой ШУМА: громкость — свойство выстрела,
+  // а не имени ствола. Шумовая банка приходит с метками 'can'/'counterplay'
+  // строкой ниже.
+  if (noise.tags.includes('loud')) return true;
   if (noise.tags.includes('metal') || noise.tags.includes('valve') || noise.tags.includes('pipe')) return true;
   if (noise.tags.includes('can') || noise.tags.includes('counterplay')) return true;
   return noise.source === 'weapon_fire' && noise.severity >= 4;
@@ -3075,7 +3076,7 @@ function findZhornayaScentTarget(
 
 function hasRawMeatItem(e: Entity): boolean {
   for (const item of e.inventory ?? []) {
-    if (item.count > 0 && itemIdHasTag(item.defId, 'bait_meat_raw')) return true;
+    if (item.count > 0 && itemIdHasTag(item.defId, 'bait_meat')) return true;
   }
   return false;
 }

@@ -99,6 +99,13 @@ const NOISE_SCAN_LIMIT = 28;
 const JAMMER_DURATION = 18;
 const JAMMER_RADIUS_MULT = 0.38;
 const QUIET_DOOR_DURATION = 35;
+/* Порог «выстрел громкий». Число не выдумано: это радиус дробовика — самого
+ * тихого ствола, которого боевое AI УЖЕ боялось поимённо (`scaryGreenDogNoise`
+ * держал `itemId === 'shotgun'`, потому что общий порог severity >= 4 его не
+ * ловил). Громкость — свойство выстрела, а не имени ствола, поэтому объявляет
+ * её здесь производитель шума, а спрашивают метку. Пороги severity для этого
+ * слишком грубы: severity >= 3 затянул бы и пистолеты, 36 стволов из 48. */
+const LOUD_SHOT_RADIUS = 19;
 const NOISE_CAN_ID = 'noise_can';
 const RADIO_JAMMER_ID = 'radio_jammer';
 const FELT_DOOR_PAD_ID = 'felt_door_pad';
@@ -301,7 +308,9 @@ function weaponNoiseProfile(weaponId: string, ws: WeaponStats): NoiseProfile | u
     ttl: weaponId === 'bfg' ? 4.2 : ws.aoeRadius ? 3.2 : 2.8,
     severity,
     source: 'weapon_fire',
-    tags: ['weapon', ws.aoeRadius ? 'aoe' : 'shot', weaponId],
+    tags: radius >= LOUD_SHOT_RADIUS
+      ? ['weapon', ws.aoeRadius ? 'aoe' : 'shot', 'loud', weaponId]
+      : ['weapon', ws.aoeRadius ? 'aoe' : 'shot', weaponId],
   };
 }
 

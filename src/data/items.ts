@@ -159,21 +159,23 @@ export function spawnCount(def: ItemDef): number {
 }
 
 export const ITEM_TAGS: Record<string, readonly string[]> = {
-  /* Метки, которые спрашивает боевое AI вместо разбора id. Заведены ПОД ВОПРОС:
-   * `loud_report` — «выстрел пугающе громок» (у дробовиков severity 3, и общий
-   * порог >= 4 их не ловил); `bait_ritual` — «мясная приманка не слабее ритуальной»;
-   * `bait_meat_raw` — «источает запах СЫРОГО мяса», уже, чем `bait_meat`, который
-   * носят ещё тушёнка и паёк. */
+  /* `bait_ritual` — «мясная приманка не слабее ритуальной». Метка спрашивается
+   * боевым AI вместо разбора id. Двух её сестёр заводить не пришлось: решением
+   * владельца 2026-09-12 громкость выстрела ушла в метку ШУМА (свойство
+   * выстрела, а не имени ствола), а запах мяса — в общий `bait_meat`. */
   meat_rune: ['bait_ritual'],
-  /* Наборы ящиков сбора: улика, саботаж и заслон окна. Метки заведены ПОД ВОПРОС,
-   * который задаёт ящик (`evidence_drop` / `sabotage_drop` / `window_seal`), а не под
-   * общий смысл: `evidence` носят 58 предметов, и переиспользовать её значило бы
-   * молча расширить набор с 13 до 58. */
-  cult_supply_list: ['evidence_drop'],
-  denunciation: ['evidence_drop'],
-  sealed_complaint: ['evidence_drop'],
-  record_exposure_notice: ['evidence_drop'],
-  voluntary_receipt: ['evidence_drop'],
+  /* Наборы ящиков сбора: саботаж и заслон окна. Метка отвечает на ВОПРОС ящика
+   * (`sabotage_drop` / `window_seal`), а не описывает предмет — описательные
+   * метки здесь менять нельзя, `ITEM_TAGS` кормит ещё и генератор арта.
+   *
+   * У улик набор РАСШИРЕН решением владельца до общей метки `evidence`: ящик
+   * принимает всё, что ею помечено. Семь названных бумаг её не носили — им она
+   * дописана здесь, иначе расширение молча потеряло бы авторский набор. */
+  cult_supply_list: ['evidence'],
+  denunciation: ['evidence'],
+  sealed_complaint: ['evidence'],
+  record_exposure_notice: ['evidence'],
+  voluntary_receipt: ['evidence'],
   acid_bottle: ['sabotage_drop'],
   ammo_fuel: ['sabotage_drop'],
   glass_shard: ['sabotage_drop'],
@@ -232,7 +234,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   bread: ['bait', 'bait_starch', 'bait_stale', 'flammable'],
   canned: ['bait', 'bait_meat', 'bait_sealed', 'flammable'],
   kasha: ['bait', 'bait_starch', 'bait_wet'],
-  rawmeat: ['bait', 'bait_meat', 'bait_risky', 'bait_trap', 'flammable', 'sabotage_drop', 'bait_meat_raw'],
+  rawmeat: ['bait', 'bait_meat', 'bait_risky', 'bait_trap', 'flammable', 'sabotage_drop'],
   mushroom_mass: ['bait', 'bait_fungal', 'bait_wet', 'flammable'],
   infected_mushroom: ['bait', 'bait_fungal', 'bait_risky', 'contaminant', 'flammable', 'sabotage_drop'],
   grey_briquette: ['bait', 'bait_starch', 'concentrate', 'daily_ration'],
@@ -297,7 +299,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   maronary_shaving: ['maronary', 'contraband', 'evidence', 'science', 'cult'],
   water_coupon: ['ration', 'coupon', 'document', 'economy', 'flammable'],
   concentrate_coupon: ['ration', 'coupon', 'document', 'economy'],
-  ration_registry_extract: ['ration', 'registry', 'document', 'audit', 'evidence_drop'],
+  ration_registry_extract: ['ration', 'registry', 'document', 'audit', 'evidence'],
   forged_ration_card: ['ration', 'forged', 'contraband', 'audit'],
   ration_stamp_pad: ['ration', 'stamp', 'forgery', 'document'],
   hermodoor_journal: ['document', 'hermodoor', 'service_log', 'repair', 'audit', 'maintenance', 'official', 'trade'],
@@ -334,7 +336,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   siren_shard: ['rare_trophy', 'samosbor', 'psi', 'evidence'],
   portable_siren_key: ['repair', 'siren', 'warning', 'liquidator', 'electronics', 'service'],
   void_spike: ['rare_trophy', 'void', 'psi', 'evidence'],
-  zhelemish_raw: ['zhelemish', 'raw', 'skin_status', 'bait', 'bait_fungal', 'bait_risky', 'evidence_drop'],
+  zhelemish_raw: ['zhelemish', 'raw', 'skin_status', 'bait', 'bait_fungal', 'bait_risky', 'evidence'],
   zhelemish_dried: ['zhelemish', 'treated', 'skin_status', 'bait', 'bait_fungal'],
   zhelemish_boiled: ['zhelemish', 'treated', 'skin_status'],
   zhelemish_sample_sealed: ['zhelemish', 'sample', 'sealed', 'nii'],
@@ -406,8 +408,8 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   /* Чем срывают броню с твари. Было списком из шестнадцати id внутри
    * `systems/monster_armor.ts`; метка переносит ответ на само оружие, как
    * `blade` и `heavy_pry` у режущего. Набор сохранён до id. */
-  shotgun: ['weapon', 'armor_strip', 'loud_report'],
-  toz_shotgun: ['weapon', 'armor_strip', 'loud_report'],
+  shotgun: ['weapon', 'armor_strip'],
+  toz_shotgun: ['weapon', 'armor_strip'],
   grenade: ['weapon', 'armor_strip'],
   gauss: ['weapon', 'armor_strip'],
   bfg: ['weapon', 'armor_strip'],
