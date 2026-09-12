@@ -561,8 +561,16 @@ function caravanSpawnScore(world: World, x: number, y: number, ox: number, oy: n
   let score = -world.dist2(ox, oy, x + 0.5, y + 0.5) * 0.01;
   const room = world.rooms[world.roomMap[idx]];
   if (room) {
-    if (room.name.includes('Караван') || room.name.includes('рынок') || room.name.includes('88')) score += 24;
-    if (room.type === RoomType.OFFICE || room.type === RoomType.STORAGE || room.type === RoomType.PRODUCTION) score += 10;
+    /* Караван собирается у торгового ряда — и это вопрос к ТИПУ комнаты.
+     *
+     * Здесь стояли подстроки «Караван»/«рынок»/«88», и замер показал, что
+     * бонус работал ровно наоборот: на пяти этажах он сработал 346 раз, и все
+     * 346 — ложные (жилые, санузлы, коридоры, медпункты: всё, в чьём НОМЕРЕ
+     * есть «88» — «Жилая #88», «Санузел #288», «Зал #880»). С настоящими
+     * рынками пересечение — НОЛЬ. То есть место сборки каравана выбиралось по
+     * случайному числу в подписи комнаты и никогда — по торговле. */
+    if (room.type === RoomType.MARKET || room.type === RoomType.SHOP) score += 24;
+    else if (room.type === RoomType.OFFICE || room.type === RoomType.STORAGE || room.type === RoomType.PRODUCTION) score += 10;
   }
   for (let dy = -3; dy <= 3; dy++) {
     for (let dx = -3; dx <= 3; dx++) {

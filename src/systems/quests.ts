@@ -2227,7 +2227,15 @@ function generateQuest(
     const room = pickVisitRoom(world, npc, preferredVisitRooms(npc, ctx));
     if (!room) return null;
     const dist = world.dist(npc.x, npc.y, room.x, room.y);
-    const docWork = room.name.includes('архив') || room.name.includes('кабин') || preferredVisitRooms(npc, ctx).includes(RoomType.OFFICE);
+    /* Бумажная работа платит умным больше (множитель `intDocumentRewardMult`,
+     * до +70 % против +50 %), поэтому вопрос «кабинет ли это» — про деньги.
+     * Спрашивается он у КОМНАТЫ, а не у её подписи: подстроки «архив»/«кабин»
+     * врали в обе стороны — замерено на пяти этажах, 28 148 комнат, они
+     * находили 59 комнат при 2004 настоящих кабинетах, пересечение 2. Третий
+     * прежний довод был и вовсе не про эту комнату: он смотрел на СПИСОК
+     * предпочтений NPC, поэтому флаг вставал даже когда выбралась не контора.
+     * Авторский архив учитывается своим тегом — у него нет типа в `RoomType`. */
+    const docWork = room.type === RoomType.OFFICE || room.tags?.includes('archive') === true;
     const rewardCalc = proceduralReward('visit', npc, player, state, ctx, {
       distance: dist,
       risk: ctx.samosborDanger ? 2 : 1,
@@ -2346,7 +2354,15 @@ function preferredVisitRooms(npc: Entity, ctx: QuestContext): RoomType[] {
   return [];
 }
 
-function pickVisitRoom(world: World, npc: Entity, preferred: RoomType[] = []): { id: number; name: string; x: number; y: number } | null {
+/* Возвращает и ТИП комнаты: зовущему важно не только куда идти, но и что это
+ * за место — от типа зависит, считается ли поручение бумажной работой, а от
+ * неё награда. Раньше тип терялся в узком объекте, и вопрос приходилось
+ * угадывать по подписи. Координаты — центр комнаты, а не её угол. */
+function pickVisitRoom(
+  world: World,
+  npc: Entity,
+  preferred: RoomType[] = [],
+): { id: number; name: string; x: number; y: number; type: RoomType; tags?: string[] } | null {
   const allRooms = world.rooms.filter(r => r != null && r.type !== RoomType.CORRIDOR);
   const rooms = preferred.length > 0 ? allRooms.filter(r => preferred.includes(r.type)) : allRooms;
   if (rooms.length === 0) return null;
@@ -2354,7 +2370,7 @@ function pickVisitRoom(world: World, npc: Entity, preferred: RoomType[] = []): {
   const candidates = rooms.filter(r => world.dist(npc.x, npc.y, r.x + r.w / 2, r.y + r.h / 2) > 15);
   const pool = candidates.length > 0 ? candidates : rooms;
   const r = pool[Math.floor(rng() * pool.length)];
-  return { id: r.id, name: r.name, x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  return { id: r.id, name: r.name, x: r.x + r.w / 2, y: r.y + r.h / 2, type: r.type, tags: r.tags };
 }
 
 function pickKillKind(npc: Entity, ctx: QuestContext): MonsterKind {
