@@ -12,7 +12,7 @@ import {
 } from '../core/types';
 import type { World } from '../core/world';
 import type { WeaponStats } from '../data/weapons';
-import { ITEMS } from '../data/items';
+import { ITEMS, itemIdHasTag } from '../data/items';
 import { rebuildPathBlockersFromWorldObjects } from '../world/path_blockers';
 import { markNavigationCellsDirty } from './ai/pathfinding';
 import { stampMark, MarkType } from './surface_marks';
@@ -33,6 +33,10 @@ export interface DeletionBeamResult {
   targetsKilled: number;
 }
 
+/** Как луч называет себя в событии. Метки живут на оружии; система их только
+ *  спрашивает, чтобы третьему лучу не понадобилась своя ветка. */
+const BEAM_SELF_TAGS = ['deletion_beam', 'gravity_beam'] as const;
+
 const BEAM_SCAN_STEP = 0.28;
 const MAX_DELETED_CELLS = 64;
 const MAX_TARGETS = 18;
@@ -49,10 +53,17 @@ export function fireDeletionBeam(
 ): DeletionBeamResult {
   const itemDef = ITEMS[weaponId];
   const itemName = itemDef?.name ?? weaponId;
-  const beamTag = weaponId === 'gravity_beam_emitter' ? 'gravity_beam' : 'deletion_beam';
-  const eventTags = beamTag === 'gravity_beam'
-    ? ['weapon', 'gravity_beam', 'deletion_beam', 'collateral', weaponId]
-    : ['weapon', 'deletion_beam', 'collateral', weaponId];
+  /* Чем себя называет луч — свойство ОРУЖИЯ, а не разбор его id системой.
+   * Здесь стояло `weaponId === 'gravity_beam_emitter'`, при том что обе пушки
+   * уже носят свои метки (`deletion_beam` у обеих, `gravity_beam` у излучателя)
+   * — система просто их не спрашивала. Третье такое оружие пришлось бы дописать
+   * в ветку; теперь оно объявляет себя само.
+   *
+   * Метки спрашиваются ОБЩИМ хелпером, а не через `itemDef.tags`: у гравилуча
+   * они лежат в `ITEM_TAGS`, а на самом определении их нет — замер это и
+   * поймал, первая версия читала пустой список. */
+  const beamTags = BEAM_SELF_TAGS.filter(tag => itemIdHasTag(weaponId, tag));
+  const eventTags = ['weapon', ...beamTags, 'collateral', weaponId];
   const range = Math.max(4, Math.min(48, stats.beamRange ?? 28));
   const width = Math.max(0.25, Math.min(1.5, stats.beamWidth ?? 0.65));
   const dirX = Math.cos(actor.angle);

@@ -66,6 +66,16 @@ function unpackChemicalShell(e: Entity) { addStackedUseOutput(e, 'decon_fluid', 
 
 export type ItemEquipSlot = 'weapon' | 'tool' | 'armor';
 
+/** Метка предмета по его id. Спрашивает ОБА места, где метки живут:
+ *  `ITEM_TAGS` и собственное поле `tags` определения. Разница не косметическая —
+ *  у гравилуча метки лежат только в `ITEM_TAGS`, и чтение через `def.tags` даёт
+ *  пустой список. */
+export function itemIdHasTag(defId: string | undefined, tag: string): boolean {
+  if (!defId) return false;
+  const def = ITEMS[defId];
+  return def ? itemDefHasTag(def, tag) : (ITEM_TAGS[defId]?.includes(tag) ?? false);
+}
+
 export function itemDefHasTag(def: ItemDef, tag: string): boolean {
   return (ITEM_TAGS[def.id]?.includes(tag) ?? false) || (def.tags?.includes(tag) ?? false);
 }
@@ -216,7 +226,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   protein_mold_cake: ['bait', 'bait_fungal', 'concentrate', 'mold_food'],
   liquidator_rake: ['weapon', 'liquidator', 'rake', 'cleanup', 'slime_clean', 'slime_counterplay', 'melee_reach', 'tool'],
   rake_bayonet: ['weapon', 'liquidator', 'bayonet', 'rake', 'melee_reach', 'metal', 'issue_gear', 'rare_stash'],
-  liquidator_axe: ['weapon', 'liquidator', 'cleanup', 'slime_counterplay', 'door_work', 'melee_heavy', 'blade'],
+  liquidator_axe: ['weapon', 'liquidator', 'cleanup', 'slime_counterplay', 'door_work', 'melee_heavy', 'blade', 'armor_strip'],
   rubber_club: ['weapon', 'liquidator', 'control', 'melee_control', 'nonlethalish', 'tool'],
   slyoznev_pps41: ['weapon', 'liquidator', 'smg', 'ammo_9mm', 'ammo_burn', 'recruit_stash'],
   eralashnikov_auto: ['weapon', 'liquidator', 'rifle', 'ammo_762', 'ammo_burn', 'permit', 'issue_stash'],
@@ -241,9 +251,9 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   empty_roks_tank: ['fuel', 'liquidator', 'repair_input', 'contraband', 'deep_engineer_stash'],
   pushkin_shotgun: ['weapon', 'liquidator', 'shotgun', 'ammo_shells', 'tactical', 'black_market', 'rare', 'shell_platform', 'corridor_stop'],
   shmk_disposable: ['weapon', 'liquidator', 'flame', 'cleanup', 'single_use', 'panic_clear', 'fuel', 'fuel_clear', 'collateral', 'rare_crate'],
-  losyash_rifle: ['weapon', 'liquidator', 'rifle', 'precision', 'anti_elite', 'rifle_bolt_pack', 'deep_recon_stash'],
+  losyash_rifle: ['weapon', 'liquidator', 'rifle', 'precision', 'anti_elite', 'rifle_bolt_pack', 'deep_recon_stash', 'armor_strip'],
   rifle_bolt_pack: ['ammo', 'liquidator', 'rifle', 'polymer_bolt', 'anti_elite', 'deep_recon_stash'],
-  ptrs_liquidator: ['weapon', 'liquidator', 'rifle', 'precision', 'anti_armor', 'boss_rifle', 'ammo_harpoon', 'darkness_route'],
+  ptrs_liquidator: ['weapon', 'liquidator', 'rifle', 'precision', 'anti_armor', 'boss_rifle', 'ammo_harpoon', 'darkness_route', 'armor_strip'],
   g41_grenade_launcher: ['weapon', 'liquidator', 'grenade', 'mounted', 'stationary', 'production_belt', 'theft'],
   tracked_zhernov: ['weapon', 'liquidator', 'melee_heavy', 'tracked', 'stationary', 'production_belt', 'regenerator_finisher', 'sobrannyy_counterplay', 'theft', 'metal'],
   foam_grenade_6p10: ['weapon', 'liquidator', 'foam', 'grenade', 'control', 'self_ammo', 'issue_stash', 'panic_control'],
@@ -375,6 +385,19 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   cloth_roll: ['medical', 'filter', 'component', 'cloth', 'wet_cloth', 'samosbor', 'counterplay', 'cold_counter', 'flammable'],
   note: ['flammable'],
 
+  /* Чем срывают броню с твари. Было списком из шестнадцати id внутри
+   * `systems/monster_armor.ts`; метка переносит ответ на само оружие, как
+   * `blade` и `heavy_pry` у режущего. Набор сохранён до id. */
+  shotgun: ['weapon', 'armor_strip'],
+  toz_shotgun: ['weapon', 'armor_strip'],
+  grenade: ['weapon', 'armor_strip'],
+  gauss: ['weapon', 'armor_strip'],
+  bfg: ['weapon', 'armor_strip'],
+  harpoon_gun: ['weapon', 'armor_strip'],
+  sledgehammer: ['weapon', 'armor_strip'],
+  metal_chair: ['weapon', 'armor_strip'],
+
+
   /* ── «Чем режут» и «чем ломают» ─────────────────────────────────
    * Три системы держали СВОЙ список режущего инструмента: паутина паупсины
    * (`systems/status.ts`), борщевик (`systems/borshchevik.ts`) и кровяная
@@ -389,13 +412,13 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
    * борщевик добавил штык, лопатку и монтировку, и это разбор, а не правка
    * баланса. Решено агентом, требует подтверждения владельца. */
   knife: ['weapon', 'blade'],
-  axe: ['weapon', 'blade'],
-  chainsaw: ['weapon', 'blade'],
-  fire_hook: ['weapon', 'blade'],
+  axe: ['weapon', 'blade', 'armor_strip'],
+  chainsaw: ['weapon', 'blade', 'armor_strip'],
+  fire_hook: ['weapon', 'blade', 'armor_tool'],
   entrenching_spade: ['weapon', 'blade'],
-  rebar: ['weapon', 'heavy_pry'],
+  rebar: ['weapon', 'heavy_pry', 'armor_tool'],
   pipe: ['weapon', 'heavy_pry'],
-  crowbar: ['tool', 'heavy_pry'],
+  crowbar: ['tool', 'heavy_pry', 'armor_strip'],
   book: ['flammable'],
   filter_layer: ['filter', 'component', 'flammable'],
   technical_spirit: ['medical', 'sterilization', 'fuel', 'contraband', 'reagent', 'brewing', 'trade'],
@@ -409,7 +432,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   nii_contraband_manifest: ['nii', 'contraband', 'evidence', 'document', 'audit'],
   nii_market_receipt: ['nii', 'contraband', 'evidence', 'receipt', 'black_market'],
   nii_forged_audit: ['nii', 'forgery', 'audit', 'document', 'contraband'],
-  gravity_beam_emitter: ['weapon', 'energy', 'gravity_beam', 'deletion_beam', 'rare_weapon', 'net'],
+  gravity_beam_emitter: ['weapon', 'energy', 'gravity_beam', 'deletion_beam', 'rare_weapon', 'net', 'armor_strip'],
   grn420_gravizhernov: ['weapon', 'energy', 'gravity_aoe', 'rare_weapon', 'liquidator', 'veteran', 'silicon_net_well', 'biomass_clear'],
   tanev_svt40: ['weapon', 'liquidator', 'rifle', 'precision', 'sniper', 'ammo_762', 'darkness_route', 'unique_reward'],
   ato41_atomic_flamer: ['weapon', 'liquidator', 'flame', 'atomic', 'deletion_beam', 'door_cutter', 'slime_counterplay', 'collateral', 'darkness_route', 'unique_reward'],

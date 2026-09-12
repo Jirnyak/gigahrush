@@ -1,6 +1,7 @@
 /* ── Standalone monster armor hooks ───────────────────────────── */
 
 import { ArmorType, DamageType, EntityType, MonsterKind, ProjType, msg, type Entity, type GameState } from '../core/types';
+import { itemIdHasTag } from '../data/items';
 import type { World } from '../core/world';
 import { armorMultiplier, type ArmorImpact } from '../data/armor_matrix';
 import { entityDisplayName, monsterDamageFloor } from '../entities/monster';
@@ -19,31 +20,14 @@ const WEAK_CHIP_THRESHOLD = 24;
 const WEAK_CHIP_MULT = 0.07;
 const WEAK_MESSAGE_COOLDOWN_S = 0.75;
 
-const ARMOR_STRIP_WEAPONS = new Set([
-  'shotgun',
-  'toz_shotgun',
-  'grenade',
-  'gauss',
-  'bfg',
-  'gravity_beam_emitter',
-  'harpoon_gun',
-  'losyash_rifle',
-  'ptrs_liquidator',
-  'sledgehammer',
-  'axe',
-  'liquidator_axe',
-  'chainsaw',
-  'crowbar',
-  'metal_chair',
-]);
 
-/* Списки опознают удар по ID ОРУЖИЯ, поэтому запись, которой нет в `WEAPON_STATS`,
- * не срабатывает никогда и молча создаёт вид работающего правила. Отсюда сняты
- * `jackhammer` и `uv_spotlight`: оба `ItemType.TOOL` и оружием не являются. */
-const ARMOR_TOOL_WEAPONS = new Set([
-  'fire_hook',
-  'rebar',
-]);
+/* Чем бьют — свойство САМОГО ОРУЖИЯ, а не список id внутри системы брони.
+ * Здесь стояли два набора на восемнадцать записей, и у них была своя болезнь:
+ * запись, которой нет в `WEAPON_STATS`, не срабатывала никогда и молча
+ * изображала работающее правило (так отсюда сняли `jackhammer` и `uv_spotlight`
+ * — оба `ItemType.TOOL`). Метка этого класса ошибок не допускает: её видно на
+ * предмете, и её сторожит замок. Тот же приём, что `blade` и `heavy_pry` у
+ * режущего оружия. */
 
 export type MonsterArmorHitKind = 'weak' | 'heavy' | 'tool';
 
@@ -70,13 +54,13 @@ export interface MonsterArmorHitResult {
 
 function hitKind(input: MonsterArmorHitInput): MonsterArmorHitKind {
   const weaponId = input.weaponId ?? '';
-  if (ARMOR_TOOL_WEAPONS.has(weaponId)) return 'tool';
+  if (itemIdHasTag(weaponId, 'armor_tool')) return 'tool';
   if (
     input.aoe ||
     input.projectileType === ProjType.GRENADE ||
     input.projectileType === ProjType.BFG ||
     input.projectileType === ProjType.BEAM ||
-    ARMOR_STRIP_WEAPONS.has(weaponId)
+    itemIdHasTag(weaponId, 'armor_strip')
   ) return 'heavy';
   return 'weak';
 }
