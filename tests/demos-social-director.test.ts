@@ -8,7 +8,7 @@ import {
   runDemosSocialDirector,
   type DemosRelationDeltaMeta,
   type DemosRelationDeltaTarget,
-} from '../src/systems/demos_social_director';
+} from '../src/systems/demos_runtime';
 
 function event(id: number, overrides: Partial<WorldEvent> = {}): WorldEvent {
   return {

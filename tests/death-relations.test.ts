@@ -13,7 +13,7 @@ import {
   getDemosRelationToPlayerSlot,
   setDemosSocialEdge,
 } from '../src/systems/demos_social';
-import { processDemosSocialFeedbackEvents } from '../src/systems/demos_social_feedback';
+import { processDemosSocialFeedbackEvents } from '../src/systems/demos_runtime';
 import { publishEvent } from '../src/systems/events';
 import type { GameState } from '../src/core/types';
 

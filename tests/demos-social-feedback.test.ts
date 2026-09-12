@@ -22,7 +22,7 @@ import { ensureAlifeMobilityState } from '../src/systems/alife_migration';
 import {
   processDemosSocialFeedbackEvents,
   requestDemosSocialJourney,
-} from '../src/systems/demos_social_feedback';
+} from '../src/systems/demos_runtime';
 import {
   clearDemosNpcSocialEdges,
   getDemosNpcOnlySocialEdges,
