@@ -159,9 +159,27 @@ export function spawnCount(def: ItemDef): number {
 }
 
 export const ITEM_TAGS: Record<string, readonly string[]> = {
+  /* Метки, которые спрашивает боевое AI вместо разбора id. Заведены ПОД ВОПРОС:
+   * `loud_report` — «выстрел пугающе громок» (у дробовиков severity 3, и общий
+   * порог >= 4 их не ловил); `bait_ritual` — «мясная приманка не слабее ритуальной»;
+   * `bait_meat_raw` — «источает запах СЫРОГО мяса», уже, чем `bait_meat`, который
+   * носят ещё тушёнка и паёк. */
+  meat_rune: ['bait_ritual'],
+  /* Наборы ящиков сбора: улика, саботаж и заслон окна. Метки заведены ПОД ВОПРОС,
+   * который задаёт ящик (`evidence_drop` / `sabotage_drop` / `window_seal`), а не под
+   * общий смысл: `evidence` носят 58 предметов, и переиспользовать её значило бы
+   * молча расширить набор с 13 до 58. */
+  cult_supply_list: ['evidence_drop'],
+  denunciation: ['evidence_drop'],
+  sealed_complaint: ['evidence_drop'],
+  record_exposure_notice: ['evidence_drop'],
+  voluntary_receipt: ['evidence_drop'],
+  acid_bottle: ['sabotage_drop'],
+  ammo_fuel: ['sabotage_drop'],
+  glass_shard: ['sabotage_drop'],
   manometer: ['pressure', 'heatline', 'tool'],
   asbestos_cord: ['repair', 'steam', 'heatline', 'hermetic', 'seal_input', 'cold_counter'],
-  sealant_tube: ['repair', 'sealant', 'cleanup', 'technical_cleanup', 'heatline', 'sump_island_stash'],
+  sealant_tube: ['repair', 'sealant', 'cleanup', 'technical_cleanup', 'heatline', 'sump_island_stash', 'sabotage_drop', 'window_seal'],
   hermetic_tape: ['repair', 'seal', 'sealant', 'temporary_seal', 'cleanup', 'technical_cleanup', 'samosbor', 'counterplay'],
   valve_tag: ['pressure', 'proof', 'heatline', 'sump_island_stash'],
   uv_spotlight: ['tool', 'liquidator', 'cleanup', 'uv', 'directed_light', 'counterplay', 'black_slime'],
@@ -182,7 +200,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   psi_shadow_lance: ['psi', 'psi_clot', 'weapon', 'tool'],
   psi_order_seal: ['psi', 'psi_clot', 'weapon', 'tool', 'aoe'],
   psi_void_needle: ['psi', 'psi_clot', 'weapon', 'tool'],
-  psi_meat_hook: ['psi', 'psi_clot', 'weapon', 'tool', 'meat'],
+  psi_meat_hook: ['psi', 'psi_clot', 'weapon', 'tool', 'meat', 'bait_ritual'],
   psi_siren_pulse: ['psi', 'psi_clot', 'weapon', 'tool', 'aoe'],
   vent_damper_plate: ['vent', 'filter', 'repair', 'maintenance', 'temporary_seal', 'counterplay', 'samosbor'],
   liquidator_flashlamp: ['liquidator', 'cleanup', 'light', 'heavy_tool', 'counterplay'],
@@ -214,9 +232,9 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   bread: ['bait', 'bait_starch', 'bait_stale', 'flammable'],
   canned: ['bait', 'bait_meat', 'bait_sealed', 'flammable'],
   kasha: ['bait', 'bait_starch', 'bait_wet'],
-  rawmeat: ['bait', 'bait_meat', 'bait_risky', 'bait_trap', 'flammable'],
+  rawmeat: ['bait', 'bait_meat', 'bait_risky', 'bait_trap', 'flammable', 'sabotage_drop', 'bait_meat_raw'],
   mushroom_mass: ['bait', 'bait_fungal', 'bait_wet', 'flammable'],
-  infected_mushroom: ['bait', 'bait_fungal', 'bait_risky', 'contaminant', 'flammable'],
+  infected_mushroom: ['bait', 'bait_fungal', 'bait_risky', 'contaminant', 'flammable', 'sabotage_drop'],
   grey_briquette: ['bait', 'bait_starch', 'concentrate', 'daily_ration'],
   green_briquette: ['bait', 'bait_starch', 'bait_fungal'],
   liquidator_ration: ['liquidator', 'concentrate', 'nutritious_concentrate', 'black_concentrate', 'field_ration', 'closed_issue', 'bait', 'bait_meat'],
@@ -279,7 +297,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   maronary_shaving: ['maronary', 'contraband', 'evidence', 'science', 'cult'],
   water_coupon: ['ration', 'coupon', 'document', 'economy', 'flammable'],
   concentrate_coupon: ['ration', 'coupon', 'document', 'economy'],
-  ration_registry_extract: ['ration', 'registry', 'document', 'audit'],
+  ration_registry_extract: ['ration', 'registry', 'document', 'audit', 'evidence_drop'],
   forged_ration_card: ['ration', 'forged', 'contraband', 'audit'],
   ration_stamp_pad: ['ration', 'stamp', 'forgery', 'document'],
   hermodoor_journal: ['document', 'hermodoor', 'service_log', 'repair', 'audit', 'maintenance', 'official', 'trade'],
@@ -316,7 +334,7 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   siren_shard: ['rare_trophy', 'samosbor', 'psi', 'evidence'],
   portable_siren_key: ['repair', 'siren', 'warning', 'liquidator', 'electronics', 'service'],
   void_spike: ['rare_trophy', 'void', 'psi', 'evidence'],
-  zhelemish_raw: ['zhelemish', 'raw', 'skin_status', 'bait', 'bait_fungal', 'bait_risky'],
+  zhelemish_raw: ['zhelemish', 'raw', 'skin_status', 'bait', 'bait_fungal', 'bait_risky', 'evidence_drop'],
   zhelemish_dried: ['zhelemish', 'treated', 'skin_status', 'bait', 'bait_fungal'],
   zhelemish_boiled: ['zhelemish', 'treated', 'skin_status'],
   zhelemish_sample_sealed: ['zhelemish', 'sample', 'sealed', 'nii'],
@@ -382,14 +400,14 @@ export const ITEM_TAGS: Record<string, readonly string[]> = {
   deactivated_residue: ['slime', 'sample', 'deactivated', 'burned', 'reagent'],
   syringe_empty: ['medical', 'nii', 'component', 'injection', 'trade'],
   cotton_wool: ['medical', 'filter', 'component'],
-  cloth_roll: ['medical', 'filter', 'component', 'cloth', 'wet_cloth', 'samosbor', 'counterplay', 'cold_counter', 'flammable'],
+  cloth_roll: ['medical', 'filter', 'component', 'cloth', 'wet_cloth', 'samosbor', 'counterplay', 'cold_counter', 'flammable', 'window_seal', 'window_seal_curtain'],
   note: ['flammable'],
 
   /* Чем срывают броню с твари. Было списком из шестнадцати id внутри
    * `systems/monster_armor.ts`; метка переносит ответ на само оружие, как
    * `blade` и `heavy_pry` у режущего. Набор сохранён до id. */
-  shotgun: ['weapon', 'armor_strip'],
-  toz_shotgun: ['weapon', 'armor_strip'],
+  shotgun: ['weapon', 'armor_strip', 'loud_report'],
+  toz_shotgun: ['weapon', 'armor_strip', 'loud_report'],
   grenade: ['weapon', 'armor_strip'],
   gauss: ['weapon', 'armor_strip'],
   bfg: ['weapon', 'armor_strip'],

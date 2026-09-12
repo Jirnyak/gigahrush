@@ -99,3 +99,18 @@ export function equippedToolLightScore(toolId: string | undefined): number {
 export function droppedToolLightScore(itemId: string): number {
   return toolLightDef(itemId)?.dropLightScore ?? 0;
 }
+
+/* Свет, брошенный на пол, светит и НЕ будучи инструментом: свеча горит, лампа
+ * бликует. Числа стояли двумя ветками внутри боевого AI (`ai/monster.ts`), то
+ * есть ядро знало предметы по имени. Место им здесь, рядом с остальным светом.
+ * В `TOOL_LIGHT_DEFS` их заводить нельзя: оттуда предмет получает расход,
+ * замедление и яркость В РУКЕ, а свечу в руке игра не зажигает. */
+const NON_TOOL_DROP_LIGHT_SCORES: Readonly<Record<string, number>> = {
+  istotit_candle: 0.64,
+  lamp_bulb: 0.32,
+};
+
+/** Насколько заметен ЛЮБОЙ брошенный источник света — инструмент или нет. */
+export function droppedLightScore(itemId: string): number {
+  return NON_TOOL_DROP_LIGHT_SCORES[itemId] ?? droppedToolLightScore(itemId);
+}

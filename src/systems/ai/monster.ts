@@ -10,8 +10,8 @@ import {
 } from '../../core/types';
 import { World } from '../../core/world';
 import { MONSTERS, entityDisplayName, monsterHasAIFlag, monsterWindup, type MonsterAIFlag, type MonsterAffinityDef, type MonsterAnchorDef, type MonsterDef, type MonsterStrikeDef, type MonsterWindupDef } from '../../entities/monster';
-import { ITEMS, ITEM_TAGS } from '../../data/items';
-import { droppedToolLightScore, equippedToolLightScore } from '../../data/tool_lights';
+import { ITEMS, ITEM_TAGS, itemIdHasTag } from '../../data/items';
+import { droppedLightScore, equippedToolLightScore } from '../../data/tool_lights';
 import {
   playGrowl,
   playFogSharkBite,
@@ -612,7 +612,9 @@ function updateFogSharkPack(
 
 function scaryGreenDogNoise(noise: NoiseRecord): boolean {
   if (noise.source === 'explosion') return true;
-  if (noise.itemId === 'shotgun' || noise.itemId === 'toz_shotgun' || noise.itemId === 'noise_can') return true;
+  // Громкий выстрел объявляет себя меткой предмета; шумовая банка приходит
+  // источником 'decoy' и метками 'can'/'counterplay' строкой ниже.
+  if (itemIdHasTag(noise.itemId, 'loud_report')) return true;
   if (noise.tags.includes('metal') || noise.tags.includes('valve') || noise.tags.includes('pipe')) return true;
   if (noise.tags.includes('can') || noise.tags.includes('counterplay')) return true;
   return noise.source === 'weapon_fire' && noise.severity >= 4;
@@ -2838,7 +2840,7 @@ function itemScentScore(defId: string): number {
   if (tags.includes('bait_risky') || tags.includes('bait_trap')) score += 0.45;
   if (tags.includes('bait_fungal')) score += 0.35;
   if (tags.includes('bait_sealed')) score *= 0.2;
-  if (defId === 'meat_rune' || defId === 'psi_meat_hook') score = Math.max(score, 1.45);
+  if (itemIdHasTag(defId, 'bait_ritual')) score = Math.max(score, 1.45);
   return score;
 }
 
@@ -3073,7 +3075,7 @@ function findZhornayaScentTarget(
 
 function hasRawMeatItem(e: Entity): boolean {
   for (const item of e.inventory ?? []) {
-    if (item.count > 0 && item.defId === 'rawmeat') return true;
+    if (item.count > 0 && itemIdHasTag(item.defId, 'bait_meat_raw')) return true;
   }
   return false;
 }
@@ -3588,10 +3590,8 @@ function lishennyyDropLight(drop: Entity): { score: number; itemId: string } | n
   let bestItem = '';
   for (const item of drop.inventory ?? []) {
     if (item.count <= 0) continue;
-    let score = droppedToolLightScore(item.defId);
-    if (item.defId === 'istotit_candle') score = 0.64;
-    else if (item.defId === 'lamp_bulb') score = 0.32;
-    else if (score <= 0) continue;
+    const score = droppedLightScore(item.defId);
+    if (score <= 0) continue;
     if (score > bestScore) {
       bestScore = score;
       bestItem = item.defId;
@@ -4145,7 +4145,9 @@ function chernoslizRevealNoise(noise: NoiseRecord): boolean {
   if (noise.source === 'decoy' || noise.source === 'explosion') return true;
   if (noise.source === 'weapon_fire' && noise.severity >= 2) return true;
   if (noise.source === 'melee' && (noise.tags.includes('metal') || noise.tags.includes('pipe'))) return true;
-  return noise.itemId === 'noise_can' || noise.tags.includes('counterplay');
+  // Разбор id шумовой банки снят: её запись приходит источником 'decoy',
+  // и он проверен первой строкой этой же функции.
+  return noise.tags.includes('counterplay');
 }
 
 function revealChernoSlizByNoise(
@@ -4718,7 +4720,9 @@ function rzhavnikDormantAnchor(world: World, e: Entity): boolean {
 function rzhavnikWakeNoise(noise: NoiseRecord): boolean {
   if (noise.source === 'explosion') return true;
   if (noise.source === 'weapon_fire' && noise.severity >= 3) return true;
-  if (noise.source === 'melee' && (noise.tags.includes('metal') || noise.itemId === 'rebar')) return true;
+  // Разбор id арматуры снят: её профиль шума несёт метку 'metal', которую эта
+  // же строка и спрашивает.
+  if (noise.source === 'melee' && noise.tags.includes('metal')) return true;
   return noise.tags.includes('metal') || noise.tags.includes('pipe') || noise.tags.includes('valve');
 }
 

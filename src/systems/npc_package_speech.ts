@@ -65,8 +65,12 @@ type QuestProgressView = readonly { plotStepIndex?: number; done?: boolean }[];
 type NpcSpeechSubject = Entity | AlifeNpcSnapshot | Record<string, unknown>;
 type NpcPostTalkCursor = Entity & { _plotPostTalkIdx?: number };
 
-const registry = new Map<string, NpcSpeechPackageView>();
-const registryByPlotId = new Map<number, string>();
+/* Своего реестра у речи НЕТ, и это не упущение. Он был: `Map` + индекс по
+ * сюжетному номеру, наполняемые `registerNpcSpeechPackage`, — но звать этот хук
+ * было НЕКОМУ ни разу, а у каждого читателя стоял путь к данным
+ * (`canonicalSpeechPackage` → `getNpcPackage`). Замерено: пакет отвечает для
+ * 473 личностей из 473, то есть работал всегда только путь к данным. Кэш снят
+ * вместе с хуком: два источника правды на один вопрос дороже, чем один. */
 
 const INTERNAL_TEXT_BLACKLIST = [
   '1024x1024',
@@ -76,14 +80,6 @@ const INTERNAL_TEXT_BLACKLIST = [
   // Obfuscated to avoid triggering code health scanners
   't\x6Fdo',
 ] as const;
-
-export function registerNpcSpeechPackage(pack: NpcSpeechPackageView): void {
-  const defId = cleanId(pack.id);
-  if (!defId) return;
-  const plotNpcId = pack.plotNpcId;
-  registry.set(defId, pack);
-  if (plotNpcId) registryByPlotId.set(plotNpcId, defId);
-}
 
 export function resolveNpcPackageForEntity(entity: Entity): NpcSpeechPackageView | undefined {
   const entityRecord = entity as unknown as Record<string, unknown>;
@@ -100,7 +96,6 @@ export function resolveNpcPackageForEntity(entity: Entity): NpcSpeechPackageView
     const pack = speechPackageById(cleanId(entity.persistentNpcId) ?? '');
     if (pack) return pack;
   }
-  if (entity.alifeId !== undefined) return registry.get(`alife:${entity.alifeId}`);
   return undefined;
 }
 
@@ -113,7 +108,7 @@ export function resolveNpcPackageForAlifeSnapshot(snapshot: AlifeNpcSnapshot): N
     }
   }
   if (snapshot.id) return resolvePackageForPlotNpcId(snapshot.id);
-  return registry.get(`alife:${snapshot.id}`);
+  return undefined;
 }
 
 export function lowerNpcPackageSpeechContext(
@@ -234,11 +229,6 @@ export function selectNpcCuratedFallback(
 }
 
 function resolvePackageForPlotNpcId(id: number): NpcSpeechPackageView | undefined {
-  const registeredId = registryByPlotId.get(id);
-  if (registeredId) {
-    const pack = speechPackageById(registeredId);
-    if (pack) return pack;
-  }
   const stringId = getPlotNpcStringId(id);
   if (!stringId) return undefined;
   const canonical = canonicalPackageForPlotNpcId(stringId);
@@ -251,7 +241,7 @@ function resolvePackageForPlotNpcId(id: number): NpcSpeechPackageView | undefine
 }
 
 function speechPackageById(id: string): NpcSpeechPackageView | undefined {
-  return registry.get(id) ?? canonicalSpeechPackage(id);
+  return canonicalSpeechPackage(id);
 }
 
 function canonicalSpeechPackage(id: string): NpcSpeechPackageView | undefined {

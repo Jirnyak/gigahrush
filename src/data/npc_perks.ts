@@ -8,7 +8,12 @@ export interface NpcPerkDef {
   sourceTraitId?: string;
 }
 
-const NPC_PERKS: NpcPerkDef[] = DEMOS_TRAIT_DEFS.map((trait: DemosTraitDef) => ({
+/* Перки выводятся из черт Демоса и другого источника не имеют. Хук
+ * `registerNpcPerk` (валидация id, запрет дублей, обрезка метки) не звался
+ * ни разу и снят: объявленный способ расширения, которым никто не
+ * пользуется, — обещание, а не API. Понадобится второй род перка — он
+ * придёт своим списком, как этот. */
+const NPC_PERKS: readonly NpcPerkDef[] = DEMOS_TRAIT_DEFS.map((trait: DemosTraitDef) => ({
   id: trait.id,
   label: trait.label,
   kind: 'demos_trait',
@@ -17,22 +22,6 @@ const NPC_PERKS: NpcPerkDef[] = DEMOS_TRAIT_DEFS.map((trait: DemosTraitDef) => (
 }));
 
 const NPC_PERKS_BY_ID = new Map<string, NpcPerkDef>(NPC_PERKS.map(def => [def.id, def]));
-const NPC_PERK_ID_RE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
-
-export function registerNpcPerk(def: NpcPerkDef): void {
-  const id = def.id.trim();
-  if (!NPC_PERK_ID_RE.test(id)) throw new Error(`[NPC_PERK] invalid id "${def.id}"`);
-  if (NPC_PERKS_BY_ID.has(id)) throw new Error(`[NPC_PERK] duplicate id "${id}"`);
-  const checked: NpcPerkDef = {
-    ...def,
-    id,
-    label: def.label.trim().slice(0, 64),
-    tags: [...new Set(def.tags.map(tag => tag.trim()).filter(Boolean))].slice(0, 16),
-  };
-  NPC_PERKS.push(checked);
-  NPC_PERKS_BY_ID.set(id, checked);
-}
-
 export function getNpcPerk(id: string): NpcPerkDef | undefined {
   return NPC_PERKS_BY_ID.get(id);
 }

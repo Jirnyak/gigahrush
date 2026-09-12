@@ -14,9 +14,8 @@ import {
   resolvePermitAccess } from '../data/permits';
 import {
   chernobogDocketContainerEventTags,
-  chernobogDocketContainerRumorIds,
-  isChernobogDocketItem } from '../data/chernobog_docket';
-import { getStack } from '../data/items';
+  chernobogDocketContainerRumorIds } from '../data/chernobog_docket';
+import { getStack, itemIdHasTag } from '../data/items';
 import { addFactionRelMutual, applyRoomMemoryRelationPenalty, applyTheftRelationPenalty } from '../data/relations';
 import { changeResourceStock, getEconomyQuote, type EconomyQuote } from './economy';
 import { controlHint } from './controls';
@@ -727,28 +726,30 @@ function addContainerTag(container: WorldContainer, tag: string): void {
   if (!container.tags.includes(tag)) container.tags.push(tag);
 }
 
+/* Ящик сбора и вещь говорят на одном языке — метками.
+ *
+ * Ящик объявлял себя меткой (`evidence_drop`, `sabotage_drop`,
+ * `veretar_window_seal`), а вещь нет: три предиката держали двадцать один id
+ * списком внутри обобщённой системы. Правка данных — переименование, новый
+ * документ, новая горючка — молча не доезжала до ящика, потому что система про
+ * неё не знала. Теперь вещь объявляет себя сама, тем же приёмом, каким это уже
+ * сделано для оружия (`deletion_beam`, `armor_strip`).
+ *
+ * Метки заведены ПОД ВОПРОС ящика, а не под общий смысл: общую `evidence`
+ * носят 58 предметов, а набор ящика — 13, и переиспользовать её значило бы
+ * молча расширить набор вчетверо. Спрашивать метку обязательно через
+ * `itemIdHasTag`: метки живут в ДВУХ местах (`ITEM_TAGS` и поле `tags`
+ * определения), и чтение одного из них даёт пустой список. */
 function isEvidenceItem(defId: string): boolean {
-  return isChernobogDocketItem(defId)
-    || defId === 'cult_supply_list'
-    || defId === 'denunciation'
-    || defId === 'sealed_complaint'
-    || defId === 'record_exposure_notice'
-    || defId === 'voluntary_receipt'
-    || defId === 'ration_registry_extract'
-    || defId === 'zhelemish_raw';
+  return itemIdHasTag(defId, 'evidence_drop');
 }
 
 function isSabotageItem(defId: string): boolean {
-  return defId === 'infected_mushroom'
-    || defId === 'rawmeat'
-    || defId === 'acid_bottle'
-    || defId === 'ammo_fuel'
-    || defId === 'sealant_tube'
-    || defId === 'glass_shard';
+  return itemIdHasTag(defId, 'sabotage_drop');
 }
 
 function isVeretarSealItem(defId: string): boolean {
-  return defId === 'cloth_roll' || defId === 'sealant_tube';
+  return itemIdHasTag(defId, 'window_seal');
 }
 
 function containerDepositOutcome(container: WorldContainer, item: Item): {
@@ -772,7 +773,8 @@ function containerDepositOutcome(container: WorldContainer, item: Item): {
   }
   if (container.tags.includes('veretar_window_seal') && !container.tags.includes('veretar_window_sealed_done') && isVeretarSealItem(item.defId)) {
     addContainerTag(container, 'veretar_window_sealed_done');
-    const curtain = item.defId === 'cloth_roll';
+    // Чем закрыли окно, решает МАТЕРИАЛ: ткань занавешивает, герметик замазывает.
+    const curtain = itemIdHasTag(item.defId, 'window_seal_curtain');
     addContainerTag(container, curtain ? 'veretar_window_curtained' : 'veretar_window_sealed_done_hard');
     addFactionRelMutual(Faction.PLAYER, Faction.CITIZEN, curtain ? 1 : 2);
     return {
@@ -842,7 +844,7 @@ function depositActionLabel(container: WorldContainer, item: Item): { label: str
     return { label: `${controlHint('interact')} отдать в общий запас`, detail: 'Жильцы запомнят помощь.', color: '#8f8', mode: 'service' };
   }
   if (container.tags.includes('veretar_window_seal') && !container.tags.includes('veretar_window_sealed_done') && isVeretarSealItem(item.defId)) {
-    return item.defId === 'cloth_roll'
+    return itemIdHasTag(item.defId, 'window_seal_curtain')
       ? { label: `${controlHint('interact')} занавесить`, detail: 'Ткань закроет белое окно и даст свидетелю отойти.', color: '#f4f1df', mode: 'service' }
       : { label: `${controlHint('interact')} замазать`, detail: 'Герметик закроет белую щель под рамой.', color: '#f4f1df', mode: 'service' };
   }

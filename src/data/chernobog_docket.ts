@@ -1,6 +1,9 @@
 import { ItemType, type Item, type ItemDef } from '../core/types';
 
-export const CHERNOBOG_DOCKET_CORE_TAGS = ['evidence', 'cult', 'archive', 'chernobog', 'witness'] as const;
+/* `evidence_drop` — метка «эту бумагу принимает ящик сбора улик». Общая метка
+ * `evidence` для этого не годится: её носят 58 предметов, а набор ящика — 13.
+ * Спрашивает метку `systems/containers.ts`, разбирать id он больше не умеет. */
+export const CHERNOBOG_DOCKET_CORE_TAGS = ['evidence', 'evidence_drop', 'cult', 'archive', 'chernobog', 'witness'] as const;
 
 export const CHERNOBOG_DOCKET_ITEMS: Record<string, ItemDef> = {
   chernobog_cell_map: {
