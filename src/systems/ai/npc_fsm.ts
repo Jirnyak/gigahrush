@@ -8,6 +8,7 @@ import {
 import { World } from '../../core/world';
 import { roomIdsAroundInto, roomRadiusCoversFloor } from '../../world/room_index';
 import { WEAPON_STATS } from '../../data/catalog';
+import { buildDemosAiSocialContext } from '../demos_ai_social';
 import { ENTITY_MASK_ACTOR, ensureEntityIndex } from '../entity_index';
 import { isHostile } from '../factions';
 import { feudRoomHoldsEnemy, tickFeudDuelWalk } from '../npc_feud';
@@ -439,7 +440,7 @@ export function updateNPC(
     enterUtilityIntent(e, initialIntentForNpc(e, samosborActive, profile), 0, profile);
   }
 
-  const decision = selectAndEnterUtilityIntent(world, entities, e, clock, samosborActive, profile);
+  const decision = selectAndEnterUtilityIntent(world, entities, e, clock, samosborActive, profile, state);
   const intent = decision.intent;
 
   ai.timer -= dt;
@@ -489,6 +490,7 @@ function selectAndEnterUtilityIntent(
   clock: GameClock,
   samosborActive: boolean,
   profile: NpcAiProfile,
+  state?: import('../../core/types').GameState,
 ): { intent: NpcUtilityIntentId; rescored: boolean } {
   const currentIntent = utilityIntentByNpc.get(e);
   const now = _barkTime;
@@ -514,7 +516,7 @@ function selectAndEnterUtilityIntent(
       hasRangedWeapon: npcHasRangedWeapon(e),
       isTraveler: usesTravelerRoutine(e),
     },
-    local: buildLocalUtilityScores(world, e, samosborActive, profile),
+    local: buildLocalUtilityScores(world, entities, e, samosborActive, profile, state),
   }, utilityScoreBuffer);
   const selected = selectNpcUtilityIntent(scores, currentIntent, {
     switchMargin: UTILITY_SWITCH_MARGIN,
@@ -564,9 +566,11 @@ export function processUrinationEvents(world: World, e: Entity, ai: import('../.
 
 function buildLocalUtilityScores(
   world: World,
+  entities: readonly Entity[],
   e: Entity,
   samosborActive: boolean,
   profile: NpcAiProfile,
+  state?: import('../../core/types').GameState,
 ): Partial<Record<NpcUtilityIntentId, number>> {
   const local: Partial<Record<NpcUtilityIntentId, number>> = {};
   const room = world.roomAt(e.x, e.y);
@@ -623,7 +627,61 @@ function buildLocalUtilityScores(
       addLocalScore(local, 'safety', 16);
     }
   }
+  applyDemosSocialBias(local, entities, e, state);
   return local;
+}
+
+/* ── Родня, друзья и враги наконец слышны в поведении ──────────────
+ *
+ * Граф Демоса считал смещения (`escortBias`, `fleeBias`, `talkBias`) и не
+ * отдавал их НИКОМУ: единственный вызывающий `buildDemosAiSocialContext` жил в
+ * тестах. Это `#87` старого реестра, и он подтверждён замером, а не чтением.
+ *
+ * Цена спрошена до подключения. Проход по 2000 акторов стоит 4.2 мс — то есть
+ * звать это каждый кадр нельзя. Здесь оно и не зовётся каждый кадр: место —
+ * такт ПЕРЕОЦЕНКИ намерения (`utilityRethinkInterval`, 1.5–4 с на человека),
+ * а значит на две тысячи жителей приходится порядка двенадцати вызовов в кадр
+ * — сотые доли миллисекунды.
+ *
+ * Ранний выход «у этого нет связей» я написал и ОТКАТИЛ: замер показал, что он
+ * делает хуже (4.2 → 7.5 мс), потому что второй раз поднимает граф. Каданса
+ * достаточно, лишнего стража не нужно.
+ */
+const socialBiasByNpc = new WeakMap<Entity, { at: number; talk: number; escort: number; flee: number }>();
+
+/** Свой каданс поверх переоценки намерения. Связи меняются медленнее, чем
+ *  человек передумывает: пересчёт раз в восемь секунд даёт то же поведение
+ *  втрое дешевле. Замерено ниже. */
+const SOCIAL_BIAS_INTERVAL_SEC = 8;
+
+function applyDemosSocialBias(
+  local: Partial<Record<NpcUtilityIntentId, number>>,
+  entities: readonly Entity[],
+  e: Entity,
+  state?: import('../../core/types').GameState,
+): void {
+  if (!state || e.alifeId === undefined) return;
+  const now = state.time;
+  let cached = socialBiasByNpc.get(e);
+  if (!cached || now - cached.at >= SOCIAL_BIAS_INTERVAL_SEC) {
+    const fresh = buildDemosAiSocialContext(state, e, ensureEntityIndex(entities).byAlifeId);
+    cached = {
+      at: now,
+      talk: fresh?.talkBias ?? 0,
+      escort: fresh?.escortBias ?? 0,
+      flee: fresh?.fleeBias ?? 0,
+    };
+    socialBiasByNpc.set(e, cached);
+  }
+  const social = { talkBias: cached.talk, escortBias: cached.escort, fleeBias: cached.flee };
+  if (!social.talkBias && !social.escortBias && !social.fleeBias) return;
+  // Рядом свой — тянет говорить и провожать; рядом враг — тянет уходить.
+  if (social.talkBias !== 0) addLocalScore(local, 'social', social.talkBias);
+  if (social.escortBias !== 0) addLocalScore(local, 'social', social.escortBias * 0.5);
+  if (social.fleeBias !== 0) {
+    addLocalScore(local, 'flee', social.fleeBias);
+    addLocalScore(local, 'safety', social.fleeBias * 0.5);
+  }
 }
 
 function addLocalScore(local: Partial<Record<NpcUtilityIntentId, number>>, intent: NpcUtilityIntentId, amount: number): void {
