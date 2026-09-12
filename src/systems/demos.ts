@@ -28,7 +28,7 @@ import {
 import { getDemosQuestNoticesForProfile } from './demos_quest_notices';
 import type { DemosSocialSaveState } from './demos_save';
 import type { DemosQuestNoticeView } from '../data/demos_quest_notices';
-import { routeDemosSpeech } from './markov_router_adapters';
+import { routeDemosSpeech } from './speech_router';
 
 export const DEMOS_SEARCH_MAX = 48;
 

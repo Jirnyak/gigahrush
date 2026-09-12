@@ -65,7 +65,7 @@ import { MONSTERS } from '../entities/monster';
 import { publishEvent } from './events';
 import { entitySpawnSlots } from './entity_limits';
 import { renderProceduralQuestSpeech, type ProceduralQuestSpeechPhase } from './markov_procedural_quests';
-import { routeAdapterSpeech } from './markov_router_adapters';
+import { routeAdapterSpeech } from './speech_router';
 import {
   assignProceduralQuestDeadline,
   deadlineMessageSuffix,

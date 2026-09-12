@@ -3,7 +3,7 @@
 import { type Entity } from '../core/types';
 import { buildContextSnapshot, type ContextBuildOptions } from './context';
 import { renderMarkovDialogueTalk } from './markov_dialogue';
-import { routeAdapterSpeech } from './markov_router_adapters';
+import { routeAdapterSpeech } from './speech_router';
 import {
   lowerNpcPackageSpeechContext,
   resolveNpcPackageForEntity,

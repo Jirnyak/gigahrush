@@ -1,6 +1,9 @@
 /* -- Universal Markov NPC speech router ------------------------- */
 
-import type { MarkovTextContext } from './markov_context';
+import { finalizeMarkovContext, type MarkovTextContext } from './markov_context';
+import type { MarkovAdapterSpeechRequest, MarkovAdapterSpeechResult } from './markov_dialogue';
+import type { MarkovSpeechRouterRequest, MarkovSpeechRouterResult } from './markov_barks';
+import type { DemosSpeechRouterRequest, DemosSpeechRouterResult } from './demos_posts';
 import { hashSeed } from '../core/rand';
 import {
   generateMarkovText as generateCoreMarkovText,
@@ -212,4 +215,158 @@ function normalizeSeed(seed: number | string | undefined): number | undefined {
   if (typeof seed === 'number' && Number.isFinite(seed)) return seed;
   if (typeof seed === 'string') return hashSeed(seed);
   return undefined;
+}
+
+/* ── Поверхности речи: один вызов на все три ───────────────────────
+ *
+ * Здесь лежал отдельный модуль-шим `markov_router_adapters` на 94 строки, и в
+ * нём одна и та же двадцатистрочная функция была написана ТРИЖДЫ: для диалога,
+ * для барка и для ленты Демоса. Различались они ровно двумя вещами — формой
+ * входного контекста и приведением типа результата. Ни то ни другое системы не
+ * стоит.
+ *
+ * Ветка `source === 'generated_markov'` сохранена дословно: она выбирает между
+ * прямой генерацией и полным роутером, и это не украшение — роутер умеет отдать
+ * авторскую строку, а прямая генерация нет.
+ */
+
+function routeSurfaceSpeech(request: {
+  intent: MarkovIntent;
+  source?: MarkovSource;
+  /* Контекст приходит НЕДОсобранным — без `contextHash`: его ставит
+   * `finalizeMarkovContext`, и он же единственная разница между входом
+   * поверхности и входом роутера. */
+  context: Partial<MarkovTextContext> & { tags?: readonly string[] };
+  lockedText?: string;
+  exactFallback?: string;
+  repeatIndex?: number;
+  maxChars?: number;
+  seed?: string | number;
+}): SpeechRouterResult {
+  const routerRequest: SpeechRouterRequest = {
+    intent: request.intent,
+    source: request.source,
+    context: finalizeMarkovContext(request.context),
+    lockedText: request.lockedText,
+    exactFallback: request.exactFallback,
+    repeatIndex: request.repeatIndex,
+    maxChars: request.maxChars,
+    seed: request.seed,
+  };
+  return request.source === 'generated_markov'
+    ? generateMarkovText(routerRequest)
+    : routeSpeech(routerRequest);
+}
+
+export function routeAdapterSpeech(request: MarkovAdapterSpeechRequest): MarkovAdapterSpeechResult {
+  const result = routeSurfaceSpeech(request);
+  return {
+    ...result,
+    intent: result.intent as MarkovAdapterSpeechResult['intent'],
+    source: result.source as MarkovAdapterSpeechResult['source'],
+  };
+}
+
+export function routeDemosSpeech(request: DemosSpeechRouterRequest): DemosSpeechRouterResult {
+  const result = routeSurfaceSpeech(request);
+  return {
+    ...result,
+    intent: result.intent as DemosSpeechRouterResult['intent'],
+    source: result.source as DemosSpeechRouterResult['source'],
+  };
+}
+
+/** Барк приходит со СВОЕЙ формой контекста — плоской, с якорями отдельным
+ *  списком. Это единственное настоящее отличие трёх прежних копий. */
+export function routeBarkSpeech(request: MarkovSpeechRouterRequest): MarkovSpeechRouterResult {
+  const c = request.context;
+  const result = routeSurfaceSpeech({
+    ...request,
+    context: {
+      actorId: c.actorId,
+      targetId: c.targetId,
+      z: c.z,
+      roomType: c.roomType,
+      roomDefId: c.roomDefId,
+      zoneId: c.zoneId,
+      faction: c.actorFaction,
+      occupation: c.actorOccupation,
+      itemId: c.itemId,
+      itemName: c.itemName,
+      eventType: typeof c.eventType === 'string' ? c.eventType : undefined,
+      eventId: c.eventId,
+      tags: [...c.tags, ...c.anchors.map(anchor => `anchor.${anchor}`)],
+    },
+  });
+  return {
+    ...result,
+    intent: result.intent as MarkovSpeechRouterResult['intent'],
+    source: result.source as MarkovSpeechRouterResult['source'],
+  };
+}
+
+/* ── Домен говорит контекстом, а не своей машиной ──────────────────
+ *
+ * Слух и процедурный квест держали ОДИН И ТОТ ЖЕ порядок действий, каждый у
+ * себя: запертый текст отдать как есть → собрать запрос → позвать роутер →
+ * проверить ответ своими правилами → если не годится, взять запасной. Различий
+ * между ними ровно два, и оба — не машина: КОНТЕКСТ (что домен знает о мире) и
+ * ПРАВИЛО ПРИЁМКИ (какая строка для него годится).
+ *
+ * Порядок теперь живёт здесь. Домен приносит контекст, приёмку и — если у него
+ * есть свой генератор фактов — запасной генератор.
+ *
+ * Роутер больше не впрыскивается вызывающим: инъекция держала адаптеры
+ * листьями графа импортов, а теперь листьями им быть незачем — они сами часть
+ * речи. Цикла это не добавляет: `speech_router` ни одного домена не импортирует.
+ */
+
+export interface DomainSpeechSpec {
+  intent: MarkovIntent;
+  context: Partial<MarkovTextContext> & { tags?: readonly string[] };
+  /** Строка, которой домен обходится, когда сказать нечем. */
+  exactFallback: string;
+  seed?: string | number;
+  repeatIndex?: number;
+  maxChars: number;
+  /** Годится ли сгенерированная строка для этого домена. */
+  accept: (text: string) => boolean;
+  /** Запасной генератор домена: зовётся, когда роутер не дал годного. */
+  generate?: () => string | undefined;
+}
+
+export interface DomainSpeechResult {
+  text: string;
+  source: MarkovSource;
+  tags: readonly string[];
+  fallbackUsed: boolean;
+  /** Полный ответ роутера, когда он и был взят: домен дописывает к нему своё. */
+  routed?: SpeechRouterResult;
+}
+
+export function speakDomain(spec: DomainSpeechSpec): DomainSpeechResult {
+  const routed = routeSurfaceSpeech({
+    intent: spec.intent,
+    source: 'generated_markov',
+    context: spec.context,
+    exactFallback: spec.exactFallback,
+    seed: spec.seed,
+    repeatIndex: spec.repeatIndex,
+    maxChars: spec.maxChars,
+  });
+  const contextTags = [...(spec.context.tags ?? [])];
+  if (routed && spec.accept(routed.text)) {
+    return {
+      text: routed.text,
+      source: routed.source,
+      tags: routed.tags.length ? routed.tags : contextTags,
+      fallbackUsed: routed.fallbackUsed,
+      routed,
+    };
+  }
+  const generated = spec.generate?.();
+  if (generated && spec.accept(generated)) {
+    return { text: generated, source: 'generated_markov', tags: contextTags, fallbackUsed: false };
+  }
+  return { text: spec.exactFallback, source: 'curated_pool', tags: contextTags, fallbackUsed: true };
 }

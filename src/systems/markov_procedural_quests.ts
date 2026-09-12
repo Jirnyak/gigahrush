@@ -8,10 +8,10 @@ import { monsterTypeName } from '../entities/monster';
 import type { ContextSnapshot } from './context';
 import {
   cleanLine,
-  type MarkovAdapterSpeechRequest,
   type MarkovAdapterSpeechResult,
   type MarkovRouteSpeech,
 } from './markov_dialogue';
+import { speakDomain } from './speech_router';
 import { markovContextFromSnapshot } from './markov_context';
 
 export type ProceduralQuestSpeechPhase = 'offer' | 'reminder' | 'completion' | 'failure';
@@ -81,9 +81,8 @@ export function renderProceduralQuestSpeech(options: ProceduralQuestSpeechOption
   const maxChars = options.maxChars ?? DEFAULT_MAX_QUEST_CHARS;
   const snapshotContext = options.snapshot ? markovContextFromSnapshot(options.snapshot, { timeMinutes: options.nowMinutes }) : undefined;
 
-  const request: MarkovAdapterSpeechRequest = {
-    intent: 'procedural_quest',
-    source: 'generated_markov',
+  const request = {
+    intent: 'procedural_quest' as const,
     context: {
       ...snapshotContext,
       targetId: q.targetNpcId,
@@ -112,12 +111,27 @@ export function renderProceduralQuestSpeech(options: ProceduralQuestSpeechOption
     maxChars,
   };
 
-  const routed = options.routeSpeech?.(request);
-  if (routed && validQuestSpeech(routed.text, facts, maxChars)) {
+  /* Порядок «роутер → приёмка → свой генератор → запасной» держит общий
+   * `speakDomain`. Квест приносит контекст, правило приёмки и СВОЙ генератор
+   * фактов — тем он и отличается от слуха, у которого генератора нет. */
+  const spoken = speakDomain({
+    intent: 'procedural_quest',
+    context: request.context,
+    exactFallback: fallback,
+    seed: request.seed,
+    repeatIndex: request.repeatIndex,
+    maxChars,
+    accept: text => validQuestSpeech(text, facts, maxChars),
+    generate: () => generateQuestSpeech(facts, q.giverName, phase, maxChars),
+  });
+
+  if (spoken.routed) {
     return {
-      ...routed,
+      ...spoken.routed,
+      text: spoken.text,
+      source: spoken.source,
       intent: 'procedural_quest',
-      tags: routed.tags.length ? routed.tags : request.context.tags,
+      tags: spoken.tags,
       fallbackUsed: false,
       phase,
       questClass: facts.questClass,
@@ -126,12 +140,9 @@ export function renderProceduralQuestSpeech(options: ProceduralQuestSpeechOption
       facts,
     };
   }
-
-  const generated = generateQuestSpeech(facts, q.giverName, phase, maxChars);
-  if (generated && validQuestSpeech(generated, facts, maxChars)) {
-    return result(generated, 'generated_markov', false, phase, facts, request.context.tags, 'procedural_quest_facts');
+  if (!spoken.fallbackUsed) {
+    return result(spoken.text, 'generated_markov', false, phase, facts, spoken.tags, 'procedural_quest_facts');
   }
-
   return result(fallback, 'curated_pool', true, phase, facts, ['quest', 'procedural_quest', 'fallback']);
 }
 

@@ -83,7 +83,7 @@ export interface MarkovDialogueOptions {
 
 const DEFAULT_MAX_TALK_CHARS = 140;
 
-import { routeAdapterSpeech } from './markov_router_adapters';
+import { routeAdapterSpeech } from './speech_router';
 
 export function renderMarkovDialogueTalk(
   npc: Entity,

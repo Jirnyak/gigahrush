@@ -15,7 +15,7 @@ import { containerTagName, warningTagName } from '../data/rumor_tag_names';
 import { floorDisplayNameForZ } from '../data/floor_names';
 import { type ContextSnapshot } from './context';
 import { renderMarkovRumorFlavor } from './markov_rumor';
-import { routeAdapterSpeech } from './markov_router_adapters';
+import { routeAdapterSpeech } from './speech_router';
 import {
   flagEventRumor,
   getNpcMemory,

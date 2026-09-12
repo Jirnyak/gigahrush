@@ -2,7 +2,7 @@
 
 import { type Entity, type Msg, msg } from '../../core/types';
 import { generateMarkovBark, isUnsafeMarkovBarkSignal } from '../markov_barks';
-import { routeBarkSpeech } from '../markov_router_adapters';
+import { routeBarkSpeech } from '../speech_router';
 import {
   npcPackageSpeechContextTags,
   resolveNpcPackageForEntity,

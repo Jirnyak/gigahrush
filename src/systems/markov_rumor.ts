@@ -10,10 +10,10 @@ import { type NpcMemory } from './npc_memory';
 import {
   cleanLine,
   hashSpeechSeed,
-  type MarkovAdapterSpeechRequest,
   type MarkovAdapterSpeechResult,
   type MarkovRouteSpeech,
 } from './markov_dialogue';
+import { speakDomain } from './speech_router';
 import { type RumorEventLike } from './rumor';
 import { containerTagName, warningTagName } from '../data/rumor_tag_names';
 
@@ -103,37 +103,27 @@ export function renderMarkovRumorFlavor(options: MarkovRumorFlavorOptions): Mark
     requiredAnchors: requiredAnchors.length > 0 ? requiredAnchors : undefined,
     tags,
   };
-  const request: MarkovAdapterSpeechRequest = {
+  /* Порядок «роутер → приёмка → запасной» держит общий `speakDomain`. Слух
+   * приносит только своё: контекст и правило приёмки. Своего генератора фактов
+   * у него нет — не годится значит берём авторскую строку. */
+  const spoken = speakDomain({
     intent: 'rumor_flavor',
-    source: 'generated_markov',
     context,
     exactFallback: fallback,
     seed: options.seed ?? rumor.id,
     repeatIndex: options.repeatIndex,
     maxChars,
-  };
-
-  const routed = options.routeSpeech?.(request);
-  if (routed && validRumorGeneratedText(routed.text, maxChars)) {
-    return {
-      ...routed,
-      intent: 'rumor_flavor',
-      tags: routed.tags.length ? routed.tags : context.tags,
-      fallbackUsed: routed.fallbackUsed,
-      rumorId: rumor.id,
-      topic: rumor.topic,
-      leadText,
-      revealText,
-    };
-  }
+    accept: text => validRumorGeneratedText(text, maxChars),
+  });
 
   return {
-    text: fallback,
-    source: 'curated_pool',
+    ...(spoken.routed ?? {}),
+    text: spoken.text,
+    source: spoken.source,
     intent: 'rumor_flavor',
-    domainId: 'rumor',
-    tags: context.tags,
-    fallbackUsed: true,
+    domainId: spoken.routed ? spoken.routed.domainId : 'rumor',
+    tags: spoken.tags,
+    fallbackUsed: spoken.fallbackUsed,
     rumorId: rumor.id,
     topic: rumor.topic,
     leadText,
