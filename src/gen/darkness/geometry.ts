@@ -29,7 +29,6 @@ import {
   DARKNESS_PRESERVED_NAME_ID,
   dropItem} from './npcs';
 
-export type DarknessTollState = 'unpaid' | 'paid_light' | 'fought' | 'bypassed';
 export type DarknessLateWarningId =
   | 'darkness_light_debt_warning'
   | 'darkness_return_trace_warning';
@@ -84,7 +83,6 @@ export interface DarknessLightGraphNode {
   y: number;
   lightCost: number;
   revealRadius: number;
-  budgetAfterReveal: number;
   tags: string[];
 }
 
@@ -152,10 +150,8 @@ export interface DarknessTopologyPlan {
 export interface DarknessFloorState {
   routeId: typeof DARKNESS_DESIGN_FLOOR_ID;
   z: typeof DARKNESS_FUTURE_Z;
-  lightBudget: number;
   revealedRoomIds: number[];
   preservedNameId: typeof DARKNESS_PRESERVED_NAME_ID | null;
-  shadowTollState: DarknessTollState;
   roomLabels: DarknessRoomLabel[];
   quests: DarknessQuestDef[];
   lateWarnings: DarknessLateWarning[];
@@ -223,7 +219,6 @@ export interface DarknessStationSpec {
 
 export const ROOM_ORIGIN_X = (W >> 1) - 36;
 export const ROOM_ORIGIN_Y = (W >> 1) - 10;
-export const DARKNESS_LIGHT_BUDGET = 8;
 
 export const DARKNESS_HQ_COMPOUNDS: readonly DarknessHqCompoundSpec[] = [
   {
@@ -664,43 +659,24 @@ export function darknessRevealRadius(spec: DarknessRoomSpec): number {
   return Math.max(5, Math.min(14, Math.ceil(Math.max(spec.w, spec.h) / 2) + 3));
 }
 
-export function darknessLightPathCosts(): Map<string, number> {
-  const costs = new Map<string, number>();
-  costs.set('entry', 0);
-  for (let pass = 0; pass < ROOM_SPECS.length; pass++) {
-    let changed = false;
-    for (const edge of LIGHT_GRAPH_EDGE_SPECS) {
-      const fromCost = costs.get(edge.fromKey);
-      if (fromCost !== undefined) {
-        const next = fromCost + edge.lightCost;
-        if (next < (costs.get(edge.toKey) ?? Number.POSITIVE_INFINITY)) {
-          costs.set(edge.toKey, next);
-          changed = true;
-        }
-      }
-      const toCost = costs.get(edge.toKey);
-      if (toCost !== undefined) {
-        const next = toCost + edge.lightCost;
-        if (next < (costs.get(edge.fromKey) ?? Number.POSITIVE_INFINITY)) {
-          costs.set(edge.fromKey, next);
-          changed = true;
-        }
-      }
-    }
-    if (!changed) break;
-  }
-  return costs;
-}
+/* Учёт светового бюджета снят 2026-09-12. Здесь стоял Дейкстра по световому
+ * графу и три поля под него — `lightBudget`, `budgetAfterReveal`,
+ * `shadowTollState`, — и ни одно из них не читала НИ ОДНА строка игры: долг
+ * светом не платился, бюджет не тратился, состояние заставы не менялось.
+ * Охраняли их два ассерта в тесте, проверявшие само существование чисел.
+ *
+ * Что СОХРАНЕНО намеренно: авторские `lightCost` у комнат и переходов вместе с
+ * их `decisions` (`spend_light`, `save_light`, `pay_toll`). Это объявленная цена
+ * прохода, то есть замысел, а не машинерия; комнатный `lightCost` к тому же
+ * жив — по нему ставится метка `spend_light`/`free_light`. Рёберный остаётся
+ * объявлением без читателя до тех пор, пока механика долга не написана. */
 
 export function buildDarknessLightGraphNodes(
   roomsByKey: Map<string, Room>,
   labels: readonly DarknessRoomLabel[],
 ): DarknessLightGraphNode[] {
-  const pathCosts = darknessLightPathCosts();
   return labels.map(label => {
     const room = roomsByKey.get(label.key)!;
-    const travelCost = pathCosts.get(label.key) ?? DARKNESS_LIGHT_BUDGET;
-    const revealSpend = label.revealedAtStart ? 0 : travelCost + label.lightCost;
     const tags = [
       'darkness',
       'light_graph',
@@ -716,7 +692,6 @@ export function buildDarknessLightGraphNodes(
       y: centerY(room),
       lightCost: label.lightCost,
       revealRadius: darknessRevealRadius(darknessRoomSpecByKey(label.key)),
-      budgetAfterReveal: Math.max(0, DARKNESS_LIGHT_BUDGET - revealSpend),
       tags,
     };
   });
@@ -1495,10 +1470,8 @@ export function initialState(labels: DarknessRoomLabel[], topology: DarknessTopo
   return {
     routeId: DARKNESS_DESIGN_FLOOR_ID,
     z: DARKNESS_FUTURE_Z,
-    lightBudget: DARKNESS_LIGHT_BUDGET,
     revealedRoomIds: labels.filter(label => label.revealedAtStart).map(label => label.roomId),
     preservedNameId: null,
-    shadowTollState: 'unpaid',
     roomLabels: labels,
     quests: QUESTS.map(q => ({ ...q, choices: [...q.choices] })),
     lateWarnings: DARKNESS_LATE_WARNINGS.map(warning => ({ ...warning, tags: [...warning.tags] })),

@@ -281,7 +281,6 @@ interface SamosborFront {
   budget: number;           // cells to process per tick
   speed: number;            // multiplier for budget
   age: number;              // ticks alive
-  maxAge: number;           // auto-expire after this many ticks
   processed: number;        // total cells processed
   changed: number;          // total cells mutated
   monstersSpawned: number;
@@ -296,10 +295,6 @@ const FRONT_BUDGET_CRACK   = 16;     // narrow, fast
 const FRONT_BUDGET_WAVE    = 36;    // wide, steady
 const FRONT_BUDGET_TENDRIL = 12;     // long, winding
 const FRONT_BUDGET_FLASH   = 96;    // instant burst, short-lived
-const FRONT_MAX_AGE_CRACK   = 300;
-const FRONT_MAX_AGE_WAVE    = 500;
-const FRONT_MAX_AGE_TENDRIL = 400;
-const FRONT_MAX_AGE_FLASH   = 30;   // flashes die fast
 const FRONT_MONSTER_CELL_INTERVAL = 30; // spawn 1 monster per N processed cells
 const FRONT_TYPES: SamosborFrontType[] = ['crack', 'wave', 'tendril', 'flash'];
 const FRONT_TYPE_WEIGHTS: Record<SamosborFrontType, number> = {
@@ -329,15 +324,6 @@ function frontBudget(type: SamosborFrontType): number {
     case 'wave':    return FRONT_BUDGET_WAVE;
     case 'tendril': return FRONT_BUDGET_TENDRIL;
     case 'flash':   return FRONT_BUDGET_FLASH;
-  }
-}
-
-function frontMaxAge(type: SamosborFrontType): number {
-  switch (type) {
-    case 'crack':   return FRONT_MAX_AGE_CRACK;
-    case 'wave':    return FRONT_MAX_AGE_WAVE;
-    case 'tendril': return FRONT_MAX_AGE_TENDRIL;
-    case 'flash':   return FRONT_MAX_AGE_FLASH;
   }
 }
 
@@ -540,7 +526,6 @@ function createFrontAtCell(world: World, ci: number, shelterSet: ReadonlySet<num
     budget: frontBudget(type),
     speed: 0.8 + rng() * 0.5,
     age: 0,
-    maxAge: frontMaxAge(type),
     processed: 0,
     changed: 0,
     monstersSpawned: 0,
@@ -589,7 +574,11 @@ function tickSamosborFront(
 ): { processed: number; changed: number; batchFlags: number } {
   if (front.dead) return { processed: 0, changed: 0, batchFlags: FRONT_DIRTY_NONE };
   front.age++;
-  // Waves should not die by age, only when they run out of cells to process.
+  /* Фронт живёт, пока ему есть куда расти, и НЕ имеет отпущенного срока. Рядом
+   * лежало поле `maxAge` с четырьмя константами на тип: выставлялось, не
+   * читалось ни одной строкой и прямо противоречило этому правилу. Снято
+   * 2026-09-12 — волна кончается, когда кончается фронтир. `age` остаётся: он
+   * счётчик для отладочного следа, а не срок. */
   if (front.frontier.length === 0) {
     front.dead = true;
     return { processed: 0, changed: 0, batchFlags: FRONT_DIRTY_NONE };

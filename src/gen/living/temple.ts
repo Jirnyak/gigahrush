@@ -5,13 +5,14 @@
 import { getPlotNpcNumericId } from '../../data/npc_packages';
 import {
   W, Cell, Tex, Feature, RoomType, DoorState,
-  type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType, MonsterKind,
+  type Room, type Entity, EntityType, AIGoal, Faction, Occupation, QuestType,
   msg,
 } from '../../core/types';
 import { World } from '../../core/world';
 import { type PlotNpcDef, registerAuthoredNpc, storyNpcFloorKey } from '../../data/plot';
 import { registerZoneContent } from './zone_content';
 import { monsterHasAIFlag, MONSTERS } from '../../entities/monster';
+import { chooseFloorMonsterKind } from '../../data/monster_ecology';
 import { monsterSpr } from '../../entities/sprite_index';
 import { registerContentEntityDeathHook } from '../../systems/content_hooks';
 import { randomRPG, scaleMonsterHp, scaleMonsterSpeed } from '../../systems/rpg';
@@ -255,7 +256,7 @@ registerZoneContent(3, 'Православный храм', generateTemple);
 /* ── Death curse: spawn 666 monsters in pentagram pattern ────── */
 export function priestDeathCurse(
   world: World, entities: Entity[], nextId: { v: number },
-  cx: number, cy: number,
+  cx: number, cy: number, z: number,
 ): void {
   const CURSE_COUNT = 666;
   const R = 40; // radius of pentagram
@@ -277,7 +278,6 @@ export function priestDeathCurse(
 
   // Distribute monsters along pentagram lines
   const monstersPerLine = Math.ceil(CURSE_COUNT / lines.length);
-  const kinds = Object.values(MonsterKind).filter(v => typeof v === 'number') as MonsterKind[];
   let spawned = 0;
 
   for (const [x1, y1, x2, y2] of lines) {
@@ -294,7 +294,14 @@ export function priestDeathCurse(
         world.cells[ci] = Cell.FLOOR;
       }
 
-      const kind = kinds[spawned % kinds.length] as MonsterKind;
+      /* Кого поднимает проклятие, решает ЭКОЛОГИЯ ЭТАЖА — та же взвешенная
+       * таблица, по которой этаж населяется обычно. Раньше здесь шёл перебор
+       * `Object.values(MonsterKind)` по кругу: все семьдесят три вида ровным
+       * слоем, по девять-десять штук каждого, включая Творца (финальный босс)
+       * и Псевдолифт (служебная сущность). Замерено на жилом: 73 вида → 13,
+       * Творцов 9 → 0, Псевдолифтов 9 → 0. Число 666 — авторское и не трогается:
+       * вопрос был не «сколько», а «кто». */
+      const kind = chooseFloorMonsterKind({ z, floorTags: ['living', 'curse'] });
       const def = MONSTERS[kind];
       const zid = world.zoneMap[ci];
       const zoneLevel = (zid >= 0 && world.zones[zid]) ? (world.zones[zid].level ?? 1) : 1;
@@ -327,7 +334,7 @@ registerContentEntityDeathHook({
   id: 'living_temple_priest_death_curse',
   onDeath(ctx) {
     if (!ctx.killerIsPlayer || ctx.killed.id !== getPlotNpcNumericId('batushka')) return;
-    priestDeathCurse(ctx.world, ctx.entities, ctx.nextEntityId, ctx.killed.x, ctx.killed.y);
+    priestDeathCurse(ctx.world, ctx.entities, ctx.nextEntityId, ctx.killed.x, ctx.killed.y, ctx.state.currentZ);
     ctx.state.msgs.push(msg('☠ ПРОКЛЯТИЕ БАТЮШКИ! 666 тварей вырвались из ада!', ctx.state.time, '#f00'));
     ctx.state.msgs.push(msg('На миникарте проступает пентаграмма...', ctx.state.time, '#a00'));
     return { worldChanged: true };

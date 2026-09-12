@@ -128,21 +128,37 @@ function statusEvent(
  * различия живут данными (`data/player_statuses.ts`).
  */
 
+/* ── Часы меток: снимок времени на кадр ──────────────────────────
+ *
+ * «Жива ли метка» — вопрос СО ВРЕМЕНЕМ, и других ответов на него нет. Но
+ * спрашивают его в том числе из расчёта оружия (`getWeaponStats`), у которого
+ * девятнадцать вызывающих и ни одного аргумента времени. До 2026-09-12 это
+ * закрывалось тремя разными способами, и два из них были неверны: `intensity`
+ * ссылался на общий проход по истёкшим, которого НИКТО не звал, а множитель
+ * споровой дымки имел умолчание `time = 0` — то есть любая когда-либо надетая
+ * метка считалась живой. Замеренное следствие: разброс ×1.65 у спорённого
+ * стрелка оставался навсегда, и у игрока тоже.
+ *
+ * Снимок на кадр — тот же приём, что у пути, боя и ядра актора
+ * (`setCombatContext`, `setActorCoreContext`); ставится там же, в `updateAI`.
+ * Умолчание теперь не лжёт: оно ссылается на часы, а не на ноль. */
+let statusClock = 0;
+
+export function setStatusClock(now: number): void {
+  statusClock = now;
+}
+
 /** Метка на теле, если она ещё жива. */
-export function activePlayerStatus(e: Entity, id: PlayerStatusId, now: number): PlayerStatus | undefined {
+export function activePlayerStatus(e: Entity, id: PlayerStatusId, now = statusClock): PlayerStatus | undefined {
   for (const status of e.statuses ?? []) {
     if (status.id === id && status.expiresAt > now) return status;
   }
   return undefined;
 }
 
-/** Сила метки; ноль — метки нет. Срок здесь НЕ спрашивается намеренно: истёкшие
- *  снимает один общий проход `expirePlayerStatuses`, и до него список чист. */
-export function playerStatusIntensity(e: Entity, id: PlayerStatusId): number {
-  for (const status of e.statuses ?? []) {
-    if (status.id === id) return status.intensity ?? 0;
-  }
-  return 0;
+/** Сила метки; ноль — метки нет или её срок вышел. */
+export function playerStatusIntensity(e: Entity, id: PlayerStatusId, now = statusClock): number {
+  return activePlayerStatus(e, id, now)?.intensity ?? 0;
 }
 
 /** Обрезка группы: сроки и силы по потолкам реестра, дубли слиты, лишние сняты. */
@@ -213,29 +229,16 @@ export function applyPlayerStatus(
   return status;
 }
 
-/** Один проход по истёкшим меткам на всё тело. Вызывающий получает каждую
- *  снятую метку и решает, объявлять ли о ней миру. */
-export function expirePlayerStatuses(
-  e: Entity,
-  now: number,
-  onExpire?: (status: PlayerStatus) => void,
-): void {
-  if (!e.statuses || e.statuses.length === 0) return;
-  const total = e.statuses.length;
-  let write = 0;
-  for (let i = 0; i < total; i++) {
-    const status = e.statuses[i];
-    if (status.expiresAt <= now) {
-      onExpire?.(status);
-      continue;
-    }
-    if (write !== i) e.statuses[write] = status;
-    write++;
-  }
-  if (write === total) return;
-  e.statuses.length = write;
-  if (write === 0) e.statuses = undefined;
-}
+/* Общего прохода по истёкшим меткам НЕТ, и он не нужен. Список ограничен самим
+ * способом записи — `applyPlayerStatus` обновляет метку ПО ИМЕНИ, поэтому
+ * больше шести (число в реестре) там не окажется никогда, — а «жива ли метка»
+ * решают часы при чтении. Проход `expirePlayerStatuses` существовал, не звался
+ * из игры ни разу и при этом служил оправданием для читателя, который срока не
+ * спрашивал; снят 2026-09-12 вместе с этим оправданием.
+ *
+ * Говняк — исключение по делу, а не по форме: `updateGovnyakConditions` не
+ * только снимает истёкшее, но и ОБЪЯВЛЯЕТ выздоровление событием, а это уже не
+ * уборка. */
 
 /**
  * Разброс от всех меток разом: дрожь минус твёрдость.
@@ -244,12 +247,13 @@ export function expirePlayerStatuses(
  * с говняком стала видимой: облегчение вычитает из того же числа, в которое
  * кашель и долг прибавляют, и своей оси заводить не понадобилось.
  */
-export function playerStatusAimSpreadMult(e: Entity): number {
+export function playerStatusAimSpreadMult(e: Entity, now = statusClock): number {
   if (!e.statuses || e.statuses.length === 0) return 1;
   let shake = 0;
   let steady = 0;
   let steadyCap = 0;
   for (const status of e.statuses) {
+    if (status.expiresAt <= now) continue;
     const def = playerStatusDef(status.id);
     if (!def) continue;
     const intensity = status.intensity ?? 0;
@@ -688,7 +692,7 @@ export function zhelemishMoveMult(entity: Entity, time: number): number {
   return (activeZhelemishSkin(entity, time) ? MOVE_MULT : 1) * paupsinaWebMoveMult(entity, time);
 }
 
-export function sporeHazeAimSpreadMult(entity: Entity, time = 0): number {
+export function sporeHazeAimSpreadMult(entity: Entity, time = statusClock): number {
   const status = activeSporeHaze(entity, time);
   if (!status) return 1;
   return (status.intensity ?? 1) < 0.5 ? SPORE_HAZE_PROTECTED_AIM_SPREAD_MULT : SPORE_HAZE_AIM_SPREAD_MULT;

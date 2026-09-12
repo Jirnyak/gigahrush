@@ -13,6 +13,7 @@
 3. Укрытия, гермы и локальные shelter hooks могут подготовить safe rooms.
 4. Active phase запускает **6–14 одновременных фронтов** по всему этажу, каждый мутирует клетки (fog, текстуры, features) и спавнит монстров по мере распространения.
 5. Типы фронтов: `crack` (молния по коридорам), `wave` (расширяющийся диск), `tendril` (щупальце по проходам), `flash` (мгновенная вспышка).
+6. **У фронта нет отпущенного срока.** Он живёт, пока ему есть куда расти, и кончается, когда кончается фронтир. Поле `maxAge` с четырьмя константами на тип выставлялось, не читалось ни одной строкой и противоречило соседнему комментарию в коде; снято 2026-09-12.
 6. Параллельно: seal logic, вариантные эффекты, `systems/samosbor_wave.ts` local mutation, fog effects, player pressure monsters, random entity transfer.
 7. После активной фазы свежая локальная геометрия stitched back into the same active floor through the heavy transition gate.
 8. Aftermath beats leave events, loot, shortages, rumors, marks or local hazards.

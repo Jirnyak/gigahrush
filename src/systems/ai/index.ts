@@ -28,6 +28,7 @@ import {
 import { actorBrainOwnsRoute, setActorCoreContext, tickActorBrain } from '../actor/brain';
 import { isPlayerEntity } from '../player_actor';
 import { setFactionsSocialContext } from '../factions';
+import { setStatusClock } from '../status';
 import { setRoomVisitContext } from '../room_visits';
 import { designFloorAtZ } from '../../data/design_floors';
 import { isPlotNpc } from '../../data/plot';
@@ -227,6 +228,9 @@ export function updateAI(world: World, entities: Entity[], dt: number, time: num
   setRoomLeashMinute(clock.totalMinutes);
   setFactionsSocialContext(state);
   setRoomVisitContext(state);
+  // Часы меток: «жива ли метка» спрашивают из расчёта оружия, а он времени не
+  // принимает. Снимок общий на кадр — тот же приём, что у боя и ядра актора.
+  setStatusClock(time);
   expireMonsterBaits(state, time);
   // Свежие записи шума ложатся в канал NOISE: список остаётся метаданными
   // (кто, чем, какие ярлыки), а «насколько здесь громко» живёт в поле.

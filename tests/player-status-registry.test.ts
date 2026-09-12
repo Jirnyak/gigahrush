@@ -20,10 +20,14 @@ import {
   playerStatusDef,
 } from '../src/data/player_statuses';
 import {
+  SPORE_HAZE_AIM_SPREAD_MULT,
+  SPORE_HAZE_DURATION_SEC,
+  SPORE_HAZE_ID,
   applyPlayerStatus,
-  expirePlayerStatuses,
   playerStatusAimSpreadMult,
   playerStatusIntensity,
+  setStatusClock,
+  sporeHazeAimSpreadMult,
 } from '../src/systems/status';
 import { makeTestPlayer } from './helpers';
 
@@ -93,18 +97,43 @@ test('повторная метка продлевает, а не заводит
   assert.equal((g.statuses ?? []).filter(s => s.id === 'govnyak_cough').length, 1);
 });
 
-test('истечение снимает метки одним проходом на всё тело', () => {
+test('истёкшая метка не читается ни силой, ни рукой', () => {
+  /* Прежде здесь проверялся общий проход по истёкшим — и он был единственным
+   * местом, где срок вообще спрашивался: сам проход из игры не звался НИ РАЗУ,
+   * а читатели на него ссылались. Спорённый стрелок держал разброс ×1.65
+   * навсегда, и игрок тоже. Теперь срок решают часы кадра, и проверяется
+   * именно это — на живом пути чтения, а не на снятой уборке. */
   const e = body();
   applyPlayerStatus(e, 'govnyak_cough', 'govnyak_roll', 0, 10, 1);
   applyPlayerStatus(e, 'govnyak_debt', 'govnyak_roll', 0, 100, 1);
-  const expired: PlayerStatusId[] = [];
-  expirePlayerStatuses(e, 50, status => expired.push(status.id));
-  assert.deepEqual(expired, ['govnyak_cough']);
-  assert.deepEqual((e.statuses ?? []).map(s => s.id), ['govnyak_debt']);
-  /* Пустое тело обязано остаться без списка вовсе: пустой массив на каждом
-   * акторе мира — это память ни за что. */
-  expirePlayerStatuses(e, 500, () => {});
-  assert.equal(e.statuses, undefined);
+
+  setStatusClock(5);
+  assert.equal(playerStatusIntensity(e, 'govnyak_cough'), 1, 'пока срок идёт, метка читается');
+  const shakenWhileAlive = playerStatusAimSpreadMult(e);
+  assert.ok(shakenWhileAlive > 1, 'живой кашель обязан трясти руку');
+
+  setStatusClock(50);
+  assert.equal(playerStatusIntensity(e, 'govnyak_cough'), 0, 'срок вышел — силы нет');
+  assert.equal(playerStatusIntensity(e, 'govnyak_debt'), 1, 'у долга срок ещё идёт');
+  assert.ok(
+    playerStatusAimSpreadMult(e) < shakenWhileAlive,
+    'истёкший кашель продолжает трясти руку — читатель снова не спрашивает срока',
+  );
+
+  setStatusClock(500);
+  assert.equal(playerStatusAimSpreadMult(e), 1, 'все сроки вышли — рука чиста');
+});
+
+test('споровая дымка выветривается: умолчание времени больше не значит «ноль»', () => {
+  /* `sporeHazeAimSpreadMult` имел умолчание `time = 0`, а вызывающий из расчёта
+   * оружия времени не передавал — то есть любая когда-либо надетая дымка
+   * считалась живой вечно. Умолчание теперь ссылается на часы кадра. */
+  const e = body();
+  applyPlayerStatus(e, SPORE_HAZE_ID, 'spore_haze', 0, SPORE_HAZE_DURATION_SEC, 1);
+  setStatusClock(1);
+  assert.equal(sporeHazeAimSpreadMult(e), SPORE_HAZE_AIM_SPREAD_MULT, 'свежая дымка сбивает прицел');
+  setStatusClock(SPORE_HAZE_DURATION_SEC + 1);
+  assert.equal(sporeHazeAimSpreadMult(e), 1, 'выветрившаяся дымка сбивать не вправе');
 });
 
 test('рука считается одной формулой: дрожь минус твёрдость', () => {

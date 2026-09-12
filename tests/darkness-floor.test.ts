@@ -51,7 +51,6 @@ test('darkness floor exposes light, reveal, sound and radon topology state', () 
   const state = darknessStateByWorld.get(gen.world);
 
   assert.equal(state, gen.darknessState);
-  assert.equal(gen.darknessState.lightBudget, 8);
   assert.equal(gen.darknessState.roomLabels.length >= 10, true);
   assert.equal(gen.darknessState.lightGraphNodes.length, gen.darknessState.roomLabels.length);
   assert.equal(gen.darknessState.lightGraphEdges.length >= 10, true);
@@ -61,7 +60,6 @@ test('darkness floor exposes light, reveal, sound and radon topology state', () 
 
   const entryNode = gen.darknessState.lightGraphNodes.find(node => node.roomKey === 'entry');
   assert.ok(entryNode);
-  assert.equal(entryNode.budgetAfterReveal, 8);
   assert.equal(entryNode.tags.includes('revealed_start'), true);
 
   for (const shell of gen.darknessState.revealShells) {
