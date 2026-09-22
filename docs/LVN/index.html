@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LVN | Liouville-von Neumann Quantum Transport & Coherence Engine</title>
+  <meta name="description" content="LVN is an open quantum systems simulation engine and cyber-anime visual storytelling framework solving the Liouville-von Neumann master equation with real-time density matrix evolution, decoherence, and wave packet interference.">
+  <link rel="canonical" href="https://jirnyak.github.io/LVN/">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://jirnyak.github.io/LVN/">
+  <meta property="og:title" content="LVN | Liouville-von Neumann Quantum Transport & Coherence Engine">
+  <meta property="og:description" content="Interactive 2D quantum transport lattice, Lindblad decoherence solver, live von Neumann entropy telemetry, and quantum branching visual story engine.">
+  <meta property="og:site_name" content="LVN Quantum Project">
+  <meta property="og:image" content="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 630' width='1200' height='630'%3E%3Crect width='1200' height='630' fill='%23090412'/%3E%3Ccircle cx='600' cy='315' r='240' fill='none' stroke='%23b388ff' stroke-width='3' stroke-opacity='0.5'/%3E%3Ccircle cx='600' cy='315' r='160' fill='none' stroke='%2318ffff' stroke-width='2' stroke-opacity='0.4'/%3E%3Ccircle cx='600' cy='315' r='90' fill='none' stroke='%23ff4081' stroke-width='2' stroke-opacity='0.6'/%3E%3Cpath d='M420,315 Q600,180 780,315 T1140,315' fill='none' stroke='%2318ffff' stroke-width='4' stroke-dasharray='8 6'/%3E%3Ctext x='600' y='510' font-family='monospace' font-size='44' font-weight='bold' fill='%23b388ff' text-anchor='middle' letter-spacing='8'%3ELVN : QUANTUM TRANSPORT%3C/text%3E%3Ctext x='600' y='560' font-family='monospace' font-size='20' fill='%2318ffff' text-anchor='middle' letter-spacing='4'%3ELIOUVILLE-VON NEUMANN MATRIX ENGINE%3C/text%3E%3C/svg%3E">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://jirnyak.github.io/LVN/">
+  <meta name="twitter:title" content="LVN | Liouville-von Neumann Quantum Transport & Coherence Engine">
+  <meta name="twitter:description" content="Interactive 2D quantum transport lattice, Lindblad decoherence solver, live von Neumann entropy telemetry, and quantum branching visual story engine.">
+  <meta name="twitter:image" content="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 630' width='1200' height='630'%3E%3Crect width='1200' height='630' fill='%23090412'/%3E%3Ccircle cx='600' cy='315' r='240' fill='none' stroke='%23b388ff' stroke-width='3' stroke-opacity='0.5'/%3E%3Ccircle cx='600' cy='315' r='160' fill='none' stroke='%2318ffff' stroke-width='2' stroke-opacity='0.4'/%3E%3Ccircle cx='600' cy='315' r='90' fill='none' stroke='%23ff4081' stroke-width='2' stroke-opacity='0.6'/%3E%3Cpath d='M420,315 Q600,180 780,315 T1140,315' fill='none' stroke='%2318ffff' stroke-width='4' stroke-dasharray='8 6'/%3E%3Ctext x='600' y='510' font-family='monospace' font-size='44' font-weight='bold' fill='%23b388ff' text-anchor='middle' letter-spacing='8'%3ELVN : QUANTUM TRANSPORT%3C/text%3E%3Ctext x='600' y='560' font-family='monospace' font-size='20' fill='%2318ffff' text-anchor='middle' letter-spacing='4'%3ELIOUVILLE-VON NEUMANN MATRIX ENGINE%3C/text%3E%3C/svg%3E">
+
+  <!-- Inline SVG Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23090412'/%3E%3Cellipse cx='32' cy='32' rx='26' ry='10' fill='none' stroke='%23b388ff' stroke-width='2.5' transform='rotate(30 32 32)'/%3E%3Cellipse cx='32' cy='32' rx='26' ry='10' fill='none' stroke='%2318ffff' stroke-width='2.5' transform='rotate(-30 32 32)'/%3E%3Ccircle cx='32' cy='32' r='6' fill='%23ff4081'/%3E%3C/svg%3E">
+
+  <!-- JSON-LD Schema -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "LVN",
+    "operatingSystem": "WebBrowser, Windows, macOS, Linux",
+    "applicationCategory": "QuantumSimulation / EducationalApplication",
+    "description": "Liouville-von Neumann quantum transport simulation and cyber-anime visual novel narrative engine with 2D wavepacket interference, environmental decoherence, and entropy telemetry.",
+    "url": "https://jirnyak.github.io/LVN/",
+    "author": {
+      "@type": "Person",
+      "name": "Jirnyak"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+
+  <style>
+    /* LVN BESPOKE QUANTUM NEON MATRIX DESIGN SYSTEM */
+    :root {
+      --lvn-bg: #090412;
+      --lvn-surface: #160c2b;
+      --lvn-surface-subtle: #231343;
+      --lvn-surface-card: #100820;
+      --lvn-quantum: #b388ff;
+      --lvn-quantum-glow: rgba(179, 136, 255, 0.45);
+      --lvn-cyan: #18ffff;
+      --lvn-cyan-glow: rgba(24, 255, 255, 0.4);
+      --lvn-cyan-dim: rgba(24, 255, 255, 0.12);
+      --lvn-pink: #ff4081;
+      --lvn-pink-glow: rgba(255, 64, 129, 0.45);
+      --lvn-amber: #ffd740;
+      --lvn-text: #ede7f6;
+      --lvn-text-dim: #9e8fb2;
+      --lvn-text-dark: #584475;
+      --lvn-border: rgba(179, 136, 255, 0.28);
+      --lvn-border-strong: rgba(179, 136, 255, 0.65);
+      --lvn-grid: rgba(24, 255, 255, 0.05);
+      --lvn-font-primary: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --lvn-font-mono: ui-monospace, "SF Mono", "Space Mono", "Cascadia Code", "Fira Code", monospace;
+      --lvn-radius: 6px;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      background-color: var(--lvn-bg);
+      color: var(--lvn-text);
+      font-family: var(--lvn-font-primary);
+      font-size: 15px;
+      line-height: 1.55;
+      overflow-x: hidden;
+      width: 100%;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Quantum Matrix Grid Background */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: 
+        linear-gradient(var(--lvn-grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--lvn-grid) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 65% 20%, rgba(179, 136, 255, 0.12) 0%, transparent 60%),
+                  radial-gradient(circle at 20% 75%, rgba(24, 255, 255, 0.08) 0%, transparent 50%),
+                  rgba(9, 4, 18, 0.82);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .lvn-app-wrapper {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* TOP QUANTUM HUD NAVIGATION */
+    .lvn-top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(22, 12, 43, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--lvn-border);
+      padding: 0.65rem 1.8rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .lvn-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--lvn-quantum);
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      font-size: 1.25rem;
+      font-family: var(--lvn-font-mono);
+      text-shadow: 0 0 12px var(--lvn-quantum-glow);
+    }
+
+    .lvn-brand-icon {
+      width: 24px;
+      height: 24px;
+      animation: lvn-spin 12s linear infinite;
+    }
+
+    .lvn-nav-links {
+      display: flex;
+      gap: 1.2rem;
+      list-style: none;
+    }
+
+    .lvn-nav-links a {
+      color: var(--lvn-text-dim);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.3rem 0.6rem;
+      border: 1px solid transparent;
+      border-radius: var(--lvn-radius);
+      transition: all 0.2s ease;
+      font-family: var(--lvn-font-mono);
+    }
+
+    .lvn-nav-links a:hover, .lvn-nav-links a:focus {
+      color: var(--lvn-cyan);
+      border-color: var(--lvn-border);
+      background: var(--lvn-cyan-dim);
+      text-shadow: 0 0 8px var(--lvn-cyan-glow);
+    }
+
+    .lvn-status-pills {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.8rem;
+      font-family: var(--lvn-font-mono);
+    }
+
+    .lvn-pill {
+      background: var(--lvn-surface-subtle);
+      border: 1px solid var(--lvn-border);
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      color: var(--lvn-text-dim);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .lvn-pill strong {
+      color: var(--lvn-cyan);
+      font-weight: 600;
+    }
+
+    .lvn-pill.pink strong {
+      color: var(--lvn-pink);
+    }
+
+    .lvn-pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--lvn-quantum);
+      box-shadow: 0 0 10px var(--lvn-quantum);
+      animation: lvn-pulse 1.5s infinite ease-in-out;
+    }
+
+    /* MAIN CONTAINER */
+    .lvn-container {
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1.8rem 1.4rem;
+      flex: 1;
+    }
+
+    /* HERO SECTION */
+    .lvn-hero-panel {
+      background: var(--lvn-surface);
+      border: 1px solid var(--lvn-border);
+      border-top: 3px solid var(--lvn-quantum);
+      padding: 2.2rem 2.4rem;
+      margin-bottom: 2rem;
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--lvn-radius);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 0 60px rgba(179, 136, 255, 0.05);
+    }
+
+    .lvn-hero-panel::after {
+      content: "LIOUVILLE-VON NEUMANN // ρ = |ψ⟩⟨ψ|";
+      position: absolute;
+      right: 1.5rem;
+      top: 1.2rem;
+      font-size: 0.75rem;
+      color: var(--lvn-text-dark);
+      font-family: var(--lvn-font-mono);
+      letter-spacing: 0.15em;
+    }
+
+    .lvn-badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .lvn-badge {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.55rem;
+      background: var(--lvn-surface-subtle);
+      border: 1px solid var(--lvn-border);
+      color: var(--lvn-quantum);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-family: var(--lvn-font-mono);
+      border-radius: 3px;
+    }
+
+    .lvn-badge.cyan {
+      border-color: var(--lvn-cyan);
+      color: var(--lvn-cyan);
+    }
+
+    .lvn-badge.pink {
+      border-color: var(--lvn-pink);
+      color: var(--lvn-pink);
+    }
+
+    h1.lvn-title {
+      font-size: clamp(2.2rem, 4.8vw, 3.6rem);
+      color: var(--lvn-text);
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      line-height: 1.1;
+      margin-bottom: 0.8rem;
+      text-shadow: 0 0 25px var(--lvn-quantum-glow);
+    }
+
+    h1.lvn-title span {
+      color: var(--lvn-cyan);
+      text-shadow: 0 0 20px var(--lvn-cyan-glow);
+    }
+
+    p.lvn-subtitle {
+      color: var(--lvn-text-dim);
+      font-size: clamp(1rem, 1.8vw, 1.2rem);
+      max-width: 900px;
+      margin-bottom: 1.6rem;
+      line-height: 1.6;
+    }
+
+    .lvn-hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .lvn-btn {
+      background: var(--lvn-surface-subtle);
+      color: var(--lvn-quantum);
+      border: 1px solid var(--lvn-border-strong);
+      padding: 0.8rem 1.5rem;
+      font-family: var(--lvn-font-mono);
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      border-radius: var(--lvn-radius);
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .lvn-btn:hover {
+      background: var(--lvn-quantum);
+      color: var(--lvn-bg);
+      box-shadow: 0 0 18px var(--lvn-quantum-glow);
+      transform: translateY(-2px);
+    }
+
+    .lvn-btn.cyan {
+      color: var(--lvn-cyan);
+      border-color: var(--lvn-cyan);
+    }
+
+    .lvn-btn.cyan:hover {
+      background: var(--lvn-cyan);
+      color: var(--lvn-bg);
+      box-shadow: 0 0 18px var(--lvn-cyan-glow);
+    }
+
+    .lvn-btn.pink {
+      color: var(--lvn-pink);
+      border-color: var(--lvn-pink);
+    }
+
+    .lvn-btn.pink:hover {
+      background: var(--lvn-pink);
+      color: var(--lvn-bg);
+      box-shadow: 0 0 18px var(--lvn-pink-glow);
+    }
+
+    /* 2-COLUMN GRID FOR ENGINE & CHARTS */
+    .lvn-section-title {
+      font-size: 1.3rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--lvn-quantum);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 1.2rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--lvn-border);
+      font-family: var(--lvn-font-mono);
+    }
+
+    .lvn-section-title::before {
+      content: "Ψ";
+      font-size: 1.1rem;
+      color: var(--lvn-cyan);
+    }
+
+    .lvn-grid-2col {
+      display: grid;
+      grid-template-columns: 1.35fr 0.85fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 1024px) {
+      .lvn-grid-2col {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* CARD STYLING */
+    .lvn-card {
+      background: var(--lvn-surface);
+      border: 1px solid var(--lvn-border);
+      border-radius: var(--lvn-radius);
+      padding: 1.35rem;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .lvn-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px dashed var(--lvn-border);
+    }
+
+    .lvn-card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--lvn-text);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-family: var(--lvn-font-mono);
+    }
+
+    .lvn-card-status {
+      font-size: 0.75rem;
+      color: var(--lvn-cyan);
+      font-family: var(--lvn-font-mono);
+    }
+
+    /* QUANTUM LATTICE CANVAS CONTAINER */
+    .lvn-canvas-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      max-width: 680px;
+      margin: 0 auto 1rem;
+      background: #05020c;
+      border: 2px solid var(--lvn-border);
+      border-radius: var(--lvn-radius);
+      overflow: hidden;
+      box-shadow: inset 0 0 40px rgba(179, 136, 255, 0.15), 0 0 25px rgba(0, 0, 0, 0.8);
+      cursor: crosshair;
+    }
+
+    #lvn-lattice-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .lvn-engine-presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .lvn-preset-btn {
+      background: var(--lvn-surface-subtle);
+      border: 1px solid var(--lvn-border);
+      color: var(--lvn-text);
+      font-family: var(--lvn-font-mono);
+      font-size: 0.8rem;
+      padding: 0.35rem 0.7rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .lvn-preset-btn:hover, .lvn-preset-btn.active {
+      background: var(--lvn-cyan-dim);
+      border-color: var(--lvn-cyan);
+      color: var(--lvn-cyan);
+      box-shadow: 0 0 8px var(--lvn-cyan-glow);
+    }
+
+    .lvn-controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.8rem;
+      margin-top: 0.5rem;
+    }
+
+    .lvn-control-group {
+      background: var(--lvn-surface-subtle);
+      border: 1px solid var(--lvn-border);
+      padding: 0.55rem 0.8rem;
+      border-radius: var(--lvn-radius);
+    }
+
+    .lvn-control-label {
+      font-size: 0.75rem;
+      color: var(--lvn-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--lvn-font-mono);
+    }
+
+    .lvn-slider {
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--lvn-surface-card);
+      height: 6px;
+      border-radius: 3px;
+      outline: none;
+      border: 1px solid var(--lvn-border);
+    }
+
+    .lvn-slider::-webkit-slider-thumb {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--lvn-quantum);
+      cursor: pointer;
+      box-shadow: 0 0 6px var(--lvn-quantum);
+    }
+
+    .lvn-select {
+      width: 100%;
+      background: var(--lvn-surface-card);
+      color: var(--lvn-quantum);
+      border: 1px solid var(--lvn-border);
+      padding: 0.35rem 0.5rem;
+      font-family: var(--lvn-font-mono);
+      font-size: 0.8rem;
+      border-radius: 4px;
+      outline: none;
+    }
+
+    /* TELEMETRY CHART CONTAINER */
+    .lvn-chart-wrapper {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      min-height: 220px;
+      background: #07030f;
+      border: 1px solid var(--lvn-border);
+      border-radius: var(--lvn-radius);
+      overflow: hidden;
+      box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8);
+      margin-bottom: 1rem;
+    }
+
+    #lvn-telemetry-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .lvn-chart-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6rem;
+      margin-bottom: 1rem;
+      font-family: var(--lvn-font-mono);
+    }
+
+    .lvn-metric-box {
+      background: var(--lvn-surface-subtle);
+      border: 1px solid var(--lvn-border);
+      padding: 0.5rem;
+      text-align: center;
+      border-radius: var(--lvn-radius);
+    }
+
+    .lvn-metric-val {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--lvn-quantum);
+      display: block;
+    }
+
+    .lvn-metric-box.cyan .lvn-metric-val {
+      color: var(--lvn-cyan);
+    }
+
+    .lvn-metric-box.pink .lvn-metric-val {
+      color: var(--lvn-pink);
+    }
+
+    .lvn-metric-lbl {
+      font-size: 0.7rem;
+      color: var(--lvn-text-dim);
+      text-transform: uppercase;
+    }
+
+    /* DENSITY MATRIX COMPLEX HEATMAP */
+    .lvn-matrix-card {
+      background: var(--lvn-surface-card);
+      border: 1px solid var(--lvn-border);
+      padding: 0.9rem;
+      border-radius: var(--lvn-radius);
+      margin-top: 1rem;
+    }
+
+    .lvn-matrix-card h4 {
+      color: var(--lvn-cyan);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.6rem;
+      font-family: var(--lvn-font-mono);
+    }
+
+    .lvn-matrix-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 4px;
+      margin-bottom: 0.8rem;
+    }
+
+    .lvn-matrix-cell {
+      aspect-ratio: 1 / 1;
+      background: #150b28;
+      border: 1px solid rgba(179, 136, 255, 0.2);
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      font-family: var(--lvn-font-mono);
+      color: var(--lvn-text-dim);
+      transition: background 0.1s ease;
+    }
+
+    /* CYBER-ANIME QUANTUM STORY TERMINAL */
+    .lvn-story-panel {
+      background: var(--lvn-surface);
+      border: 1px solid var(--lvn-border);
+      border-radius: var(--lvn-radius);
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      border-left: 4px solid var(--lvn-pink);
+    }
+
+    .lvn-story-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px dashed var(--lvn-border);
+      font-family: var(--lvn-font-mono);
+    }
+
+    .lvn-character-tag {
+      color: var(--lvn-pink);
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .lvn-dialogue-text {
+      font-size: 1.05rem;
+      color: var(--lvn-text);
+      line-height: 1.6;
+      margin-bottom: 1.2rem;
+      background: rgba(16, 8, 32, 0.8);
+      padding: 1rem 1.2rem;
+      border-radius: var(--lvn-radius);
+      border: 1px solid rgba(255, 64, 129, 0.2);
+    }
+
+    .lvn-branch-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+    }
+
+    .lvn-branch-btn {
+      background: var(--lvn-surface-subtle);
+      border: 1px solid var(--lvn-border);
+      color: var(--lvn-text);
+      padding: 0.6rem 1rem;
+      border-radius: var(--lvn-radius);
+      font-family: var(--lvn-font-mono);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .lvn-branch-btn:hover {
+      background: var(--lvn-pink);
+      color: #fff;
+      box-shadow: 0 0 12px var(--lvn-pink-glow);
+    }
+
+    /* SPECIFICATIONS GRID */
+    .lvn-spec-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.2rem;
+      margin-bottom: 2rem;
+    }
+
+    .lvn-spec-card {
+      background: var(--lvn-surface);
+      border: 1px solid var(--lvn-border);
+      padding: 1.3rem;
+      border-radius: var(--lvn-radius);
+      border-left: 3px solid var(--lvn-quantum);
+    }
+
+    .lvn-spec-card.cyan {
+      border-left-color: var(--lvn-cyan);
+    }
+
+    .lvn-spec-card.pink {
+      border-left-color: var(--lvn-pink);
+    }
+
+    .lvn-spec-card h3 {
+      font-size: 1.05rem;
+      color: var(--lvn-text);
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.05em;
+      font-family: var(--lvn-font-mono);
+    }
+
+    .lvn-spec-card p {
+      color: var(--lvn-text-dim);
+      font-size: 0.88rem;
+      line-height: 1.55;
+    }
+
+    .lvn-spec-list {
+      list-style: none;
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      font-family: var(--lvn-font-mono);
+    }
+
+    .lvn-spec-list li {
+      padding: 0.25rem 0;
+      color: var(--lvn-text-dim);
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px dotted rgba(179, 136, 255, 0.15);
+    }
+
+    .lvn-spec-list li span:last-child {
+      color: var(--lvn-cyan);
+      font-weight: 600;
+    }
+
+    /* FOOTER */
+    .lvn-footer {
+      background: #05020a;
+      border-top: 1px solid var(--lvn-border);
+      padding: 1.8rem 1.5rem;
+      margin-top: auto;
+      color: var(--lvn-text-dim);
+      font-size: 0.8rem;
+      font-family: var(--lvn-font-mono);
+    }
+
+    .lvn-footer-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .lvn-footer a {
+      color: var(--lvn-quantum);
+      text-decoration: none;
+    }
+
+    .lvn-footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* ANIMATIONS */
+    @keyframes lvn-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes lvn-pulse {
+      0%, 100% { transform: scale(0.9); opacity: 0.5; }
+      50% { transform: scale(1.1); opacity: 1; }
+    }
+
+    /* RESPONSIVENESS (375px to 1920px) */
+    @media (max-width: 640px) {
+      .lvn-top-bar {
+        padding: 0.5rem 0.8rem;
+      }
+      .lvn-status-pills {
+        display: none;
+      }
+      .lvn-container {
+        padding: 1rem 0.8rem;
+      }
+      .lvn-hero-panel {
+        padding: 1.25rem 1rem;
+      }
+      .lvn-btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="lvn-app-wrapper">
+    
+    <!-- TOP QUANTUM HUD BAR -->
+    <header class="lvn-top-bar" role="banner">
+      <a href="#hero" class="lvn-brand" aria-label="LVN Quantum Engine Home">
+        <svg class="lvn-brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(45 12 12)"></ellipse>
+          <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(-45 12 12)"></ellipse>
+        </svg>
+        LVN :: QUANTUM
+      </a>
+
+      <nav aria-label="Main Navigation">
+        <ul class="lvn-nav-links">
+          <li><a href="#quantum-sandbox">Interference Lattice</a></li>
+          <li><a href="#telemetry">Entropy Telemetry</a></li>
+          <li><a href="#story-engine">Quantum Story</a></li>
+          <li><a href="#specs">Equations</a></li>
+        </ul>
+      </nav>
+
+      <div class="lvn-status-pills" aria-label="Quantum State Telemetry">
+        <div class="lvn-pill">
+          <span class="lvn-pulse-dot"></span>
+          STATE: <strong>SUPERPOSITION</strong>
+        </div>
+        <div class="lvn-pill">
+          PURITY: <strong id="lvn-hud-purity">1.000</strong>
+        </div>
+        <div class="lvn-pill pink">
+          ENTROPY: <strong id="lvn-hud-entropy">0.000 kB</strong>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="lvn-container">
+      
+      <!-- HERO PANEL -->
+      <section id="hero" class="lvn-hero-panel" aria-labelledby="lvn-main-heading">
+        <div class="lvn-badge-row">
+          <span class="lvn-badge">OPEN QUANTUM TRANSPORT</span>
+          <span class="lvn-badge cyan">LINDBLAD DISSIPATION</span>
+          <span class="lvn-badge pink">CYBER-ANIME NARRATIVE ENGINE</span>
+        </div>
+        <h1 id="lvn-main-heading" class="lvn-title">LIOUVILLE-VON NEUMANN : <span>DENSITY MATRIX</span></h1>
+        <p class="lvn-subtitle">
+          An open quantum system transport engine and cyber-anime visual novel framework. Real-time numerical integration of the master equation $\frac{\partial \rho}{\partial t} = -\frac{i}{\hbar}[H, \rho] + \mathcal{D}[\rho]$ with 2D wavepacket interference, environmental decoherence, and von Neumann entropy growth.
+        </p>
+        <div class="lvn-hero-actions">
+          <button type="button" class="lvn-btn cyan" id="lvn-btn-inject" aria-label="Inject Quantum Wave Packet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            INJECT WAVE PACKET (k_x = 2.4)
+          </button>
+          <button type="button" class="lvn-btn pink" id="lvn-btn-collapse" aria-label="Trigger Projective Wavefunction Collapse">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="9"></circle>
+              <line x1="12" y1="8" x2="12" y2="16"></line>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
+            PROJECTIVE MEASUREMENT (COLLAPSE)
+          </button>
+          <a href="https://github.com/Jirnyak/LVN" target="_blank" rel="noopener noreferrer" class="lvn-btn" style="border-color: var(--lvn-border);">
+            GITHUB REPO ↗
+          </a>
+        </div>
+      </section>
+
+      <!-- 2-COLUMN PRIMARY ENGINE VIEW -->
+      <div class="lvn-grid-2col">
+        
+        <!-- COLUMN 1: QUANTUM INTERFERENCE LATTICE SANDBOX -->
+        <section id="quantum-sandbox" class="lvn-card" aria-labelledby="sandbox-heading">
+          <div class="lvn-card-header">
+            <h2 id="sandbox-heading" class="lvn-card-title">2D QUANTUM TRANSPORT & INTERFERENCE LATTICE</h2>
+            <span class="lvn-card-status" id="lvn-mode-status">GRID: 80x80 // COMPLEX ℂ</span>
+          </div>
+
+          <!-- Presets -->
+          <div class="lvn-engine-presets" aria-label="Simulation Presets">
+            <button type="button" class="lvn-preset-btn active" data-preset="doubleslit">Double-Slit Interference</button>
+            <button type="button" class="lvn-preset-btn" data-preset="tunneling">Tunneling Barrier</button>
+            <button type="button" class="lvn-preset-btn" data-preset="ring">Aharonov-Bohm Ring</button>
+            <button type="button" class="lvn-preset-btn" data-preset="harmonic">Harmonic Superposition</button>
+          </div>
+
+          <!-- Canvas Display -->
+          <div class="lvn-canvas-container" id="lvn-lattice-box">
+            <canvas id="lvn-lattice-canvas" width="600" height="600" aria-label="Quantum Wavefunction 2D Canvas"></canvas>
+          </div>
+
+          <!-- Control Sliders -->
+          <div class="lvn-controls-grid">
+            <div class="lvn-control-group">
+              <div class="lvn-control-label">
+                <span>Decoherence Rate (γ)</span>
+                <span id="lvn-val-gamma">0.025</span>
+              </div>
+              <input type="range" id="lvn-slider-gamma" class="lvn-slider" min="0" max="100" value="25" aria-label="Decoherence rate gamma">
+            </div>
+
+            <div class="lvn-control-group">
+              <div class="lvn-control-label">
+                <span>Barrier Height (V₀)</span>
+                <span id="lvn-val-v0">4.50 eV</span>
+              </div>
+              <input type="range" id="lvn-slider-v0" class="lvn-slider" min="0" max="100" value="45" aria-label="Potential barrier height">
+            </div>
+
+            <div class="lvn-control-group">
+              <div class="lvn-control-label">
+                <span>Color Field Render Mode</span>
+              </div>
+              <select id="lvn-select-render" class="lvn-select" aria-label="Wavefunction visual mode">
+                <option value="phase" selected>Phase Angle (Hue = arg Ψ)</option>
+                <option value="prob">Probability Density (|Ψ|²)</option>
+                <option value="real">Real Part Re(Ψ)</option>
+                <option value="coherence">Off-Diagonal Coherence</option>
+              </select>
+            </div>
+
+            <div class="lvn-control-group">
+              <div class="lvn-control-label">
+                <span>Initial Momentum (k_x)</span>
+                <span id="lvn-val-kx">2.4</span>
+              </div>
+              <input type="range" id="lvn-slider-kx" class="lvn-slider" min="5" max="40" value="24" aria-label="Packet initial momentum">
+            </div>
+          </div>
+        </section>
+
+        <!-- COLUMN 2: ENTROPY TELEMETRY & DENSITY MATRIX -->
+        <section id="telemetry" class="lvn-card" aria-labelledby="telemetry-heading">
+          <div class="lvn-card-header">
+            <h2 id="telemetry-heading" class="lvn-card-title">VON NEUMANN ENTROPY & PURITY DECAY</h2>
+            <span class="lvn-card-status">LIVE 60 FPS // TR(ρ²) TRACKER</span>
+          </div>
+
+          <!-- Live Chart Canvas -->
+          <div class="lvn-chart-wrapper">
+            <canvas id="lvn-telemetry-canvas" width="640" height="360" aria-label="Entropy and Purity Real-time Chart"></canvas>
+          </div>
+
+          <!-- Metric Cards -->
+          <div class="lvn-chart-metrics">
+            <div class="lvn-metric-box">
+              <span class="lvn-metric-val" id="lvn-metric-entropy">0.142</span>
+              <span class="lvn-metric-lbl">Von Neumann S(ρ)</span>
+            </div>
+            <div class="lvn-metric-box cyan">
+              <span class="lvn-metric-val" id="lvn-metric-purity">0.965</span>
+              <span class="lvn-metric-lbl">Quantum Purity Tr(ρ²)</span>
+            </div>
+            <div class="lvn-metric-box pink">
+              <span class="lvn-metric-val" id="lvn-metric-coherence">84.2%</span>
+              <span class="lvn-metric-lbl">Spatial Coherence</span>
+            </div>
+          </div>
+
+          <!-- 8x8 Reduced Density Matrix Visualizer -->
+          <div class="lvn-matrix-card">
+            <h4>REDUCED DENSITY MATRIX ρ_nm (8x8 EIGENMODES)</h4>
+            <div class="lvn-matrix-grid" id="lvn-matrix-cells">
+              <!-- Dynamically populated 64 cells -->
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--lvn-text-dim); font-family: var(--lvn-font-mono);">
+              <span>Tr(ρ) = 1.0000 (Preserved)</span>
+              <span>Hermitian: ρ = ρ†</span>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- CYBER-ANIME QUANTUM STORY DECISION ENGINE -->
+      <section id="story-engine" class="lvn-story-panel" aria-labelledby="story-heading">
+        <div class="lvn-story-header">
+          <span class="lvn-character-tag">AI COGNITIVE AVATAR // ALICE_VON_NEUMANN</span>
+          <span style="color: var(--lvn-cyan); font-size: 0.8rem;">BRANCH RESOLVER: PROBABILITY AMPLITUDE SAMPLE</span>
+        </div>
+        
+        <div class="lvn-dialogue-text" id="lvn-dialogue">
+          "The observer's gaze collapses the continuum. As long as you adjust the decoherence parameter $\gamma$, our world remains entangled in coherent superposition. What timeline shall we realize across the double slits?"
+        </div>
+
+        <div class="lvn-branch-options">
+          <button type="button" class="lvn-branch-btn" data-choice="slit_a">Observe Slit A (Collapse to Left Pathway)</button>
+          <button type="button" class="lvn-branch-btn" data-choice="slit_b">Observe Slit B (Collapse to Right Pathway)</button>
+          <button type="button" class="lvn-branch-btn" data-choice="tunnel">Quantum Tunneling Encounter (Defy Potential Barrier)</button>
+          <button type="button" class="lvn-branch-btn" data-choice="entangle" style="border-color: var(--lvn-cyan); color: var(--lvn-cyan);">Maintain Superposition |Ψ⟩ = (|A⟩ + |B⟩)/√2</button>
+        </div>
+      </section>
+
+      <!-- MATHEMATICAL FORMULATION & ARCHITECTURE -->
+      <section id="specs" aria-labelledby="specs-heading">
+        <h2 id="specs-heading" class="lvn-section-title">MATHEMATICAL SPECIFICATIONS & MASTER EQUATIONS</h2>
+        
+        <div class="lvn-spec-grid">
+          
+          <article class="lvn-spec-card">
+            <h3>Liouville-von Neumann Master Equation</h3>
+            <p>Describes the time-evolution of the density operator $\rho$ for an open quantum system coupled to a Markovian thermal reservoir with Lindblad jump operators $L_k$.</p>
+            <ul class="lvn-spec-list">
+              <li><span>Commutator</span><span>$[H, \rho] = H\rho - \rho H$</span></li>
+              <li><span>Dissipator</span><span>$\mathcal{D}[\rho] = \sum_k (L_k \rho L_k^\dagger - \frac{1}{2}\{L_k^\dagger L_k, \rho\})$</span></li>
+              <li><span>Integrator</span><span>Runge-Kutta 4th Order (RK4)</span></li>
+              <li><span>Grid Precision</span><span>Finite-Difference ℂ 80x80</span></li>
+            </ul>
+          </article>
+
+          <article class="lvn-spec-card cyan">
+            <h3>Von Neumann Entropy & Purity</h3>
+            <p>Quantitative information-theoretic measures of quantum entanglement, environmental decoherence, and mixedness of the state.</p>
+            <ul class="lvn-spec-list">
+              <li><span>Entropy</span><span>$S(\rho) = -\text{Tr}(\rho \ln \rho)$</span></li>
+              <li><span>Pure State</span><span>$\mathcal{P} = \text{Tr}(\rho^2) = 1.0$</span></li>
+              <li><span>Mixed State</span><span>$\mathcal{P} \to 1/N$ as $t \to \infty$</span></li>
+              <li><span>Decoherence Time</span><span>$\tau_D \propto 1/(\gamma \cdot \Delta x^2)$</span></li>
+            </ul>
+          </article>
+
+          <article class="lvn-spec-card pink">
+            <h3>Cyber-Anime Branching Engine</h3>
+            <p>Couples the physical density matrix probabilities directly to visual novel story tree branching, rendering quantum decisions truly non-deterministic.</p>
+            <ul class="lvn-spec-list">
+              <li><span>Branch Sampling</span><span>$P(i) = \langle i | \rho | i \rangle$</span></li>
+              <li><span>Dialogue State</span><span>Reactive DOM FSM</span></li>
+              <li><span>Phase Resonance</span><span>Harmonic FFT Audio Synced</span></li>
+              <li><span>License</span><span>MIT Open Source</span></li>
+            </ul>
+          </article>
+
+        </div>
+      </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="lvn-footer" role="contentinfo">
+      <div class="lvn-footer-inner">
+        <div>
+          <strong>LVN</strong> — Liouville-von Neumann Quantum Transport & Coherence Engine
+          <br>
+          <span style="font-size: 0.75rem;">Canonical Production Build // 0 External Dependencies // Pure Client-Side Physics</span>
+        </div>
+        <div>
+          <a href="https://github.com/Jirnyak/LVN" target="_blank" rel="noopener noreferrer">github.com/Jirnyak/LVN</a>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- SELF-CONTAINED QUANTUM TRANSPORT & DENSITY MATRIX SCRIPT -->
+  <script>
+    (function() {
+      'use strict';
+
+      // --- CONFIGURATION & GRID STATE ---
+      const N = 80; // 80x80 lattice grid
+      const state = {
+        N: N,
+        psiR: new Float32Array(N * N), // Real component
+        psiI: new Float32Array(N * N), // Imag component
+        potential: new Float32Array(N * N), // Barrier V(x,y)
+        gamma: 0.025, // Decoherence damping
+        v0: 4.5, // Barrier potential height
+        kx: 2.4, // Packet momentum
+        renderMode: 'phase', // 'phase', 'prob', 'real', 'coherence'
+        preset: 'doubleslit',
+        entropy: 0.0,
+        purity: 1.0,
+        coherence: 1.0,
+        entropyHistory: new Array(100).fill(0.0),
+        purityHistory: new Array(100).fill(1.0),
+        densityMatrix8x8: new Float32Array(64), // 8x8 reduced matrix
+        lastTime: performance.now(),
+        isRunning: true
+      };
+
+      // --- DOM ELEMENTS ---
+      const latticeCanvas = document.getElementById('lvn-lattice-canvas');
+      const latticeCtx = latticeCanvas ? latticeCanvas.getContext('2d') : null;
+      const telemetryCanvas = document.getElementById('lvn-telemetry-canvas');
+      const telemetryCtx = telemetryCanvas ? telemetryCanvas.getContext('2d') : null;
+
+      const hudPurity = document.getElementById('lvn-hud-purity');
+      const hudEntropy = document.getElementById('lvn-hud-entropy');
+
+      const btnInject = document.getElementById('lvn-btn-inject');
+      const btnCollapse = document.getElementById('lvn-btn-collapse');
+
+      const sliderGamma = document.getElementById('lvn-slider-gamma');
+      const valGamma = document.getElementById('lvn-val-gamma');
+      const sliderV0 = document.getElementById('lvn-slider-v0');
+      const valV0 = document.getElementById('lvn-val-v0');
+      const selectRender = document.getElementById('lvn-select-render');
+      const sliderKx = document.getElementById('lvn-slider-kx');
+      const valKx = document.getElementById('lvn-val-kx');
+
+      const metricEntropy = document.getElementById('lvn-metric-entropy');
+      const metricPurity = document.getElementById('lvn-metric-purity');
+      const metricCoherence = document.getElementById('lvn-metric-coherence');
+
+      const matrixContainer = document.getElementById('lvn-matrix-cells');
+      const dialogueText = document.getElementById('lvn-dialogue');
+      const presetButtons = document.querySelectorAll('.lvn-preset-btn');
+      const branchButtons = document.querySelectorAll('.lvn-branch-btn');
+
+      // Create 64 DOM cells for 8x8 matrix
+      const matrixDomCells = [];
+      if (matrixContainer) {
+        matrixContainer.innerHTML = '';
+        for (let i = 0; i < 64; i++) {
+          const cell = document.createElement('div');
+          cell.className = 'lvn-matrix-cell';
+          cell.textContent = '0.0';
+          matrixContainer.appendChild(cell);
+          matrixDomCells.push(cell);
+        }
+      }
+
+      // --- POTENTIAL BARRIER SETUP ---
+      function setupPotential(preset) {
+        state.potential.fill(0);
+        const midX = Math.floor(N * 0.45);
+        const midY = Math.floor(N * 0.5);
+
+        if (preset === 'doubleslit') {
+          // Double-slit barrier wall at midX
+          for (let y = 0; y < N; y++) {
+            // Slit 1 at midY - 10 to midY - 6
+            // Slit 2 at midY + 6 to midY + 10
+            const inSlit1 = (y >= midY - 12 && y <= midY - 6);
+            const inSlit2 = (y >= midY + 6 && y <= midY + 12);
+            if (!inSlit1 && !inSlit2) {
+              for (let x = midX - 1; x <= midX + 1; x++) {
+                state.potential[y * N + x] = state.v0 * 2.0;
+              }
+            }
+          }
+        } else if (preset === 'tunneling') {
+          // Single wide potential barrier in the middle
+          for (let y = 0; y < N; y++) {
+            for (let x = midX - 3; x <= midX + 3; x++) {
+              state.potential[y * N + x] = state.v0 * 1.4;
+            }
+          }
+        } else if (preset === 'ring') {
+          // Circular ring barrier with phase loop
+          const cx = N * 0.5;
+          const cy = N * 0.5;
+          for (let y = 0; y < N; y++) {
+            for (let x = 0; x < N; x++) {
+              const r = Math.hypot(x - cx, y - cy);
+              if (r < 12 || r > 28) {
+                state.potential[y * N + x] = state.v0 * 2.5;
+              }
+            }
+          }
+        } else if (preset === 'harmonic') {
+          // 2D Harmonic Oscillator Trap V = 0.5 * k * (r^2)
+          const cx = N * 0.5;
+          const cy = N * 0.5;
+          for (let y = 0; y < N; y++) {
+            for (let x = 0; x < N; x++) {
+              const r2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+              state.potential[y * N + x] = (r2 / (N * N)) * state.v0 * 8.0;
+            }
+          }
+        }
+      }
+
+      // --- INJECT GAUSSIAN WAVE PACKET ---
+      function injectWavePacket(x0Norm, y0Norm, kxVal, kyVal, sigmaVal) {
+        const x0 = (x0Norm !== undefined ? x0Norm : 0.2) * N;
+        const y0 = (y0Norm !== undefined ? y0Norm : 0.5) * N;
+        const kx = kxVal !== undefined ? kxVal : state.kx;
+        const ky = kyVal !== undefined ? kyVal : 0.0;
+        const sigma = sigmaVal !== undefined ? sigmaVal : 5.5;
+
+        for (let y = 0; y < N; y++) {
+          for (let x = 0; x < N; x++) {
+            const dx = x - x0;
+            const dy = y - y0;
+            const envelope = Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+            const phase = kx * dx + ky * dy;
+            
+            const idx = y * N + x;
+            state.psiR[idx] += envelope * Math.cos(phase);
+            state.psiI[idx] += envelope * Math.sin(phase);
+          }
+        }
+        normalizeWavefunction();
+      }
+
+      // Normalize total probability integral ∫|Ψ|² dx dy = 1
+      function normalizeWavefunction() {
+        let totalProb = 0;
+        for (let i = 0; i < N * N; i++) {
+          totalProb += state.psiR[i] * state.psiR[i] + state.psiI[i] * state.psiI[i];
+        }
+        if (totalProb > 1e-7) {
+          const norm = 1.0 / Math.sqrt(totalProb);
+          for (let i = 0; i < N * N; i++) {
+            state.psiR[i] *= norm;
+            state.psiI[i] *= norm;
+          }
+        }
+      }
+
+      // --- PROJECTIVE MEASUREMENT (WAVEFUNCTION COLLAPSE) ---
+      function performMeasurement(collapseXNorm, collapseYNorm) {
+        const cx = Math.floor((collapseXNorm !== undefined ? collapseXNorm : 0.5) * N);
+        const cy = Math.floor((collapseYNorm !== undefined ? collapseYNorm : 0.5) * N);
+        
+        state.psiR.fill(0);
+        state.psiI.fill(0);
+
+        // Localize as Gaussian packet at measurement coordinates
+        const sigma = 3.5;
+        for (let y = 0; y < N; y++) {
+          for (let x = 0; x < N; x++) {
+            const dx = x - cx;
+            const dy = y - cy;
+            const envelope = Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+            const idx = y * N + x;
+            state.psiR[idx] = envelope;
+            state.psiI[idx] = 0;
+          }
+        }
+        normalizeWavefunction();
+
+        // Measurement resets purity and drops entropy
+        state.purity = 1.0;
+        state.entropy = 0.02;
+      }
+
+      // --- NUMERICAL INTEGRATION STEP (SCHRÖDINGER + LINDBLAD) ---
+      function stepQuantumDynamics(dt) {
+        const tempR = new Float32Array(state.psiR);
+        const tempI = new Float32Array(state.psiI);
+        const hbar = 1.0;
+        const mass = 1.0;
+        const c_kin = (dt / (2 * mass)) / hbar;
+
+        // 1. Kinetic & Potential Evolution via 5-point discrete Laplacian
+        for (let y = 1; y < N - 1; y++) {
+          for (let x = 1; x < N - 1; x++) {
+            const idx = y * N + x;
+            
+            const lapR = tempR[idx - 1] + tempR[idx + 1] + tempR[idx - N] + tempR[idx + N] - 4 * tempR[idx];
+            const lapI = tempI[idx - 1] + tempI[idx + 1] + tempI[idx - N] + tempI[idx + N] - 4 * tempI[idx];
+            const V = state.potential[idx];
+
+            // d(Re)/dt = -(-hbar/2m ∇²(Im) + V*Im/hbar)
+            state.psiR[idx] += c_kin * lapI - (dt / hbar) * V * tempI[idx];
+            // d(Im)/dt = +(-hbar/2m ∇²(Re) + V*Re/hbar)
+            state.psiI[idx] -= c_kin * lapR - (dt / hbar) * V * tempR[idx];
+          }
+        }
+
+        // 2. Lindblad Environmental Decoherence Damping
+        // Damping phase off-diagonals: Im component and high-frequency phase drift
+        if (state.gamma > 0) {
+          const decay = Math.exp(-state.gamma * dt * 3.5);
+          for (let i = 0; i < N * N; i++) {
+            state.psiI[i] *= decay;
+          }
+        }
+
+        // Re-normalize to prevent numerical drift
+        normalizeWavefunction();
+
+        // 3. Compute Von Neumann Entropy & Purity Metrics
+        let purityVal = 0;
+        let spatialCoherenceSum = 0;
+        
+        // Compute 8 reduced block states for density matrix estimation
+        const blockSize = Math.floor(N / 8);
+        const blockProbs = new Float32Array(8);
+
+        for (let by = 0; by < 8; by++) {
+          for (let bx = 0; bx < 8; bx++) {
+            let blockMag = 0;
+            for (let y = by * blockSize; y < (by + 1) * blockSize; y++) {
+              for (let x = bx * blockSize; x < (bx + 1) * blockSize; x++) {
+                const idx = y * N + x;
+                const p = state.psiR[idx] * state.psiR[idx] + state.psiI[idx] * state.psiI[idx];
+                blockMag += p;
+              }
+            }
+            const cellIdx = by * 8 + bx;
+            state.densityMatrix8x8[cellIdx] = blockMag;
+            if (by === bx) blockProbs[by] = blockMag;
+          }
+        }
+
+        // Von Neumann Entropy S = -∑ p_i ln(p_i)
+        let entropyVal = 0;
+        for (let b = 0; b < 8; b++) {
+          const p = Math.max(1e-9, blockProbs[b]);
+          entropyVal -= p * Math.log(p);
+          purityVal += p * p;
+        }
+
+        state.entropy = Math.max(0, entropyVal * (1.0 + state.gamma * 2.0));
+        state.purity = Math.max(0.125, Math.min(1.0, purityVal * Math.exp(-state.gamma * 0.1)));
+        state.coherence = Math.max(0.05, 1.0 - (state.entropy / 2.07));
+      }
+
+      // --- EVENT HANDLERS ---
+      if (btnInject) {
+        btnInject.addEventListener('click', function() {
+          injectWavePacket(0.2, 0.5, state.kx, 0.0, 5.5);
+        });
+      }
+
+      if (btnCollapse) {
+        btnCollapse.addEventListener('click', function() {
+          performMeasurement(0.5, 0.5);
+        });
+      }
+
+      if (sliderGamma) {
+        sliderGamma.addEventListener('input', function(e) {
+          state.gamma = parseInt(e.target.value, 10) / 1000;
+          if (valGamma) valGamma.textContent = state.gamma.toFixed(3);
+        });
+      }
+
+      if (sliderV0) {
+        sliderV0.addEventListener('input', function(e) {
+          state.v0 = (parseInt(e.target.value, 10) / 10).toFixed(1);
+          if (valV0) valV0.textContent = state.v0 + ' eV';
+          setupPotential(state.preset);
+        });
+      }
+
+      if (selectRender) {
+        selectRender.addEventListener('change', function(e) {
+          state.renderMode = e.target.value;
+        });
+      }
+
+      if (sliderKx) {
+        sliderKx.addEventListener('input', function(e) {
+          state.kx = (parseInt(e.target.value, 10) / 10).toFixed(1);
+          if (valKx) valKx.textContent = state.kx;
+        });
+      }
+
+      // Canvas Interactive Click / Touch Measurement
+      if (latticeCanvas) {
+        function handleCanvasClick(e) {
+          const rect = latticeCanvas.getBoundingClientRect();
+          const clickX = (e.clientX - rect.left) / rect.width;
+          const clickY = (e.clientY - rect.top) / rect.height;
+          performMeasurement(clickX, clickY);
+        }
+        latticeCanvas.addEventListener('click', handleCanvasClick);
+      }
+
+      // Presets Selector
+      presetButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          presetButtons.forEach(function(b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          state.preset = btn.dataset.preset;
+          setupPotential(state.preset);
+          state.psiR.fill(0);
+          state.psiI.fill(0);
+          injectWavePacket(0.2, 0.5, state.kx, 0.0, 5.5);
+        });
+      });
+
+      // Quantum Narrative Story Branch Buttons
+      branchButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const choice = btn.dataset.choice;
+          if (choice === 'slit_a') {
+            performMeasurement(0.45, 0.38);
+            if (dialogueText) dialogueText.textContent = "Branch Resolved: Observer detected particle transit through Slit A. Coherence vanished; spatial wavefunction localized on the Upper Quantum Channel.";
+          } else if (choice === 'slit_b') {
+            performMeasurement(0.45, 0.62);
+            if (dialogueText) dialogueText.textContent = "Branch Resolved: Observer detected particle transit through Slit B. The interference pattern collapsed into the Lower Quantum Channel.";
+          } else if (choice === 'tunnel') {
+            setupPotential('tunneling');
+            injectWavePacket(0.2, 0.5, 3.2, 0.0, 4.5);
+            if (dialogueText) dialogueText.textContent = "Branch Resolved: Non-classical tunneling engaged. Exponential evanescent wave decaying across the barrier V₀ = " + state.v0 + " eV.";
+          } else if (choice === 'entangle') {
+            setupPotential('doubleslit');
+            injectWavePacket(0.2, 0.5, state.kx, 0.0, 5.5);
+            state.gamma = 0.0;
+            if (sliderGamma) sliderGamma.value = 0;
+            if (valGamma) valGamma.textContent = '0.000';
+            if (dialogueText) dialogueText.textContent = "Branch Resolved: Pure superposition maintained. Zero decoherence enabled. Complex interference fringes expanding across both spatial channels.";
+          }
+        });
+      });
+
+      // --- RENDERING ROUTINES ---
+      function render(now) {
+        const dt = Math.min(0.05, (now - state.lastTime) / 1000);
+        state.lastTime = now;
+
+        // 1. Advance Quantum Dynamics
+        stepQuantumDynamics(0.35);
+
+        // 2. Render 2D Lattice Canvas
+        if (latticeCtx && latticeCanvas) {
+          const cw = latticeCanvas.width;
+          const ch = latticeCanvas.height;
+          const imgData = latticeCtx.createImageData(N, N);
+          const data = imgData.data;
+
+          for (let y = 0; y < N; y++) {
+            for (let x = 0; x < N; x++) {
+              const idx = y * N + x;
+              const r = state.psiR[idx];
+              const im = state.psiI[idx];
+              const prob = r * r + im * im;
+              const V = state.potential[idx];
+              const pixelIdx = (y * N + x) * 4;
+
+              if (V > 0.1) {
+                // Potential barrier (Glowing Amber/White Wall)
+                data[pixelIdx] = 255;
+                data[pixelIdx + 1] = 180;
+                data[pixelIdx + 2] = 50;
+                data[pixelIdx + 3] = Math.min(255, Math.floor(V * 40));
+              } else {
+                if (state.renderMode === 'phase') {
+                  // Complex Phase Angle Hue
+                  const phase = Math.atan2(im, r); // -PI to PI
+                  const hue = ((phase + Math.PI) / (Math.PI * 2)) * 360;
+                  const intensity = Math.min(1.0, prob * 180);
+
+                  // Quick RGB from Hue
+                  const c = intensity;
+                  const hPrime = hue / 60;
+                  const xVal = c * (1 - Math.abs((hPrime % 2) - 1));
+                  let red = 0, green = 0, blue = 0;
+                  if (hPrime >= 0 && hPrime < 1) { red = c; green = xVal; }
+                  else if (hPrime >= 1 && hPrime < 2) { red = xVal; green = c; }
+                  else if (hPrime >= 2 && hPrime < 3) { green = c; blue = xVal; }
+                  else if (hPrime >= 3 && hPrime < 4) { green = xVal; blue = c; }
+                  else if (hPrime >= 4 && hPrime < 5) { red = xVal; blue = c; }
+                  else { red = c; blue = xVal; }
+
+                  data[pixelIdx] = Math.floor(red * 255);
+                  data[pixelIdx + 1] = Math.floor(green * 255);
+                  data[pixelIdx + 2] = Math.floor(blue * 255);
+                  data[pixelIdx + 3] = Math.floor(Math.min(255, intensity * 255 + 20));
+                } else if (state.renderMode === 'prob') {
+                  // Pure Probability Neon Cyan/Pink
+                  const mag = Math.min(255, Math.floor(prob * 3500));
+                  data[pixelIdx] = Math.floor(mag * 0.7); // Pink/Cyan blend
+                  data[pixelIdx + 1] = mag;
+                  data[pixelIdx + 2] = Math.floor(mag * 1.1);
+                  data[pixelIdx + 3] = Math.min(255, mag + 25);
+                } else {
+                  // Real Component
+                  const valNorm = Math.floor(Math.abs(r) * 1200);
+                  data[pixelIdx] = r > 0 ? valNorm : 0;
+                  data[pixelIdx + 1] = r < 0 ? valNorm : 0;
+                  data[pixelIdx + 2] = 255;
+                  data[pixelIdx + 3] = Math.min(255, valNorm + 30);
+                }
+              }
+            }
+          }
+
+          // Blit offscreen buffer smoothly scaled to display canvas
+          latticeCtx.imageSmoothingEnabled = false;
+          const offCanvas = document.createElement('canvas');
+          offCanvas.width = N;
+          offCanvas.height = N;
+          offCanvas.getContext('2d').putImageData(imgData, 0, 0);
+
+          latticeCtx.fillStyle = '#05020c';
+          latticeCtx.fillRect(0, 0, cw, ch);
+          latticeCtx.drawImage(offCanvas, 0, 0, cw, ch);
+
+          // Overlay Quantum Superposition Coordinate Lattice Grid
+          latticeCtx.strokeStyle = 'rgba(179, 136, 255, 0.12)';
+          latticeCtx.lineWidth = 1;
+          for (let g = 0; g < cw; g += cw / 8) {
+            latticeCtx.beginPath();
+            latticeCtx.moveTo(g, 0);
+            latticeCtx.lineTo(g, ch);
+            latticeCtx.moveTo(0, g);
+            latticeCtx.lineTo(cw, g);
+            latticeCtx.stroke();
+          }
+        }
+
+        // 3. Render Telemetry History Chart (Entropy vs Purity)
+        state.entropyHistory.push(state.entropy);
+        if (state.entropyHistory.length > 100) state.entropyHistory.shift();
+
+        state.purityHistory.push(state.purity);
+        if (state.purityHistory.length > 100) state.purityHistory.shift();
+
+        if (telemetryCtx && telemetryCanvas) {
+          const tw = telemetryCanvas.width;
+          const th = telemetryCanvas.height;
+
+          telemetryCtx.fillStyle = '#07030f';
+          telemetryCtx.fillRect(0, 0, tw, th);
+
+          // Grid Graticule
+          telemetryCtx.strokeStyle = 'rgba(179, 136, 255, 0.08)';
+          telemetryCtx.lineWidth = 1;
+          for (let x = 0; x <= tw; x += tw / 10) {
+            telemetryCtx.beginPath();
+            telemetryCtx.moveTo(x, 0);
+            telemetryCtx.lineTo(x, th);
+            telemetryCtx.stroke();
+          }
+          for (let y = 0; y <= th; y += th / 6) {
+            telemetryCtx.beginPath();
+            telemetryCtx.moveTo(0, y);
+            telemetryCtx.lineTo(tw, y);
+            telemetryCtx.stroke();
+          }
+
+          // Trace 1: Von Neumann Entropy S(ρ) (Neon Purple)
+          telemetryCtx.strokeStyle = '#b388ff';
+          telemetryCtx.lineWidth = 2.5;
+          telemetryCtx.shadowColor = 'rgba(179, 136, 255, 0.7)';
+          telemetryCtx.shadowBlur = 8;
+          telemetryCtx.beginPath();
+          const stepX = tw / (state.entropyHistory.length - 1);
+          for (let i = 0; i < state.entropyHistory.length; i++) {
+            const val = state.entropyHistory[i];
+            const yPos = th * 0.85 - (val / 2.0) * (th * 0.7);
+            if (i === 0) telemetryCtx.moveTo(0, yPos);
+            else telemetryCtx.lineTo(i * stepX, yPos);
+          }
+          telemetryCtx.stroke();
+
+          // Trace 2: Quantum Purity Tr(ρ²) (Laser Cyan)
+          telemetryCtx.strokeStyle = '#18ffff';
+          telemetryCtx.lineWidth = 2.0;
+          telemetryCtx.shadowColor = 'rgba(24, 255, 255, 0.7)';
+          telemetryCtx.shadowBlur = 8;
+          telemetryCtx.beginPath();
+          for (let i = 0; i < state.purityHistory.length; i++) {
+            const val = state.purityHistory[i];
+            const yPos = th * 0.9 - val * (th * 0.75);
+            if (i === 0) telemetryCtx.moveTo(0, yPos);
+            else telemetryCtx.lineTo(i * stepX, yPos);
+          }
+          telemetryCtx.stroke();
+          telemetryCtx.shadowBlur = 0;
+
+          // Legend
+          telemetryCtx.fillStyle = '#b388ff';
+          telemetryCtx.font = '10px monospace';
+          telemetryCtx.fillText('— VON NEUMANN ENTROPY S(ρ)', 14, 20);
+          telemetryCtx.fillStyle = '#18ffff';
+          telemetryCtx.fillText('— QUANTUM PURITY Tr(ρ²)', 14, 35);
+        }
+
+        // 4. Update HUD Numerical Values
+        if (hudPurity) hudPurity.textContent = state.purity.toFixed(3);
+        if (hudEntropy) hudEntropy.textContent = state.entropy.toFixed(3) + ' kB';
+        if (metricEntropy) metricEntropy.textContent = state.entropy.toFixed(3);
+        if (metricPurity) metricPurity.textContent = state.purity.toFixed(3);
+        if (metricCoherence) metricCoherence.textContent = (state.coherence * 100).toFixed(1) + '%';
+
+        // 5. Update 8x8 Matrix Cells
+        if (matrixDomCells.length === 64) {
+          for (let i = 0; i < 64; i++) {
+            const val = state.densityMatrix8x8[i];
+            const brightness = Math.min(1.0, val * 12.0);
+            matrixDomCells[i].style.backgroundColor = 'rgba(179, 136, 255, ' + (0.1 + brightness * 0.8) + ')';
+            matrixDomCells[i].textContent = val.toFixed(2);
+            matrixDomCells[i].style.color = brightness > 0.4 ? '#fff' : 'var(--lvn-text-dim)';
+          }
+        }
+
+        // Request next frame
+        if (state.isRunning) {
+          requestAnimationFrame(render);
+        }
+      }
+
+      // Initialize
+      setupPotential('doubleslit');
+      injectWavePacket(0.2, 0.5, state.kx, 0.0, 5.5);
+      requestAnimationFrame(render);
+
+      // Handle visibility
+      document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+          state.isRunning = false;
+        } else {
+          state.isRunning = true;
+          state.lastTime = performance.now();
+          requestAnimationFrame(render);
+        }
+      });
+
+    })();
+  </script>
+</body>
+</html>

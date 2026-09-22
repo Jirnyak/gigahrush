@@ -1,0 +1,2592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>Timaert // Procedural RPG & 16-Bit Fantasy Dungeon Engine</title>
+    <meta name="description" content="TIMAERT is a high-performance C++23 procedural 2D fantasy RPG engine featuring cellular automata dungeon generation, Bresenham line-of-sight raycasting, EnTT ECS paperdoll inventory, and Vulkan 60 FPS rendering.">
+    <meta name="keywords" content="timaert, rpg-engine, procedural-generation, cellular-automata, bresenham-raycaster, vulkan, cpp23, entt-ecs, pixel-art, dungeon-crawler">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <link rel="canonical" href="https://Jirnyak.github.io/Timaert/">
+
+    <!-- Open Graph Protocol -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://Jirnyak.github.io/Timaert/">
+    <meta property="og:title" content="TIMAERT — C++23 Procedural 2D Fantasy RPG & Vulkan Engine">
+    <meta property="og:description" content="Explore procedural dungeons with cellular automata generation, real-time Bresenham line-of-sight fog-of-war, ECS paperdoll equipment simulator, and live monster threat telemetry.">
+    <meta property="og:image" content="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='300' viewBox='0 0 1200 300'%3E%3Crect width='1200' height='300' fill='%230d0a08'/%3E%3Cpath d='M0 0 L1200 300 M1200 0 L0 300' stroke='%23ff5722' stroke-width='2' opacity='0.15'/%3E%3Ctext x='600' y='140' font-family='serif' font-size='60' fill='%23ffc107' text-anchor='middle'%3ETIMAERT%3C/text%3E%3Ctext x='600' y='200' font-family='monospace' font-size='22' fill='%23ff7043' text-anchor='middle'%3E16-BIT PROCEDURAL DUNGEON RPG%3C/text%3E%3C/svg%3E">
+    <meta property="og:site_name" content="TIMAERT RPG Engine">
+
+    <!-- Twitter Summary Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://Jirnyak.github.io/Timaert/">
+    <meta name="twitter:title" content="TIMAERT — C++23 Procedural 2D Fantasy RPG & Vulkan Engine">
+    <meta name="twitter:description" content="Explore procedural dungeons with cellular automata generation, real-time Bresenham line-of-sight fog-of-war, ECS paperdoll equipment simulator, and live monster threat telemetry.">
+    <meta name="twitter:image" content="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='300' viewBox='0 0 1200 300'%3E%3Crect width='1200' height='300' fill='%230d0a08'/%3E%3Cpath d='M0 0 L1200 300 M1200 0 L0 300' stroke='%23ff5722' stroke-width='2' opacity='0.15'/%3E%3Ctext x='600' y='140' font-family='serif' font-size='60' fill='%23ffc107' text-anchor='middle'%3ETIMAERT%3C/text%3E%3Ctext x='600' y='200' font-family='monospace' font-size='22' fill='%23ff7043' text-anchor='middle'%3E16-BIT PROCEDURAL DUNGEON RPG%3C/text%3E%3C/svg%3E">
+
+    <!-- JSON-LD Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "TIMAERT",
+      "headline": "TIMAERT — C++23 Procedural 2D Fantasy RPG & Vulkan Engine",
+      "description": "High-performance C++23 procedural 2D fantasy RPG engine featuring cellular automata dungeon generation, Bresenham line-of-sight raycasting, EnTT ECS paperdoll inventory, and Vulkan 60 FPS rendering.",
+      "applicationCategory": "GameEngine",
+      "operatingSystem": "Web, Windows, Linux",
+      "url": "https://Jirnyak.github.io/Timaert/",
+      "image": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='300' viewBox='0 0 1200 300'%3E%3Crect width='1200' height='300' fill='%230d0a08'/%3E%3Cpath d='M0 0 L1200 300 M1200 0 L0 300' stroke='%23ff5722' stroke-width='2' opacity='0.15'/%3E%3Ctext x='600' y='140' font-family='serif' font-size='60' fill='%23ffc107' text-anchor='middle'%3ETIMAERT%3C/text%3E%3Ctext x='600' y='200' font-family='monospace' font-size='22' fill='%23ff7043' text-anchor='middle'%3E16-BIT PROCEDURAL DUNGEON RPG%3C/text%3E%3C/svg%3E",
+      "author": {
+        "@type": "Organization",
+        "name": "Antigravity Engineering"
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+    </script>
+
+    <!-- Inline SVG Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d0a08'/%3E%3Cpath d='M50 15 L62 42 L88 46 L68 64 L74 90 L50 76 L26 90 L32 64 L12 46 L38 42 Z' fill='%23ffc107' stroke='%23ff5722' stroke-width='3'/%3E%3Ccircle cx='50' cy='52' r='10' fill='%2300b0ff'/%3E%3C/svg%3E">
+    <link rel="manifest" href="site.webmanifest">
+
+    <style>
+        :root {
+            /* Core Dungeon Palette */
+            --rpg-bg: #0d0a08;
+            --rpg-surface: #17110e;
+            --rpg-surface-raised: #241b16;
+            --rpg-surface-glass: rgba(23, 17, 14, 0.92);
+            --rpg-border: rgba(197, 160, 89, 0.25);
+            --rpg-border-hover: rgba(255, 193, 7, 0.65);
+            --rpg-border-gold: #c5a059;
+            
+            /* Atmospheric Light & Accents */
+            --rpg-ember: #ff5722;
+            --rpg-ember-glow: rgba(255, 87, 34, 0.4);
+            --rpg-torch: #ff7043;
+            --rpg-gold: #ffc107;
+            --rpg-gold-bright: #ffe082;
+            --rpg-mana: #00b0ff;
+            --rpg-mana-glow: rgba(0, 176, 255, 0.35);
+            --rpg-health: #e53935;
+            --rpg-stamina: #43a047;
+            
+            /* Typography & Parchment */
+            --rpg-text: #f5eedc;
+            --rpg-text-muted: #a89f91;
+            --rpg-text-dim: #6d6458;
+            --rpg-parchment: #e8d8b8;
+            --rpg-parchment-bg: rgba(232, 216, 184, 0.05);
+
+            /* Fonts */
+            --font-serif: 'Cinzel', 'Georgia', 'Times New Roman', serif;
+            --font-body: 'Rajdhani', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: 'Courier New', Consolas, Monaco, monospace;
+            
+            /* Shadows & Transitions */
+            --shadow-ember: 0 0 25px rgba(255, 87, 34, 0.25);
+            --shadow-gold: 0 0 15px rgba(255, 193, 7, 0.3);
+            --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Light Theme Adaptation */
+        @media (prefers-color-scheme: light) {
+            :root.light-mode {
+                --rpg-bg: #f5eedc;
+                --rpg-surface: #e8d8b8;
+                --rpg-surface-raised: #d9c59e;
+                --rpg-surface-glass: rgba(232, 216, 184, 0.95);
+                --rpg-border: rgba(140, 95, 30, 0.35);
+                --rpg-border-hover: rgba(180, 110, 20, 0.8);
+                --rpg-text: #1a1310;
+                --rpg-text-muted: #4a3c30;
+                --rpg-text-dim: #7d6b58;
+                --rpg-parchment-bg: rgba(20, 15, 10, 0.04);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            background-color: var(--rpg-bg);
+            color: var(--rpg-text);
+        }
+
+        body {
+            background-color: var(--rpg-bg);
+            color: var(--rpg-text);
+            font-family: var(--font-body);
+            font-size: 16px;
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Background Particle Canvas */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.75;
+        }
+
+        /* Header */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: var(--rpg-surface-glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--rpg-border);
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--rpg-gold-bright);
+        }
+
+        .brand-icon {
+            width: 34px;
+            height: 34px;
+            filter: drop-shadow(0 0 8px var(--rpg-ember));
+        }
+
+        .brand-title {
+            font-family: var(--font-serif);
+            font-size: 1.5rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-shadow: 0 0 12px rgba(255, 193, 7, 0.4);
+        }
+
+        .brand-badge {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            background: rgba(255, 87, 34, 0.2);
+            border: 1px solid var(--rpg-ember);
+            color: var(--rpg-torch);
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 1px;
+        }
+
+        nav {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+        }
+
+        nav a {
+            color: var(--rpg-text);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 0.95rem;
+            letter-spacing: 1px;
+            padding: 0.35rem 0.65rem;
+            border-radius: 6px;
+            transition: var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        nav a:hover {
+            color: var(--rpg-gold-bright);
+            background: rgba(255, 193, 7, 0.12);
+            box-shadow: 0 0 10px rgba(255, 193, 7, 0.2);
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .lang-btn, .theme-toggle-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--rpg-border);
+            color: var(--rpg-text);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+
+        .lang-btn.active, .lang-btn:hover, .theme-toggle-btn:hover {
+            background: var(--rpg-gold);
+            color: #0d0a08;
+            border-color: var(--rpg-gold-bright);
+        }
+
+        .github-link {
+            background: linear-gradient(135deg, #ff5722, #c5a059);
+            color: #0d0a08 !important;
+            font-weight: 800;
+            border-radius: 6px;
+            padding: 0.4rem 0.85rem !important;
+            box-shadow: 0 0 12px var(--rpg-ember-glow);
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 4rem 1.5rem 3rem;
+            text-align: center;
+            background: radial-gradient(circle at 50% 30%, rgba(255, 87, 34, 0.15) 0%, transparent 70%);
+            border-bottom: 1px solid var(--rpg-border);
+            position: relative;
+        }
+
+        .hero-banner-img {
+            max-width: 860px;
+            width: 100%;
+            height: auto;
+            border-radius: 12px;
+            border: 2px solid var(--rpg-border-gold);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px var(--rpg-ember-glow);
+            margin-bottom: 2rem;
+            aspect-ratio: 16/9;
+            object-fit: cover;
+            background: #1a1310;
+        }
+
+        .hero h1 {
+            font-family: var(--font-serif);
+            font-size: clamp(2rem, 5vw, 3.8rem);
+            font-weight: 900;
+            color: #ffffff;
+            text-shadow: 0 0 25px var(--rpg-torch), 0 0 50px rgba(255, 87, 34, 0.5);
+            letter-spacing: 2px;
+            margin-bottom: 1rem;
+            line-height: 1.15;
+        }
+
+        .hero-tagline {
+            font-size: clamp(1rem, 2.5vw, 1.35rem);
+            color: var(--rpg-parchment);
+            max-width: 850px;
+            margin: 0 auto 2rem;
+            font-weight: 500;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        .hero-stats-ribbon {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 1rem;
+            background: var(--rpg-surface-glass);
+            border: 1px solid var(--rpg-border);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .stat-badge {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.5rem;
+        }
+
+        .stat-value {
+            font-family: var(--font-serif);
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--rpg-gold-bright);
+            text-shadow: 0 0 10px rgba(255, 193, 7, 0.4);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--rpg-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Container Layout */
+        .container {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .section-title {
+            font-family: var(--font-serif);
+            font-size: clamp(1.8rem, 4vw, 2.6rem);
+            color: var(--rpg-gold);
+            text-shadow: 0 0 15px rgba(255, 193, 7, 0.3);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .section-subtitle {
+            font-size: 1.1rem;
+            color: var(--rpg-text-muted);
+            max-width: 750px;
+            margin: 0 auto;
+        }
+
+        /* Card Panels */
+        .panel-card {
+            background: var(--rpg-surface);
+            border: 1px solid var(--rpg-border);
+            border-radius: 12px;
+            padding: 1.75rem;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition-fast);
+        }
+
+        .panel-card:hover {
+            border-color: var(--rpg-border-hover);
+        }
+
+        /* Sandbox: Dungeon Crawler */
+        .crawler-layout {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 1.5rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .crawler-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .canvas-container {
+            position: relative;
+            background: #000000;
+            border: 2px solid var(--rpg-border-gold);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9), 0 0 20px rgba(255, 87, 34, 0.2);
+            width: 100%;
+        }
+
+        #dungeon-canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 48 / 28;
+            image-rendering: pixelated;
+            cursor: crosshair;
+        }
+
+        .crawler-controls-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .rpg-btn {
+            background: var(--rpg-surface-raised);
+            border: 1px solid var(--rpg-border-gold);
+            color: var(--rpg-gold-bright);
+            font-family: var(--font-body);
+            font-size: 0.9rem;
+            font-weight: 700;
+            padding: 0.5rem 0.9rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .rpg-btn:hover {
+            background: var(--rpg-gold);
+            color: #0d0a08;
+            box-shadow: 0 0 12px var(--rpg-gold);
+        }
+
+        .rpg-btn.primary {
+            background: linear-gradient(135deg, #ff5722, #e65100);
+            color: #ffffff;
+            border-color: #ff9800;
+        }
+
+        .rpg-btn.primary:hover {
+            background: linear-gradient(135deg, #ff7043, #f57c00);
+            box-shadow: 0 0 15px var(--rpg-ember-glow);
+        }
+
+        /* Virtual D-Pad for Mobile */
+        .virtual-dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 50px);
+            grid-template-rows: repeat(3, 50px);
+            gap: 5px;
+            justify-content: center;
+            margin: 1rem auto 0;
+        }
+
+        .dpad-btn {
+            background: var(--rpg-surface-raised);
+            border: 1px solid var(--rpg-border-gold);
+            color: var(--rpg-gold-bright);
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .dpad-btn:active {
+            background: var(--rpg-gold);
+            color: #0d0a08;
+        }
+
+        .dpad-btn.center-action {
+            font-size: 0.8rem;
+            background: rgba(255, 87, 34, 0.2);
+            border-color: var(--rpg-ember);
+        }
+
+        /* Crawler Sidebar & HUD */
+        .hud-card {
+            background: var(--rpg-surface);
+            border: 1px solid var(--rpg-border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .hud-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95rem;
+        }
+
+        .bar-container {
+            width: 100%;
+            height: 14px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 7px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+        }
+
+        .bar-fill {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .bar-fill.hp {
+            background: linear-gradient(90deg, #b71c1c, #e53935);
+            box-shadow: 0 0 10px rgba(229, 57, 53, 0.5);
+        }
+
+        .bar-fill.mp {
+            background: linear-gradient(90deg, #01579b, #00b0ff);
+            box-shadow: 0 0 10px rgba(0, 176, 255, 0.5);
+        }
+
+        .log-box {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--rpg-border);
+            border-radius: 8px;
+            padding: 0.75rem;
+            height: 160px;
+            overflow-y: auto;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            line-height: 1.4;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .log-entry {
+            color: var(--rpg-text-muted);
+        }
+
+        .log-entry.combat { color: #ff8a80; }
+        .log-entry.loot { color: #ffe57f; }
+        .log-entry.system { color: #80d8ff; }
+        .log-entry.discovery { color: #b9f6ca; }
+
+        /* Paperdoll & Equipment Section */
+        .paperdoll-grid {
+            display: grid;
+            grid-template-columns: 320px 1fr 340px;
+            gap: 1.5rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1100px) {
+            .paperdoll-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .paperdoll-radar-col {
+                grid-column: span 2;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .paperdoll-grid {
+                grid-template-columns: 1fr;
+            }
+            .paperdoll-radar-col {
+                grid-column: span 1;
+            }
+        }
+
+        .knight-doll-frame {
+            position: relative;
+            background: radial-gradient(circle at 50% 50%, rgba(197, 160, 89, 0.15) 0%, rgba(23, 17, 14, 0.95) 75%);
+            border: 2px solid var(--rpg-border-gold);
+            border-radius: 12px;
+            padding: 1.5rem 1rem;
+            min-height: 420px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .slots-layout {
+            display: grid;
+            grid-template-columns: 80px 120px 80px;
+            grid-template-rows: 80px 80px 80px;
+            gap: 12px;
+            align-items: center;
+            justify-items: center;
+            margin: auto;
+        }
+
+        .equip-slot {
+            width: 74px;
+            height: 74px;
+            background: var(--rpg-surface-raised);
+            border: 2px dashed var(--rpg-border-gold);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            transition: var(--transition-fast);
+            user-select: none;
+        }
+
+        .equip-slot.filled {
+            border-style: solid;
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.15), rgba(36, 27, 22, 0.9));
+            box-shadow: 0 0 12px rgba(255, 193, 7, 0.2);
+        }
+
+        .equip-slot:hover {
+            border-color: var(--rpg-gold-bright);
+            transform: scale(1.05);
+        }
+
+        .slot-icon {
+            font-size: 1.8rem;
+        }
+
+        .slot-label {
+            font-size: 0.65rem;
+            color: var(--rpg-text-muted);
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        /* Backpack Grid */
+        .backpack-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 1rem;
+        }
+
+        .bag-item {
+            aspect-ratio: 1/1;
+            background: var(--rpg-surface-raised);
+            border: 1px solid var(--rpg-border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 4px;
+            position: relative;
+            transition: var(--transition-fast);
+        }
+
+        .bag-item:hover {
+            border-color: var(--rpg-gold);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(255, 193, 7, 0.25);
+        }
+
+        .bag-item.rarity-common { border-color: #9e9e9e; }
+        .bag-item.rarity-uncommon { border-color: #4caf50; box-shadow: 0 0 8px rgba(76, 175, 80, 0.2); }
+        .bag-item.rarity-rare { border-color: #2196f3; box-shadow: 0 0 10px rgba(33, 150, 243, 0.3); }
+        .bag-item.rarity-epic { border-color: #9c27b0; box-shadow: 0 0 12px rgba(156, 39, 176, 0.35); }
+        .bag-item.rarity-legendary { border-color: #ff9800; box-shadow: 0 0 15px rgba(255, 152, 0, 0.45); }
+        .bag-item.rarity-mythic { border-color: #e91e63; box-shadow: 0 0 18px rgba(233, 30, 99, 0.5); }
+
+        .item-icon { font-size: 1.6rem; }
+        .item-name-tiny { font-size: 0.65rem; text-align: center; color: var(--rpg-text); line-height: 1.1; margin-top: 2px; }
+
+        /* Stat Block Table */
+        .stat-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+
+        .stat-table td {
+            padding: 0.5rem 0.25rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-name { color: var(--rpg-text-muted); }
+        .stat-num { font-family: var(--font-mono); font-weight: bold; color: var(--rpg-gold-bright); text-align: right; }
+        .stat-delta { font-size: 0.75rem; color: #69f0ae; margin-left: 4px; }
+
+        /* Telemetry Section */
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 850px) {
+            .telemetry-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chart-canvas {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 16 / 10;
+            display: block;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--rpg-border);
+        }
+
+        .monster-select-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-bottom: 1rem;
+        }
+
+        .monster-pill {
+            background: var(--rpg-surface-raised);
+            border: 1px solid var(--rpg-border);
+            color: var(--rpg-text);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+
+        .monster-pill.active, .monster-pill:hover {
+            background: var(--rpg-gold);
+            color: #0d0a08;
+            font-weight: bold;
+            border-color: var(--rpg-gold-bright);
+        }
+
+        /* Monster Registry Table */
+        .table-responsive {
+            overflow-x: auto;
+            margin-top: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--rpg-border);
+        }
+
+        .rpg-data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+            background: var(--rpg-surface);
+        }
+
+        .rpg-data-table th {
+            background: var(--rpg-surface-raised);
+            color: var(--rpg-gold);
+            padding: 0.75rem 1rem;
+            border-bottom: 2px solid var(--rpg-border-gold);
+            font-family: var(--font-serif);
+            letter-spacing: 1px;
+            white-space: nowrap;
+        }
+
+        .rpg-data-table td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            white-space: nowrap;
+        }
+
+        .rpg-data-table tr:hover td {
+            background: rgba(255, 193, 7, 0.05);
+        }
+
+        /* Architecture Section */
+        .arch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .arch-card {
+            background: var(--rpg-surface);
+            border: 1px solid var(--rpg-border);
+            border-radius: 10px;
+            padding: 1.5rem;
+            border-top: 3px solid var(--rpg-gold);
+        }
+
+        .arch-card h3 {
+            font-family: var(--font-serif);
+            font-size: 1.25rem;
+            color: var(--rpg-gold-bright);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .arch-card p {
+            font-size: 0.9rem;
+            color: var(--rpg-text-muted);
+            line-height: 1.5;
+        }
+
+        /* FAQ Accordion */
+        .faq-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        details.faq-item {
+            background: var(--rpg-surface);
+            border: 1px solid var(--rpg-border);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            transition: var(--transition-fast);
+            cursor: pointer;
+        }
+
+        details.faq-item[open] {
+            border-color: var(--rpg-gold);
+            background: var(--rpg-surface-raised);
+        }
+
+        details.faq-item summary {
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: var(--rpg-gold-bright);
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        details.faq-item summary::-webkit-details-marker {
+            display: none;
+        }
+
+        details.faq-item summary::after {
+            content: '⚔️';
+            font-size: 0.9rem;
+            transition: transform 0.2s ease;
+        }
+
+        details.faq-item[open] summary::after {
+            transform: rotate(45deg);
+        }
+
+        details.faq-item p {
+            margin-top: 0.85rem;
+            color: var(--rpg-text);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--rpg-border);
+            background: var(--rpg-surface);
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            margin-top: 4rem;
+        }
+
+        .footer-content {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: var(--rpg-text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: var(--transition-fast);
+        }
+
+        .footer-links a:hover {
+            color: var(--rpg-gold);
+        }
+
+        .i18n-toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--rpg-gold);
+            color: #0d0a08;
+            font-weight: 800;
+            padding: 10px 18px;
+            border-radius: 8px;
+            box-shadow: 0 5px 25px rgba(255, 193, 7, 0.4);
+            z-index: 9999;
+            display: none;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="bg-canvas"></canvas>
+
+    <header>
+        <a href="#hero" class="header-brand">
+            <svg class="brand-icon" viewBox="0 0 100 100">
+                <rect width="100" height="100" rx="20" fill="#0d0a08"/>
+                <path d="M50 15 L62 42 L88 46 L68 64 L74 90 L50 76 L26 90 L32 64 L12 46 L38 42 Z" fill="#ffc107" stroke="#ff5722" stroke-width="3"/>
+                <circle cx="50" cy="52" r="10" fill="#00b0ff"/>
+            </svg>
+            <div>
+                <span class="brand-title">TIMAERT</span>
+                <span class="brand-badge">C++23 VULKAN</span>
+            </div>
+        </a>
+
+        <nav>
+            <a href="#dungeon-sandbox"><span>🏰</span> <span data-i18n="nav_crawler">Dungeon Crawler</span></a>
+            <a href="#inventory-ecs"><span>🛡️</span> <span data-i18n="nav_paperdoll">Equipment</span></a>
+            <a href="#loot-telemetry"><span>📊</span> <span data-i18n="nav_telemetry">Telemetry</span></a>
+            <a href="#architecture"><span>⚙️</span> <span data-i18n="nav_arch">Architecture</span></a>
+            <a href="#faq"><span>❓</span> <span data-i18n="nav_faq">FAQ</span></a>
+            <a href="https://github.com/Jirnyak/Timaert" target="_blank" rel="noopener" class="github-link"><span>⚡</span> GitHub</a>
+        </nav>
+
+        <div class="nav-controls">
+            <button class="lang-btn active" onclick="switchLang('en')">EN</button>
+            <button class="lang-btn" onclick="switchLang('ru')">RU</button>
+            <button class="lang-btn" onclick="switchLang('zh')">ZH</button>
+            <button class="lang-btn" onclick="switchLang('de')">DE</button>
+            <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Visual Mode">🌓</button>
+        </div>
+    </header>
+
+    <main>
+        <!-- Hero Section -->
+        <section id="hero" class="hero">
+            <div class="hero-content">
+                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='300' viewBox='0 0 1200 300'%3E%3Crect width='1200' height='300' fill='%230d0a08'/%3E%3Cpath d='M0 0 L1200 300 M1200 0 L0 300' stroke='%23ff5722' stroke-width='2' opacity='0.15'/%3E%3Ctext x='600' y='140' font-family='serif' font-size='60' fill='%23ffc107' text-anchor='middle'%3ETIMAERT%3C/text%3E%3Ctext x='600' y='200' font-family='monospace' font-size='22' fill='%23ff7043' text-anchor='middle'%3E16-BIT PROCEDURAL DUNGEON RPG%3C/text%3E%3C/svg%3E" alt="Timaert 2D RPG Engine Banner" class="hero-banner-img" onerror="this.style.display='none'">
+                <h1 data-i18n="hero_title">TIMAERT PROCEDURAL RPG ENGINE</h1>
+                <p class="hero-tagline" data-i18n="hero_desc">High-Performance C++23 2D Fantasy Engine featuring Procedural Cellular Automata Dungeons, Real-Time Bresenham Line-of-Sight Fog-of-War, and EnTT ECS Paperdoll Simulation.</p>
+
+                <div class="hero-stats-ribbon">
+                    <div class="stat-badge">
+                        <span class="stat-value">19</span>
+                        <span class="stat-label" data-i18n="stat_creatures">Fauna & Bosses</span>
+                    </div>
+                    <div class="stat-badge">
+                        <span class="stat-value">0 B</span>
+                        <span class="stat-label" data-i18n="stat_gc">GC Alloc / Frame</span>
+                    </div>
+                    <div class="stat-badge">
+                        <span class="stat-value">60+ FPS</span>
+                        <span class="stat-label" data-i18n="stat_vulkan">Vulkan Native</span>
+                    </div>
+                    <div class="stat-badge">
+                        <span class="stat-value">&infin;</span>
+                        <span class="stat-label" data-i18n="stat_dungeons">Procedural Depth</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 1: Procedural Dungeon Crawler Sandbox -->
+        <section id="dungeon-sandbox" class="container">
+            <div class="section-header">
+                <h2 class="section-title"><span>🏰</span> <span data-i18n="title_crawler">Cellular Automata Dungeon Sandbox</span></h2>
+                <p class="section-subtitle" data-i18n="sub_crawler">4-5 Rule Cave Generation with Flood-Fill Connectivity & Bresenham 2D Line-of-Sight Raycasting.</p>
+            </div>
+
+            <div class="crawler-layout">
+                <div class="panel-card">
+                    <div class="canvas-container">
+                        <canvas id="dungeon-canvas" width="768" height="448"></canvas>
+                    </div>
+
+                    <div class="crawler-controls-bar">
+                        <div class="btn-group">
+                            <button class="rpg-btn primary" onclick="generateNewDungeon()"><span>🎲</span> <span data-i18n="btn_gen">Generate Dungeon</span></button>
+                            <button class="rpg-btn" onclick="toggleTorchPower()"><span>🕯️</span> <span id="torch-btn-text" data-i18n="btn_torch">Torch: Standard</span></button>
+                            <button class="rpg-btn" onclick="revealMapSpell()"><span>👁️</span> <span data-i18n="btn_reveal">Clairvoyance (Reveal)</span></button>
+                            <button class="rpg-btn" onclick="restHero()"><span>🛡️</span> <span data-i18n="btn_rest">Rest / Heal</span></button>
+                        </div>
+                        <div class="btn-group">
+                            <button class="rpg-btn" onclick="toggleSound()"><span>🔊</span> <span id="sound-btn-text">Audio: ON</span></button>
+                        </div>
+                    </div>
+
+                    <!-- Virtual D-Pad for Mobile Touch -->
+                    <div class="virtual-dpad" aria-label="Virtual Directional Pad">
+                        <div></div>
+                        <button class="dpad-btn" onclick="movePlayer(0, -1)" title="Move North">▲</button>
+                        <div></div>
+                        <button class="dpad-btn" onclick="movePlayer(-1, 0)" title="Move West">◀</button>
+                        <button class="dpad-btn center-action" onclick="restHero()" title="Rest Turn">REST</button>
+                        <button class="dpad-btn" onclick="movePlayer(1, 0)" title="Move East">▶</button>
+                        <div></div>
+                        <button class="dpad-btn" onclick="movePlayer(0, 1)" title="Move South">▼</button>
+                        <div></div>
+                    </div>
+                </div>
+
+                <!-- HUD & Combat Chronicle -->
+                <div class="hud-card">
+                    <h3 style="font-family: var(--font-serif); color: var(--rpg-gold-bright); border-bottom: 1px solid var(--rpg-border); padding-bottom: 0.5rem;" data-i18n="hud_title">Dungeon Chronicle</h3>
+                    
+                    <div>
+                        <div class="hud-row">
+                            <span data-i18n="hud_knight">Knight Health</span>
+                            <span id="hud-hp-text" style="font-family: var(--font-mono); color: #ff8a80;">120 / 120</span>
+                        </div>
+                        <div class="bar-container">
+                            <div id="hud-hp-bar" class="bar-fill hp" style="width: 100%;"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="hud-row">
+                            <span data-i18n="hud_mana">Arcane Mana</span>
+                            <span id="hud-mp-text" style="font-family: var(--font-mono); color: #80d8ff;">80 / 80</span>
+                        </div>
+                        <div class="bar-container">
+                            <div id="hud-mp-bar" class="bar-fill mp" style="width: 100%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="hud-row">
+                        <span data-i18n="hud_floor">Dungeon Floor:</span>
+                        <strong id="hud-floor-num" style="color: var(--rpg-gold);">Floor 1 (Ancient Crypt)</strong>
+                    </div>
+
+                    <div class="hud-row">
+                        <span data-i18n="hud_monsters">Monsters Slain:</span>
+                        <strong id="hud-slain-num" style="color: #ffab91;">0</strong>
+                    </div>
+
+                    <div class="hud-row">
+                        <span data-i18n="hud_gold">Gold Pouch:</span>
+                        <strong id="hud-gold-num" style="color: var(--rpg-gold-bright);">150 🪙</strong>
+                    </div>
+
+                    <div style="margin-top: 0.5rem;">
+                        <span style="font-size: 0.8rem; text-transform: uppercase; color: var(--rpg-text-dim); letter-spacing: 1px;" data-i18n="hud_log">Encounter Feed</span>
+                        <div id="combat-log" class="log-box">
+                            <div class="log-entry system">» Cellular Automata generated floor with 4-5 cave smoothing.</div>
+                            <div class="log-entry discovery">» Bresenham line-of-sight raycaster active (7.5 tile radius).</div>
+                            <div class="log-entry system">» Use Arrow keys, WASD, or D-Pad to traverse the dungeon.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: ECS Inventory & Equipment Paperdoll Simulator -->
+        <section id="inventory-ecs" class="container">
+            <div class="section-header">
+                <h2 class="section-title"><span>🛡️</span> <span data-i18n="title_paperdoll">ECS Paperdoll Equipment Simulator</span></h2>
+                <p class="section-subtitle" data-i18n="sub_paperdoll">EnTT Component-Driven Equipment System with Live Dynamic Stat Radar & Tooltips.</p>
+            </div>
+
+            <div class="paperdoll-grid">
+                <!-- Knight Paperdoll Silhouette -->
+                <div class="knight-doll-frame">
+                    <h3 style="font-family: var(--font-serif); color: var(--rpg-gold-bright); font-size: 1.1rem;" data-i18n="doll_hero">Sir Vaelen &bull; Lv. 12 Knight</h3>
+                    
+                    <div class="slots-layout">
+                        <!-- Row 1: Helm -->
+                        <div></div>
+                        <div id="slot-helm" class="equip-slot filled" onclick="unequipSlot('helm')" title="Helm Slot">
+                            <span class="slot-icon">🪖</span>
+                            <span class="slot-label">Helm</span>
+                        </div>
+                        <div></div>
+
+                        <!-- Row 2: MainHand, Cuirass, OffHand -->
+                        <div id="slot-mainhand" class="equip-slot filled" onclick="unequipSlot('mainhand')" title="Main Hand Weapon">
+                            <span class="slot-icon">🗡️</span>
+                            <span class="slot-label">Main Hand</span>
+                        </div>
+                        <div id="slot-chest" class="equip-slot filled" onclick="unequipSlot('chest')" title="Chest Armor">
+                            <span class="slot-icon">🥋</span>
+                            <span class="slot-label">Cuirass</span>
+                        </div>
+                        <div id="slot-offhand" class="equip-slot filled" onclick="unequipSlot('offhand')" title="Off Hand Shield">
+                            <span class="slot-icon">🛡️</span>
+                            <span class="slot-label">Off Hand</span>
+                        </div>
+
+                        <!-- Row 3: Ring, Boots -->
+                        <div id="slot-ring" class="equip-slot filled" onclick="unequipSlot('ring')" title="Arcane Ring">
+                            <span class="slot-icon">💍</span>
+                            <span class="slot-label">Ring</span>
+                        </div>
+                        <div id="slot-boots" class="equip-slot filled" onclick="unequipSlot('boots')" title="Greaves / Boots">
+                            <span class="slot-icon">🥾</span>
+                            <span class="slot-label">Boots</span>
+                        </div>
+                        <div></div>
+                    </div>
+
+                    <p style="font-size: 0.75rem; color: var(--rpg-text-dim); text-align: center;" data-i18n="doll_hint">Click equipped gear to unequip; click backpack item to equip.</p>
+                </div>
+
+                <!-- Backpack Grid -->
+                <div class="panel-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="font-family: var(--font-serif); color: var(--rpg-gold-bright);" data-i18n="bag_title">Loot Stash & Inventory</h3>
+                        <span id="bag-count" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--rpg-text-muted);">8 / 16 Slots</span>
+                    </div>
+
+                    <div id="backpack-container" class="backpack-grid">
+                        <!-- Populated dynamically by JS -->
+                    </div>
+
+                    <div id="item-tooltip-box" style="margin-top: 1rem; padding: 0.75rem; background: rgba(0,0,0,0.6); border: 1px solid var(--rpg-border); border-radius: 8px; min-height: 80px;">
+                        <div id="tt-name" style="font-weight: bold; color: var(--rpg-gold-bright);">Hover or tap an item to inspect stats</div>
+                        <div id="tt-desc" style="font-size: 0.8rem; color: var(--rpg-text-muted); margin-top: 4px;">Dynamic stat modifiers project directly to authoritative CombatStats.</div>
+                    </div>
+                </div>
+
+                <!-- Live Stat Radar & Attributes Table -->
+                <div class="panel-card paperdoll-radar-col">
+                    <h3 style="font-family: var(--font-serif); color: var(--rpg-gold-bright); margin-bottom: 0.5rem;" data-i18n="stat_radar_title">Authoritative Combat Sheet</h3>
+                    
+                    <canvas id="stat-radar-canvas" class="chart-canvas" width="300" height="200"></canvas>
+
+                    <table class="stat-table">
+                        <tbody>
+                            <tr>
+                                <td class="stat-name" data-i18n="stat_atk">Attack Power (ATK):</td>
+                                <td class="stat-num" id="stat-val-atk">48 <span class="stat-delta">(+22)</span></td>
+                            </tr>
+                            <tr>
+                                <td class="stat-name" data-i18n="stat_def">Defense Armor (DEF):</td>
+                                <td class="stat-num" id="stat-val-def">35 <span class="stat-delta">(+18)</span></td>
+                            </tr>
+                            <tr>
+                                <td class="stat-name" data-i18n="stat_hp_max">Max Health (HP):</td>
+                                <td class="stat-num" id="stat-val-hp">120 <span class="stat-delta">(+40)</span></td>
+                            </tr>
+                            <tr>
+                                <td class="stat-name" data-i18n="stat_mp_max">Max Mana (MP):</td>
+                                <td class="stat-num" id="stat-val-mp">80 <span class="stat-delta">(+30)</span></td>
+                            </tr>
+                            <tr>
+                                <td class="stat-name" data-i18n="stat_spd">Movement Speed (SPD):</td>
+                                <td class="stat-num" id="stat-val-spd">14 <span class="stat-delta">(+2)</span></td>
+                            </tr>
+                            <tr>
+                                <td class="stat-name" data-i18n="stat_crit">Critical Strike (CRIT):</td>
+                                <td class="stat-num" id="stat-val-crit">18% <span class="stat-delta">(+10%)</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Monster Threat & Loot Distribution Telemetry -->
+        <section id="loot-telemetry" class="container">
+            <div class="section-header">
+                <h2 class="section-title"><span>📊</span> <span data-i18n="title_telemetry">Monster Threat & Loot Distribution Telemetry</span></h2>
+                <p class="section-subtitle" data-i18n="sub_telemetry">5-Axis Threat Radar & Poisson Loot Probability Curves based on monsters.md.</p>
+            </div>
+
+            <div class="telemetry-grid">
+                <!-- 5-Axis Spider Radar -->
+                <div class="panel-card">
+                    <h3 style="font-family: var(--font-serif); color: var(--rpg-gold-bright); margin-bottom: 0.75rem;" data-i18n="radar_monster_title">5-Axis Creature Threat Matrix</h3>
+                    
+                    <div class="monster-select-bar" id="monster-selector">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <canvas id="monster-radar-canvas" class="chart-canvas" width="400" height="280"></canvas>
+                </div>
+
+                <!-- Poisson Loot Drop Curve -->
+                <div class="panel-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <h3 style="font-family: var(--font-serif); color: var(--rpg-gold-bright);" data-i18n="loot_curve_title">Poisson Loot Roll Distribution</h3>
+                        <span id="luck-multiplier-label" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--rpg-gold-bright);">Luck: 1.0x</span>
+                    </div>
+
+                    <canvas id="loot-curve-canvas" class="chart-canvas" width="400" height="240"></canvas>
+
+                    <div style="margin-top: 1rem;">
+                        <label for="luck-slider" style="font-size: 0.85rem; color: var(--rpg-text-muted); display: block; margin-bottom: 4px;" data-i18n="luck_slider">Adjust Dungeon Floor Luck Multiplier:</label>
+                        <input type="range" id="luck-slider" min="0.5" max="3.0" step="0.1" value="1.0" style="width: 100%; accent-color: var(--rpg-gold);" oninput="updateLootCurve(this.value)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Complete 19-Creature Catalog Table from monsters.md -->
+            <div class="table-responsive">
+                <table class="rpg-data-table">
+                    <thead>
+                        <tr>
+                            <th>Kind ID</th>
+                            <th>Creature Label</th>
+                            <th>Faction</th>
+                            <th>AI Mode</th>
+                            <th>Base Level</th>
+                            <th>Loot Profile</th>
+                            <th>XP Base</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>0x100</code></td><td>Wolf</td><td>Wildlife</td><td>Combat</td><td>3</td><td><code>wildlife</code></td><td>35</td></tr>
+                        <tr><td><code>0x101</code></td><td>Goblin</td><td>Bandits</td><td>Combat</td><td>4</td><td><code>bandits</code></td><td>45</td></tr>
+                        <tr><td><code>0x102</code></td><td>Skeleton</td><td>Demons</td><td>Combat</td><td>6</td><td><code>demons</code></td><td>60</td></tr>
+                        <tr><td><code>0x103</code></td><td>Troll</td><td>Wildlife</td><td>Combat</td><td>10</td><td><code>kLootTroll</code></td><td>140</td></tr>
+                        <tr><td><code>0x104</code></td><td>Ice Wraith</td><td>Demons</td><td>Combat</td><td>12</td><td><code>demons</code></td><td>180</td></tr>
+                        <tr><td><code>0x105</code></td><td>Sand Scorpion</td><td>Wildlife</td><td>Combat</td><td>8</td><td><code>wildlife</code></td><td>95</td></tr>
+                        <tr><td><code>0x106</code></td><td>Stone Golem</td><td>Neutral</td><td>Combat</td><td>15</td><td><code>kLootGolem</code></td><td>250</td></tr>
+                        <tr><td><code>0x107</code></td><td>Swamp Thing</td><td>Wildlife</td><td>Combat</td><td>9</td><td><code>wildlife</code></td><td>110</td></tr>
+                        <tr><td><code>0x108</code></td><td>Deer / Stag</td><td>Wildlife</td><td>Flee</td><td>2</td><td><code>wildlife</code></td><td>20</td></tr>
+                        <tr><td><code>0x109</code></td><td>Rabbit</td><td>Wildlife</td><td>Flee</td><td>1</td><td><code>wildlife</code></td><td>10</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Section 4: Technical Architecture -->
+        <section id="architecture" class="container">
+            <div class="section-header">
+                <h2 class="section-title"><span>⚙️</span> <span data-i18n="title_arch">4-Layer C++23 Architecture</span></h2>
+                <p class="section-subtitle" data-i18n="sub_arch">Strict Layer Decoupling, Vulkan 1.3 Pipeline & EnTT Component Model.</p>
+            </div>
+
+            <div class="arch-grid">
+                <div class="arch-card">
+                    <h3><span>📜</span> L1: Macroworld Core</h3>
+                    <p>Holds authoritative <code>PlayerState</code>, universal <code>CharacterSheet</code>, stat curves, and single-source-of-truth <code>roll_loot_profile()</code> resolver.</p>
+                </div>
+                <div class="arch-card">
+                    <h3><span>🗺️</span> L2: Microworld Subworld</h3>
+                    <p>EnTT ECS entity simulation, spatial partition grid, cellular automata cave meshes, and the load-bearing <code>0x100</code> creature discriminator.</p>
+                </div>
+                <div class="arch-card">
+                    <h3><span>⚔️</span> L3: Event & Combat</h3>
+                    <p>Bresenham line-of-sight raycaster, real-time damage formula with armor mitigation, XP awards to killing blow owners, and loot drops.</p>
+                </div>
+                <div class="arch-card">
+                    <h3><span>🎮</span> L4: Vulkan 60 FPS Engine</h3>
+                    <p>Zero GC allocation loop, push constants particle rendering, dynamic sprite state machine, and seamless subworld crossing.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: FAQ Accordion -->
+        <section id="faq" class="container">
+            <div class="section-header">
+                <h2 class="section-title"><span>❓</span> <span data-i18n="title_faq">Frequently Asked Questions</span></h2>
+                <p class="section-subtitle" data-i18n="sub_faq">Technical specifications, gameplay mechanics, and open-source engine design.</p>
+            </div>
+
+            <div class="faq-list">
+                <details class="faq-item">
+                    <summary data-i18n="faq_q1">How does the Cellular Automata 4-5 rule generate connected dungeons?</summary>
+                    <p data-i18n="faq_a1">The dungeon begins with a 45% random wall noise distribution. Four smoothing iterations apply the standard 4-5 rule: any tile with &ge;5 wall neighbors within its 3x3 kernel becomes a solid wall; otherwise it becomes floor. Finally, a flood-fill algorithm identifies all disconnected cave chambers and automatically carves orthogonal corridors to ensure 100% path connectivity.</p>
+                </details>
+                <details class="faq-item">
+                    <summary data-i18n="faq_q2">What is the 0x100 discriminator in the monster catalog?</summary>
+                    <p data-i18n="faq_a2">In Timaert, humanoid NPCs have full Oblivion-style CharacterSheets with skills and perks (kind &lt; 8). Creatures and monsters are sheet-less data rows in fauna.cpp keyed with the bitwise flag (0x100 | index). This keeps NPC dialogue logic strictly decoupled from wildlife combat loops.</p>
+                </details>
+                <details class="faq-item">
+                    <summary data-i18n="faq_q3">Does Timaert run entirely client-side without external dependencies?</summary>
+                    <p data-i18n="faq_a3">Yes. This web demonstration is 100% self-contained with zero CDN calls, pure HTML5 Canvas raycasting, and Web Audio API procedural sound synthesizers.</p>
+                </details>
+                <details class="faq-item">
+                    <summary data-i18n="faq_q4">How is the Bresenham Line-of-Sight Fog-of-War calculated?</summary>
+                    <p data-i18n="faq_a4">From the player's coordinate, discrete integer Bresenham rays are cast to all perimeter points of a 7.5-tile circle. Rays terminate upon intersecting solid cave walls, revealing the wall facet while occluding tiles behind it. Explored tiles remain rendered at a dimmed 18% ambient parchment brightness.</p>
+                </details>
+            </div>
+        </section>
+    <svg id="difficulty-radar-chart" style="display:none;" viewBox="0 0 100 100"></svg>
+</main>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="#dungeon-sandbox" data-i18n="nav_crawler">Dungeon Crawler</a>
+                <a href="#inventory-ecs" data-i18n="nav_paperdoll">Equipment</a>
+                <a href="#loot-telemetry" data-i18n="nav_telemetry">Telemetry</a>
+                <a href="#architecture" data-i18n="nav_arch">Architecture</a>
+                <a href="https://github.com/Jirnyak/Timaert" target="_blank" rel="noopener">GitHub Repository</a>
+            </div>
+            <p style="color: var(--rpg-text-dim); font-size: 0.85rem;">&copy; 2026 TIMAERT RPG Engine. Created by Jirnyak & marko1olo. MIT Licensed.</p>
+        </div>
+    </footer>
+
+    <div id="i18n-toast" class="i18n-toast">🌐 Language switched</div>
+
+    <!-- Interactive Simulation & Engine Script -->
+    <script>
+    /* ==========================================================================
+       TIMAERT CLIENT-SIDE PROCEDURAL ENGINE & SIMULATOR
+       ========================================================================== */
+
+    // Sound Synthesizer (Web Audio API - Pure Client-Side)
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function initAudio() {
+        if (!audioCtx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) {
+                audioCtx = new AudioContext();
+            }
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }
+
+    function playSound(type) {
+        if (!soundEnabled) return;
+        try {
+            initAudio();
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'step') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(140, now);
+                osc.frequency.exponentialRampToValueAtTime(70, now + 0.06);
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.linearRampToValueAtTime(0.001, now + 0.06);
+                osc.start(now);
+                osc.stop(now + 0.06);
+            } else if (type === 'slash') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(380, now);
+                osc.frequency.exponentialRampToValueAtTime(90, now + 0.12);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.001, now + 0.12);
+                osc.start(now);
+                osc.stop(now + 0.12);
+            } else if (type === 'loot') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now); // C5
+                osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+                osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.linearRampToValueAtTime(0.001, now + 0.28);
+                osc.start(now);
+                osc.stop(now + 0.28);
+            } else if (type === 'heal') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.25);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.linearRampToValueAtTime(0.001, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            }
+        } catch (e) {
+            // Audio error non-blocking
+        }
+    }
+
+    function toggleSound() {
+        soundEnabled = !soundEnabled;
+        document.getElementById('sound-btn-text').innerText = soundEnabled ? 'Audio: ON' : 'Audio: OFF';
+    }
+
+    // 1. Procedural Cellular Automata Dungeon & Bresenham Raycaster
+    const D_COLS = 48;
+    const D_ROWS = 28;
+    let dungeonGrid = []; // 0 = floor, 1 = wall
+    let fowGrid = [];     // 0 = unseen, 1 = seen (memory), 2 = currently visible
+    let player = { x: 5, y: 5, hp: 120, maxHp: 120, mp: 80, maxMp: 80, gold: 150, slain: 0, floor: 1 };
+    let monsters = [];
+    let chests = [];
+    let stairs = { x: 0, y: 0 };
+    let torchPower = 7.5;
+    let torchTime = 0;
+
+    const dCanvas = document.getElementById('dungeon-canvas');
+    const dCtx = dCanvas.getContext('2d');
+
+    function initDungeonMatrix() {
+        dungeonGrid = [];
+        fowGrid = [];
+        for (let y = 0; y < D_ROWS; y++) {
+            dungeonGrid[y] = [];
+            fowGrid[y] = [];
+            for (let x = 0; x < D_COLS; x++) {
+                if (x === 0 || x === D_COLS - 1 || y === 0 || y === D_ROWS - 1) {
+                    dungeonGrid[y][x] = 1;
+                } else {
+                    dungeonGrid[y][x] = Math.random() < 0.44 ? 1 : 0;
+                }
+                fowGrid[y][x] = 0;
+            }
+        }
+    }
+
+    function countNeighbors(x, y) {
+        let count = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const nx = x + dx;
+                const ny = y + dy;
+                if (nx >= 0 && nx < D_COLS && ny >= 0 && ny < D_ROWS) {
+                    if (dungeonGrid[ny][nx] === 1) count++;
+                } else {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    function smoothCaves(iterations) {
+        for (let it = 0; it < iterations; it++) {
+            const nextGrid = [];
+            for (let y = 0; y < D_ROWS; y++) {
+                nextGrid[y] = [];
+                for (let x = 0; x < D_COLS; x++) {
+                    if (x === 0 || x === D_COLS - 1 || y === 0 || y === D_ROWS - 1) {
+                        nextGrid[y][x] = 1;
+                    } else {
+                        const n = countNeighbors(x, y);
+                        nextGrid[y][x] = n >= 5 ? 1 : 0;
+                    }
+                }
+            }
+            dungeonGrid = nextGrid;
+        }
+    }
+
+    function ensureConnectivity() {
+        // Flood fill to find largest cave pocket
+        const visited = Array.from({ length: D_ROWS }, () => Array(D_COLS).fill(false));
+        const pockets = [];
+
+        for (let y = 1; y < D_ROWS - 1; y++) {
+            for (let x = 1; x < D_COLS - 1; x++) {
+                if (dungeonGrid[y][x] === 0 && !visited[y][x]) {
+                    const pocket = [];
+                    const queue = [[x, y]];
+                    visited[y][x] = true;
+                    while (queue.length > 0) {
+                        const [cx, cy] = queue.shift();
+                        pocket.push({ x: cx, y: cy });
+                        const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+                        for (let [dx, dy] of dirs) {
+                            const nx = cx + dx;
+                            const ny = cy + dy;
+                            if (nx > 0 && nx < D_COLS - 1 && ny > 0 && ny < D_ROWS - 1) {
+                                if (dungeonGrid[ny][nx] === 0 && !visited[ny][nx]) {
+                                    visited[ny][nx] = true;
+                                    queue.push([nx, ny]);
+                                }
+                            }
+                        }
+                    }
+                    pockets.push(pocket);
+                }
+            }
+        }
+
+        if (pockets.length === 0) {
+            // Fallback clear central region
+            for (let y = 5; y < D_ROWS - 5; y++) {
+                for (let x = 5; x < D_COLS - 5; x++) {
+                    dungeonGrid[y][x] = 0;
+                }
+            }
+            return;
+        }
+
+        // Sort pockets by size descending
+        pockets.sort((a, b) => b.length - a.length);
+        const mainCave = pockets[0];
+
+        // Connect other smaller pockets to main cave by carving corridors
+        for (let i = 1; i < pockets.length; i++) {
+            const pA = pockets[i][0];
+            const pB = mainCave[Math.floor(Math.random() * mainCave.length)];
+            let cx = pA.x;
+            let cy = pA.y;
+            while (cx !== pB.x) {
+                dungeonGrid[cy][cx] = 0;
+                cx += (pB.x > cx) ? 1 : -1;
+            }
+            while (cy !== pB.y) {
+                dungeonGrid[cy][cx] = 0;
+                cy += (pB.y > cy) ? 1 : -1;
+            }
+        }
+    }
+
+    function spawnDungeonEntities() {
+        const freeTiles = [];
+        for (let y = 1; y < D_ROWS - 1; y++) {
+            for (let x = 1; x < D_COLS - 1; x++) {
+                if (dungeonGrid[y][x] === 0) freeTiles.push({ x, y });
+            }
+        }
+        // Shuffle free tiles
+        freeTiles.sort(() => Math.random() - 0.5);
+
+        // Player spawn
+        if (freeTiles.length > 0) {
+            const pStart = freeTiles.pop();
+            player.x = pStart.x;
+            player.y = pStart.y;
+        }
+
+        // Stairs spawn
+        if (freeTiles.length > 0) {
+            stairs = freeTiles.pop();
+        }
+
+        // Monsters spawn
+        monsters = [];
+        const monsterTypes = [
+            { name: 'Goblin', icon: '👺', hp: 28, maxHp: 28, atk: 12, def: 4, xp: 45, color: '#4caf50' },
+            { name: 'Skeleton', icon: '💀', hp: 35, maxHp: 35, atk: 16, def: 6, xp: 60, color: '#e0e0e0' },
+            { name: 'Wolf', icon: '🐺', hp: 22, maxHp: 22, atk: 14, def: 3, xp: 35, color: '#a1887f' },
+            { name: 'Troll', icon: '👹', hp: 70, maxHp: 70, atk: 24, def: 12, xp: 140, color: '#8d6e63' },
+            { name: 'Ice Wraith', icon: '👻', hp: 50, maxHp: 50, atk: 22, def: 8, xp: 180, color: '#80deea' }
+        ];
+
+        const numMonsters = Math.min(8, freeTiles.length);
+        for (let i = 0; i < numMonsters; i++) {
+            const t = freeTiles.pop();
+            const mType = monsterTypes[Math.floor(Math.random() * monsterTypes.length)];
+            monsters.push({
+                x: t.x, y: t.y,
+                name: mType.name, icon: mType.icon,
+                hp: mType.hp, maxHp: mType.maxHp,
+                atk: mType.atk, def: mType.def,
+                xp: mType.xp, color: mType.color
+            });
+        }
+
+        // Chests spawn
+        chests = [];
+        const numChests = Math.min(5, freeTiles.length);
+        for (let i = 0; i < numChests; i++) {
+            const t = freeTiles.pop();
+            chests.push({ x: t.x, y: t.y, opened: false, gold: Math.floor(Math.random() * 60) + 20 });
+        }
+    }
+
+    // Bresenham 2D Line-of-Sight Raycasting
+    function castRay(x0, y0, x1, y1) {
+        let dx = Math.abs(x1 - x0);
+        let dy = Math.abs(y1 - y0);
+        let sx = (x0 < x1) ? 1 : -1;
+        let sy = (y0 < y1) ? 1 : -1;
+        let err = dx - dy;
+
+        let curX = x0;
+        let curY = y0;
+
+        while (true) {
+            if (curX >= 0 && curX < D_COLS && curY >= 0 && curY < D_ROWS) {
+                fowGrid[curY][curX] = 2; // currently visible
+                if (dungeonGrid[curY][curX] === 1 && (curX !== x0 || curY !== y0)) {
+                    break; // stop ray on wall
+                }
+            }
+            if (curX === x1 && curY === y1) break;
+            let e2 = 2 * err;
+            if (e2 > -dy) { err -= dy; curX += sx; }
+            if (e2 < dx) { err += dx; curY += sy; }
+        }
+    }
+
+    function calculateFoW() {
+        // Demote previous visible (2) to memory (1)
+        for (let y = 0; y < D_ROWS; y++) {
+            for (let x = 0; x < D_COLS; x++) {
+                if (fowGrid[y][x] === 2) fowGrid[y][x] = 1;
+            }
+        }
+
+        const radius = Math.floor(torchPower);
+        const steps = 120;
+        for (let i = 0; i < steps; i++) {
+            const angle = (i / steps) * Math.PI * 2;
+            const tx = Math.round(player.x + Math.cos(angle) * radius);
+            const ty = Math.round(player.y + Math.sin(angle) * radius);
+            castRay(player.x, player.y, tx, ty);
+        }
+        fowGrid[player.y][player.x] = 2;
+    }
+
+    function generateNewDungeon() {
+        initDungeonMatrix();
+        smoothCaves(4);
+        ensureConnectivity();
+        spawnDungeonEntities();
+        calculateFoW();
+        logMessage(`» Descended to Floor ${player.floor}. Dungeon cave regenerated.`, 'system');
+        renderDungeon();
+        playSound('heal');
+    }
+
+    function toggleTorchPower() {
+        torchPower = (torchPower === 7.5) ? 12.0 : 7.5;
+        document.getElementById('torch-btn-text').innerText = (torchPower > 8) ? 'Torch: RADIANT' : 'Torch: Standard';
+        calculateFoW();
+        renderDungeon();
+        logMessage(`» Adjusted torch flame intensity to ${torchPower > 8 ? 'Radiant (12 tiles)' : 'Standard (7.5 tiles)'}.`, 'system');
+    }
+
+    function revealMapSpell() {
+        if (player.mp < 25) {
+            logMessage('» Insufficient Mana for Clairvoyance Spell (25 MP required).', 'combat');
+            return;
+        }
+        player.mp -= 25;
+        for (let y = 0; y < D_ROWS; y++) {
+            for (let x = 0; x < D_COLS; x++) {
+                if (fowGrid[y][x] === 0) fowGrid[y][x] = 1;
+            }
+        }
+        calculateFoW();
+        updateHUD();
+        renderDungeon();
+        logMessage('» Cast Clairvoyance! Entire dungeon floor revealed in memory.', 'discovery');
+        playSound('loot');
+    }
+
+    function restHero() {
+        const healHp = 20;
+        const healMp = 15;
+        player.hp = Math.min(player.maxHp, player.hp + healHp);
+        player.mp = Math.min(player.maxMp, player.mp + healMp);
+        updateHUD();
+        logMessage(`» Rested by the torch flame. Recovered +${healHp} HP and +${healMp} MP.`, 'system');
+        playSound('heal');
+    }
+
+    function movePlayer(dx, dy) {
+        initAudio();
+        const nx = player.x + dx;
+        const ny = player.y + dy;
+
+        if (nx < 0 || nx >= D_COLS || ny < 0 || ny >= D_ROWS) return;
+        if (dungeonGrid[ny][nx] === 1) return; // wall collision
+
+        // Check monster encounter
+        const mIndex = monsters.findIndex(m => m.x === nx && m.y === ny);
+        if (mIndex !== -1) {
+            const m = monsters[mIndex];
+            // Combat strike
+            const playerDmg = Math.max(8, (totalStats.atk || 48) - m.def + Math.floor(Math.random() * 10));
+            m.hp -= playerDmg;
+            playSound('slash');
+            logMessage(`» You slash ${m.name} with weapon for ${playerDmg} DMG!`, 'combat');
+
+            if (m.hp <= 0) {
+                player.slain++;
+                player.gold += Math.floor(m.xp / 2);
+                logMessage(`» ${m.name} slain! Gained +${m.xp} XP and +${Math.floor(m.xp / 2)} Gold.`, 'loot');
+                monsters.splice(mIndex, 1);
+            } else {
+                // Monster retaliation
+                const mDmg = Math.max(3, m.atk - Math.floor((totalStats.def || 35) / 2));
+                player.hp = Math.max(0, player.hp - mDmg);
+                logMessage(`» ${m.name} strikes back for ${mDmg} DMG!`, 'combat');
+            }
+            updateHUD();
+            renderDungeon();
+            return;
+        }
+
+        // Check chest
+        const cIndex = chests.findIndex(c => c.x === nx && c.y === ny && !c.opened);
+        if (cIndex !== -1) {
+            const c = chests[cIndex];
+            c.opened = true;
+            player.gold += c.gold;
+            logMessage(`» Opened ancient Crypt Chest! Found +${c.gold} 🪙 Gold.`, 'loot');
+            playSound('loot');
+        }
+
+        // Check stairs
+        if (nx === stairs.x && ny === stairs.y) {
+            player.floor++;
+            player.hp = Math.min(player.maxHp, player.hp + 30);
+            logMessage(`» Descended staircase deeper into the Catacombs (Floor ${player.floor})!`, 'discovery');
+            generateNewDungeon();
+            return;
+        }
+
+        player.x = nx;
+        player.y = ny;
+        playSound('step');
+        calculateFoW();
+        renderDungeon();
+    }
+
+    function renderDungeon() {
+        const cellW = dCanvas.width / D_COLS;
+        const cellH = dCanvas.height / D_ROWS;
+        torchTime += 0.05;
+        const flicker = 0.88 + 0.12 * Math.sin(torchTime * 6 + 0.5 * Math.cos(torchTime * 14));
+
+        dCtx.fillStyle = '#000000';
+        dCtx.fillRect(0, 0, dCanvas.width, dCanvas.height);
+
+        for (let y = 0; y < D_ROWS; y++) {
+            for (let x = 0; x < D_COLS; x++) {
+                const fow = fowGrid[y][x];
+                if (fow === 0) continue; // Unexplored pitch black
+
+                const px = x * cellW;
+                const py = y * cellH;
+                const isWall = dungeonGrid[y][x] === 1;
+
+                if (fow === 1) {
+                    // Explored in memory
+                    dCtx.fillStyle = isWall ? '#1a1310' : '#120d0a';
+                    dCtx.fillRect(px, py, cellW + 0.5, cellH + 0.5);
+                    if (isWall) {
+                        dCtx.strokeStyle = 'rgba(197, 160, 89, 0.15)';
+                        dCtx.strokeRect(px, py, cellW, cellH);
+                    }
+                } else if (fow === 2) {
+                    // In direct line of sight
+                    const dist = Math.hypot(x - player.x, y - player.y);
+                    const att = Math.max(0.2, 1 - (dist / torchPower)) * flicker;
+
+                    if (isWall) {
+                        dCtx.fillStyle = `rgb(${Math.floor(60 * att + 20)}, ${Math.floor(40 * att + 12)}, ${Math.floor(30 * att + 8)})`;
+                        dCtx.fillRect(px, py, cellW + 0.5, cellH + 0.5);
+                        dCtx.strokeStyle = `rgba(255, 193, 7, ${0.4 * att})`;
+                        dCtx.strokeRect(px, py, cellW, cellH);
+                    } else {
+                        dCtx.fillStyle = `rgb(${Math.floor(45 * att + 15)}, ${Math.floor(32 * att + 10)}, ${Math.floor(22 * att + 6)})`;
+                        dCtx.fillRect(px, py, cellW + 0.5, cellH + 0.5);
+                    }
+                }
+            }
+        }
+
+        // Render Stairs
+        if (fowGrid[stairs.y][stairs.x] > 0) {
+            dCtx.font = `${Math.floor(cellH * 0.9)}px sans-serif`;
+            dCtx.textAlign = 'center';
+            dCtx.textBaseline = 'middle';
+            dCtx.fillText('🪜', (stairs.x + 0.5) * cellW, (stairs.y + 0.5) * cellH);
+        }
+
+        // Render Chests
+        for (let c of chests) {
+            if (fowGrid[c.y][c.x] > 0) {
+                dCtx.font = `${Math.floor(cellH * 0.8)}px sans-serif`;
+                dCtx.textAlign = 'center';
+                dCtx.textBaseline = 'middle';
+                dCtx.fillText(c.opened ? '📭' : '🎁', (c.x + 0.5) * cellW, (c.y + 0.5) * cellH);
+            }
+        }
+
+        // Render Monsters (only if in currently visible fow == 2)
+        for (let m of monsters) {
+            if (fowGrid[m.y][m.x] === 2) {
+                dCtx.font = `${Math.floor(cellH * 0.85)}px sans-serif`;
+                dCtx.textAlign = 'center';
+                dCtx.textBaseline = 'middle';
+                dCtx.fillText(m.icon, (m.x + 0.5) * cellW, (m.y + 0.5) * cellH);
+
+                // Small HP bar
+                const barW = cellW * 0.8;
+                const hpPct = m.hp / m.maxHp;
+                dCtx.fillStyle = 'rgba(0,0,0,0.8)';
+                dCtx.fillRect((m.x + 0.1) * cellW, m.y * cellH - 3, barW, 3);
+                dCtx.fillStyle = '#e53935';
+                dCtx.fillRect((m.x + 0.1) * cellW, m.y * cellH - 3, barW * hpPct, 3);
+            }
+        }
+
+        // Render Player Knight
+        dCtx.font = `${Math.floor(cellH * 0.95)}px sans-serif`;
+        dCtx.textAlign = 'center';
+        dCtx.textBaseline = 'middle';
+        dCtx.fillText('🛡️', (player.x + 0.5) * cellW, (player.y + 0.5) * cellH);
+
+        // Torch Ember Aura
+        dCtx.beginPath();
+        dCtx.arc((player.x + 0.5) * cellW, (player.y + 0.5) * cellH, cellW * 1.5, 0, Math.PI * 2);
+        dCtx.fillStyle = `rgba(255, 87, 34, ${0.12 * flicker})`;
+        dCtx.fill();
+    }
+
+    function updateHUD() {
+        document.getElementById('hud-hp-text').innerText = `${player.hp} / ${player.maxHp}`;
+        document.getElementById('hud-hp-bar').style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+        document.getElementById('hud-mp-text').innerText = `${player.mp} / ${player.maxMp}`;
+        document.getElementById('hud-mp-bar').style.width = `${Math.max(0, (player.mp / player.maxMp) * 100)}%`;
+        document.getElementById('hud-floor-num').innerText = `Floor ${player.floor} (Catacombs)`;
+        document.getElementById('hud-slain-num').innerText = player.slain;
+        document.getElementById('hud-gold-num').innerText = `${player.gold} 🪙`;
+    }
+
+    function logMessage(text, type = 'system') {
+        const logBox = document.getElementById('combat-log');
+        if (!logBox) return;
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type}`;
+        entry.innerText = text;
+        logBox.appendChild(entry);
+        logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // Keyboard Navigation
+    window.addEventListener('keydown', (e) => {
+        if (['ArrowUp', 'KeyW'].includes(e.code)) { e.preventDefault(); movePlayer(0, -1); }
+        else if (['ArrowDown', 'KeyS'].includes(e.code)) { e.preventDefault(); movePlayer(0, 1); }
+        else if (['ArrowLeft', 'KeyA'].includes(e.code)) { e.preventDefault(); movePlayer(-1, 0); }
+        else if (['ArrowRight', 'KeyD'].includes(e.code)) { e.preventDefault(); movePlayer(1, 0); }
+        else if (e.code === 'Space') { e.preventDefault(); restHero(); }
+    });
+
+    // Canvas Click-to-Move
+    dCanvas.addEventListener('click', (e) => {
+        const rect = dCanvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+        const cellW = rect.width / D_COLS;
+        const cellH = rect.height / D_ROWS;
+        const targetTileX = Math.floor(clickX / cellW);
+        const targetTileY = Math.floor(clickY / cellH);
+
+        const dx = Math.sign(targetTileX - player.x);
+        const dy = Math.sign(targetTileY - player.y);
+        if (dx !== 0 || dy !== 0) {
+            movePlayer(dx, dy);
+        }
+    });
+
+    // 2. ECS Inventory & Paperdoll Simulator
+    const itemCatalog = [
+        { id: 'helm_ancient', name: 'Helm of the Ancients', slot: 'helm', icon: '🪖', rarity: 'rare', stats: { def: 8, hp: 20 }, desc: 'Forged in dragonfire during the First Era.' },
+        { id: 'chest_plate', name: 'Knight’s Dragon Cuirass', slot: 'chest', icon: '🥋', rarity: 'epic', stats: { def: 18, hp: 50 }, desc: 'Heavy tempered steel etched with dragon sigils.' },
+        { id: 'sword_mithril', name: 'Mithril Broadsword', slot: 'mainhand', icon: '🗡️', rarity: 'rare', stats: { atk: 26, crit: 8 }, desc: 'Lightweight blade that slices through heavy bone.' },
+        { id: 'shield_aegis', name: 'Aegis Tower Shield', slot: 'offhand', icon: '🛡️', rarity: 'epic', stats: { def: 14, hp: 30 }, desc: 'Solid oak banded with rune-inscribed bronze.' },
+        { id: 'ring_mana', name: 'Arcane Sapphire Ring', slot: 'ring', icon: '💍', rarity: 'legendary', stats: { mp: 40, crit: 5 }, desc: 'Channeled conduit of endless mystical ley lines.' },
+        { id: 'boots_speed', name: 'Greaves of the Vanguard', slot: 'boots', icon: '🥾', rarity: 'uncommon', stats: { def: 6, spd: 4 }, desc: 'Enchanted leather allowing swift tactical repositions.' },
+        { id: 'staff_archmage', name: 'Staff of Solar Flare', slot: 'mainhand', icon: '🪄', rarity: 'legendary', stats: { atk: 34, mp: 35 }, desc: 'Pulsing crystal staff that incinerates foes.' },
+        { id: 'ring_blood', name: 'Band of Bloodlust', slot: 'ring', icon: '💎', rarity: 'mythic', stats: { atk: 12, crit: 15 }, desc: 'Ancient ruby cursed with unquenchable thirst.' },
+        { id: 'potion_health', name: 'Elixir of Rebirth', slot: 'consumable', icon: '🧪', rarity: 'common', stats: { hp: 50 }, desc: 'Restores 50 HP upon consumption.' },
+        { id: 'rune_stone', name: 'Eldritch Rune of Aegis', slot: 'consumable', icon: '🔮', rarity: 'rare', stats: { def: 10 }, desc: 'Mystic glyph that wards off demonic spells.' }
+    ];
+
+    let equipped = {
+        helm: itemCatalog[0],
+        chest: itemCatalog[1],
+        mainhand: itemCatalog[2],
+        offhand: itemCatalog[3],
+        ring: itemCatalog[4],
+        boots: itemCatalog[5]
+    };
+
+    let backpack = [
+        itemCatalog[6],
+        itemCatalog[7],
+        itemCatalog[8],
+        itemCatalog[9]
+    ];
+
+    let totalStats = { atk: 48, def: 35, hp: 120, mp: 80, spd: 14, crit: 18 };
+
+    function calculateStats() {
+        const base = { atk: 12, def: 8, hp: 80, mp: 50, spd: 10, crit: 5 };
+        let bonus = { atk: 0, def: 0, hp: 0, mp: 0, spd: 0, crit: 0 };
+
+        for (let slot in equipped) {
+            const item = equipped[slot];
+            if (item && item.stats) {
+                for (let k in item.stats) {
+                    bonus[k] = (bonus[k] || 0) + item.stats[k];
+                }
+            }
+        }
+
+        totalStats = {
+            atk: base.atk + bonus.atk,
+            def: base.def + bonus.def,
+            hp: base.hp + bonus.hp,
+            mp: base.mp + bonus.mp,
+            spd: base.spd + bonus.spd,
+            crit: base.crit + bonus.crit
+        };
+
+        player.maxHp = totalStats.hp;
+        player.maxMp = totalStats.mp;
+        updateHUD();
+
+        document.getElementById('stat-val-atk').innerHTML = `${totalStats.atk} <span class="stat-delta">(+${bonus.atk})</span>`;
+        document.getElementById('stat-val-def').innerHTML = `${totalStats.def} <span class="stat-delta">(+${bonus.def})</span>`;
+        document.getElementById('stat-val-hp').innerHTML = `${totalStats.hp} <span class="stat-delta">(+${bonus.hp})</span>`;
+        document.getElementById('stat-val-mp').innerHTML = `${totalStats.mp} <span class="stat-delta">(+${bonus.mp})</span>`;
+        document.getElementById('stat-val-spd').innerHTML = `${totalStats.spd} <span class="stat-delta">(+${bonus.spd})</span>`;
+        document.getElementById('stat-val-crit').innerHTML = `${totalStats.crit}% <span class="stat-delta">(+${bonus.crit}%)</span>`;
+
+        renderStatRadar();
+    }
+
+    function renderPaperdoll() {
+        const slots = ['helm', 'chest', 'mainhand', 'offhand', 'ring', 'boots'];
+        for (let slot of slots) {
+            const el = document.getElementById(`slot-${slot}`);
+            if (!el) continue;
+            const item = equipped[slot];
+            if (item) {
+                el.className = `equip-slot filled rarity-${item.rarity}`;
+                el.innerHTML = `<span class="slot-icon">${item.icon}</span><span class="slot-label">${item.name.split(' ')[0]}</span>`;
+            } else {
+                el.className = 'equip-slot';
+                el.innerHTML = `<span class="slot-icon">➕</span><span class="slot-label">${slot}</span>`;
+            }
+        }
+
+        const bagEl = document.getElementById('backpack-container');
+        bagEl.innerHTML = '';
+        backpack.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = `bag-item rarity-${item.rarity}`;
+            div.innerHTML = `<span class="item-icon">${item.icon}</span><span class="item-name-tiny">${item.name}</span>`;
+            div.onclick = () => equipItemFromBag(index);
+            div.onmouseenter = () => showTooltip(item);
+            bagEl.appendChild(div);
+        });
+
+        // Fill remaining empty slots
+        for (let i = backpack.length; i < 16; i++) {
+            const div = document.createElement('div');
+            div.className = 'bag-item';
+            div.style.opacity = '0.3';
+            div.innerHTML = '<span style="font-size:1rem; color:var(--rpg-text-dim);">·</span>';
+            bagEl.appendChild(div);
+        }
+
+        document.getElementById('bag-count').innerText = `${backpack.length} / 16 Slots`;
+    }
+
+    function showTooltip(item) {
+        document.getElementById('tt-name').innerText = `${item.name} (${item.rarity.toUpperCase()})`;
+        let statStr = [];
+        if (item.stats) {
+            for (let s in item.stats) statStr.push(`+${item.stats[s]} ${s.toUpperCase()}`);
+        }
+        document.getElementById('tt-desc').innerText = `${item.desc} [${statStr.join(', ')}]`;
+    }
+
+    function unequipSlot(slot) {
+        const item = equipped[slot];
+        if (!item) return;
+        if (backpack.length >= 16) {
+            logMessage('» Backpack full! Cannot unequip item.', 'combat');
+            return;
+        }
+        backpack.push(item);
+        equipped[slot] = null;
+        playSound('step');
+        renderPaperdoll();
+        calculateStats();
+    }
+
+    function equipItemFromBag(index) {
+        const item = backpack[index];
+        if (!item) return;
+        if (item.slot === 'consumable') {
+            backpack.splice(index, 1);
+            player.hp = Math.min(player.maxHp, player.hp + (item.stats.hp || 30));
+            updateHUD();
+            logMessage(`» Consumed ${item.name}!`, 'heal');
+            playSound('heal');
+            renderPaperdoll();
+            return;
+        }
+
+        const currentEquipped = equipped[item.slot];
+        backpack.splice(index, 1);
+        if (currentEquipped) {
+            backpack.push(currentEquipped);
+        }
+        equipped[item.slot] = item;
+        playSound('slash');
+        logMessage(`» Equipped ${item.name}!`, 'loot');
+        renderPaperdoll();
+        calculateStats();
+    }
+
+    // Stat Radar Spider Chart
+    const radarCanvas = document.getElementById('stat-radar-canvas');
+    const rCtx = radarCanvas.getContext('2d');
+
+    function renderStatRadar() {
+        const w = radarCanvas.width;
+        const h = radarCanvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+        const radius = Math.min(cx, cy) - 25;
+
+        rCtx.clearRect(0, 0, w, h);
+
+        const axes = ['ATK', 'DEF', 'HP', 'MP', 'SPD', 'CRIT'];
+        const values = [
+            Math.min(1, totalStats.atk / 80),
+            Math.min(1, totalStats.def / 60),
+            Math.min(1, totalStats.hp / 200),
+            Math.min(1, totalStats.mp / 150),
+            Math.min(1, totalStats.spd / 30),
+            Math.min(1, totalStats.crit / 50)
+        ];
+        const numAxes = axes.length;
+
+        // Draw web rings
+        for (let ring = 1; ring <= 4; ring++) {
+            const r = (ring / 4) * radius;
+            rCtx.beginPath();
+            for (let i = 0; i < numAxes; i++) {
+                const angle = (i / numAxes) * Math.PI * 2 - Math.PI / 2;
+                const x = cx + Math.cos(angle) * r;
+                const y = cy + Math.sin(angle) * r;
+                if (i === 0) rCtx.moveTo(x, y);
+                else rCtx.lineTo(x, y);
+            }
+            rCtx.closePath();
+            rCtx.strokeStyle = 'rgba(197, 160, 89, 0.2)';
+            rCtx.stroke();
+        }
+
+        // Draw spokes & labels
+        rCtx.font = '10px var(--font-body)';
+        rCtx.fillStyle = '#a89f91';
+        rCtx.textAlign = 'center';
+        rCtx.textBaseline = 'middle';
+
+        for (let i = 0; i < numAxes; i++) {
+            const angle = (i / numAxes) * Math.PI * 2 - Math.PI / 2;
+            const x = cx + Math.cos(angle) * radius;
+            const y = cy + Math.sin(angle) * radius;
+            rCtx.beginPath();
+            rCtx.moveTo(cx, cy);
+            rCtx.lineTo(x, y);
+            rCtx.strokeStyle = 'rgba(197, 160, 89, 0.25)';
+            rCtx.stroke();
+
+            const lx = cx + Math.cos(angle) * (radius + 15);
+            const ly = cy + Math.sin(angle) * (radius + 15);
+            rCtx.fillText(axes[i], lx, ly);
+        }
+
+        // Draw Data Polygon
+        rCtx.beginPath();
+        for (let i = 0; i < numAxes; i++) {
+            const angle = (i / numAxes) * Math.PI * 2 - Math.PI / 2;
+            const r = values[i] * radius;
+            const x = cx + Math.cos(angle) * r;
+            const y = cy + Math.sin(angle) * r;
+            if (i === 0) rCtx.moveTo(x, y);
+            else rCtx.lineTo(x, y);
+        }
+        rCtx.closePath();
+        rCtx.fillStyle = 'rgba(255, 193, 7, 0.35)';
+        rCtx.fill();
+        rCtx.strokeStyle = '#ffc107';
+        rCtx.lineWidth = 2;
+        rCtx.stroke();
+    }
+
+    // 3. Monster Threat Radar & Poisson Loot Telemetry
+    const monsterThreatDb = {
+        'Wolf': { melee: 40, magicRes: 15, armor: 25, danger: 30, loot: 25 },
+        'Goblin': { melee: 45, magicRes: 30, armor: 35, danger: 45, loot: 40 },
+        'Skeleton': { melee: 55, magicRes: 60, armor: 50, danger: 55, loot: 50 },
+        'Troll': { melee: 85, magicRes: 40, armor: 75, danger: 80, loot: 75 },
+        'Ice Wraith': { melee: 70, magicRes: 95, armor: 45, danger: 85, loot: 80 },
+        'Stone Golem': { melee: 95, magicRes: 85, armor: 95, danger: 90, loot: 90 },
+        'Swamp Thing': { melee: 65, magicRes: 50, armor: 65, danger: 65, loot: 60 }
+    };
+    let activeMonster = 'Skeleton';
+
+    function initMonsterSelector() {
+        const container = document.getElementById('monster-selector');
+        container.innerHTML = '';
+        for (let m in monsterThreatDb) {
+            const pill = document.createElement('button');
+            pill.className = `monster-pill ${m === activeMonster ? 'active' : ''}`;
+            pill.innerText = m;
+            pill.onclick = () => {
+                activeMonster = m;
+                document.querySelectorAll('.monster-pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                renderMonsterRadar();
+            };
+            container.appendChild(pill);
+        }
+    }
+
+    const mRadarCanvas = document.getElementById('monster-radar-canvas');
+    const mrCtx = mRadarCanvas.getContext('2d');
+
+    function renderMonsterRadar() {
+        const w = mRadarCanvas.width;
+        const h = mRadarCanvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+        const radius = Math.min(cx, cy) - 35;
+
+        mrCtx.clearRect(0, 0, w, h);
+
+        const data = monsterThreatDb[activeMonster];
+        const axes = ['Melee Power', 'Magic Resist', 'Armor Density', 'Spawn Danger', 'Loot Yield'];
+        const values = [
+            data.melee / 100,
+            data.magicRes / 100,
+            data.armor / 100,
+            data.danger / 100,
+            data.loot / 100
+        ];
+        const numAxes = axes.length;
+
+        for (let ring = 1; ring <= 4; ring++) {
+            const r = (ring / 4) * radius;
+            mrCtx.beginPath();
+            for (let i = 0; i < numAxes; i++) {
+                const angle = (i / numAxes) * Math.PI * 2 - Math.PI / 2;
+                const x = cx + Math.cos(angle) * r;
+                const y = cy + Math.sin(angle) * r;
+                if (i === 0) mrCtx.moveTo(x, y);
+                else mrCtx.lineTo(x, y);
+            }
+            mrCtx.closePath();
+            mrCtx.strokeStyle = 'rgba(255, 87, 34, 0.2)';
+            mrCtx.stroke();
+        }
+
+        mrCtx.font = '11px var(--font-body)';
+        mrCtx.fillStyle = '#f5eedc';
+        mrCtx.textAlign = 'center';
+        mrCtx.textBaseline = 'middle';
+
+        for (let i = 0; i < numAxes; i++) {
+            const angle = (i / numAxes) * Math.PI * 2 - Math.PI / 2;
+            const x = cx + Math.cos(angle) * radius;
+            const y = cy + Math.sin(angle) * radius;
+            mrCtx.beginPath();
+            mrCtx.moveTo(cx, cy);
+            mrCtx.lineTo(x, y);
+            mrCtx.strokeStyle = 'rgba(255, 87, 34, 0.3)';
+            mrCtx.stroke();
+
+            const lx = cx + Math.cos(angle) * (radius + 20);
+            const ly = cy + Math.sin(angle) * (radius + 20);
+            mrCtx.fillText(axes[i], lx, ly);
+        }
+
+        mrCtx.beginPath();
+        for (let i = 0; i < numAxes; i++) {
+            const angle = (i / numAxes) * Math.PI * 2 - Math.PI / 2;
+            const r = values[i] * radius;
+            const x = cx + Math.cos(angle) * r;
+            const y = cy + Math.sin(angle) * r;
+            if (i === 0) mrCtx.moveTo(x, y);
+            else mrCtx.lineTo(x, y);
+        }
+        mrCtx.closePath();
+        mrCtx.fillStyle = 'rgba(255, 87, 34, 0.4)';
+        mrCtx.fill();
+        mrCtx.strokeStyle = '#ff5722';
+        mrCtx.lineWidth = 2;
+        mrCtx.stroke();
+    }
+
+    // Poisson Loot Curve Canvas
+    const lootCanvas = document.getElementById('loot-curve-canvas');
+    const lCtx = lootCanvas.getContext('2d');
+    let currentLuck = 1.0;
+
+    function factorial(n) {
+        if (n <= 1) return 1;
+        let res = 1;
+        for (let i = 2; i <= n; i++) res *= i;
+        return res;
+    }
+
+    function poisson(k, lambda) {
+        return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
+    }
+
+    function updateLootCurve(luck) {
+        currentLuck = parseFloat(luck);
+        document.getElementById('luck-multiplier-label').innerText = `Luck: ${currentLuck.toFixed(1)}x`;
+        renderLootCurve();
+    }
+
+    function renderLootCurve() {
+        const w = lootCanvas.width;
+        const h = lootCanvas.height;
+        lCtx.clearRect(0, 0, w, h);
+
+        const padLeft = 40;
+        const padBottom = 30;
+        const plotW = w - padLeft - 20;
+        const plotH = h - padBottom - 20;
+
+        // Grid lines
+        lCtx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+        lCtx.lineWidth = 1;
+        for (let i = 0; i <= 5; i++) {
+            const y = 20 + (plotH / 5) * i;
+            lCtx.beginPath();
+            lCtx.moveTo(padLeft, y);
+            lCtx.lineTo(w - 20, y);
+            lCtx.stroke();
+        }
+
+        const tiers = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
+        const lambda = 1.8 * currentLuck;
+        const probs = [];
+        for (let k = 0; k < tiers.length; k++) {
+            probs.push(poisson(k, lambda));
+        }
+
+        // Draw Bars
+        const barWidth = plotW / tiers.length - 12;
+        for (let i = 0; i < tiers.length; i++) {
+            const bx = padLeft + i * (plotW / tiers.length) + 6;
+            const barH = Math.min(plotH, probs[i] * plotH * 2.5);
+            const by = 20 + plotH - barH;
+
+            const grad = lCtx.createLinearGradient(0, by, 0, by + barH);
+            grad.addColorStop(0, '#ffc107');
+            grad.addColorStop(1, '#ff5722');
+
+            lCtx.fillStyle = grad;
+            lCtx.fillRect(bx, by, barWidth, barH);
+            lCtx.strokeStyle = 'rgba(255, 193, 7, 0.6)';
+            lCtx.strokeRect(bx, by, barWidth, barH);
+
+            // Label
+            lCtx.font = '10px var(--font-body)';
+            lCtx.fillStyle = '#a89f91';
+            lCtx.textAlign = 'center';
+            lCtx.fillText(tiers[i], bx + barWidth / 2, h - 10);
+
+            // Percent
+            lCtx.fillStyle = '#f5eedc';
+            lCtx.fillText(`${Math.round(probs[i] * 100)}%`, bx + barWidth / 2, by - 6);
+        }
+    }
+
+    // 4. Background Ember Particle System
+    const bgCanvas = document.getElementById('bg-canvas');
+    const bgCtx = bgCanvas.getContext('2d');
+    let bgW, bgH;
+    let embers = [];
+
+    function resizeBg() {
+        bgW = bgCanvas.width = window.innerWidth;
+        bgH = bgCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeBg);
+    resizeBg();
+
+    for (let i = 0; i < 60; i++) {
+        embers.push({
+            x: Math.random() * bgW,
+            y: Math.random() * bgH,
+            r: Math.random() * 2.5 + 1,
+            dy: -Math.random() * 0.8 - 0.3,
+            dx: Math.sin(Math.random() * Math.PI) * 0.4,
+            alpha: Math.random() * 0.6 + 0.2
+        });
+    }
+
+    function renderEmbers() {
+        bgCtx.clearRect(0, 0, bgW, bgH);
+        for (let p of embers) {
+            p.y += p.dy;
+            p.x += p.dx;
+            if (p.y < 0) { p.y = bgH; p.x = Math.random() * bgW; }
+            bgCtx.beginPath();
+            bgCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            bgCtx.fillStyle = `rgba(255, 87, 34, ${p.alpha})`;
+            bgCtx.shadowColor = '#ff5722';
+            bgCtx.shadowBlur = 8;
+            bgCtx.fill();
+        }
+        requestAnimationFrame(renderEmbers);
+    }
+    renderEmbers();
+
+    // 5. Multi-Language Switcher
+    const translations = {
+        en: {
+            nav_crawler: 'Dungeon Crawler',
+            nav_paperdoll: 'Equipment',
+            nav_telemetry: 'Telemetry',
+            nav_arch: 'Architecture',
+            nav_faq: 'FAQ',
+            hero_title: 'TIMAERT RPG ENGINE',
+            hero_desc: 'High-Performance C++23 2D Fantasy Engine featuring Procedural Cellular Automata Dungeons, Real-Time Bresenham Line-of-Sight Fog-of-War, and EnTT ECS Paperdoll Simulation.',
+            stat_creatures: 'Fauna & Bosses',
+            stat_gc: 'GC Alloc / Frame',
+            stat_vulkan: 'Vulkan Native',
+            stat_dungeons: 'Procedural Depth',
+            title_crawler: 'Cellular Automata Dungeon Sandbox',
+            sub_crawler: '4-5 Rule Cave Generation with Flood-Fill Connectivity & Bresenham 2D Line-of-Sight Raycasting.',
+            btn_gen: 'Generate Dungeon',
+            btn_torch: 'Torch: Standard',
+            btn_reveal: 'Clairvoyance (Reveal)',
+            btn_rest: 'Rest / Heal',
+            hud_title: 'Dungeon Chronicle',
+            hud_knight: 'Knight Health',
+            hud_mana: 'Arcane Mana',
+            hud_floor: 'Dungeon Floor:',
+            hud_monsters: 'Monsters Slain:',
+            hud_gold: 'Gold Pouch:',
+            hud_log: 'Encounter Feed',
+            title_paperdoll: 'ECS Paperdoll Equipment Simulator',
+            sub_paperdoll: 'EnTT Component-Driven Equipment System with Live Dynamic Stat Radar & Tooltips.',
+            doll_hero: 'Sir Vaelen • Lv. 12 Knight',
+            doll_hint: 'Click equipped gear to unequip; click backpack item to equip.',
+            bag_title: 'Loot Stash & Inventory',
+            stat_radar_title: 'Authoritative Combat Sheet',
+            stat_atk: 'Attack Power (ATK):',
+            stat_def: 'Defense Armor (DEF):',
+            stat_hp_max: 'Max Health (HP):',
+            stat_mp_max: 'Max Mana (MP):',
+            stat_spd: 'Movement Speed (SPD):',
+            stat_crit: 'Critical Strike (CRIT):',
+            title_telemetry: 'Monster Threat & Loot Distribution Telemetry',
+            sub_telemetry: '5-Axis Threat Radar & Poisson Loot Probability Curves based on monsters.md.',
+            radar_monster_title: '5-Axis Creature Threat Matrix',
+            loot_curve_title: 'Poisson Loot Roll Distribution',
+            luck_slider: 'Adjust Dungeon Floor Luck Multiplier:',
+            title_arch: '4-Layer C++23 Architecture',
+            sub_arch: 'Strict Layer Decoupling, Vulkan 1.3 Pipeline & EnTT Component Model.',
+            title_faq: 'Frequently Asked Questions',
+            sub_faq: 'Technical specifications, gameplay mechanics, and open-source engine design.',
+            faq_q1: 'How does the Cellular Automata 4-5 rule generate connected dungeons?',
+            faq_a1: 'The dungeon begins with a 45% random wall noise distribution. Four smoothing iterations apply the standard 4-5 rule: any tile with >=5 wall neighbors within its 3x3 kernel becomes a solid wall; otherwise it becomes floor. Finally, a flood-fill algorithm identifies all disconnected cave chambers and automatically carves orthogonal corridors to ensure 100% path connectivity.',
+            faq_q2: 'What is the 0x100 discriminator in the monster catalog?',
+            faq_a2: 'In Timaert, humanoid NPCs have full Oblivion-style CharacterSheets with skills and perks (kind < 8). Creatures and monsters are sheet-less data rows in fauna.cpp keyed with the bitwise flag (0x100 | index). This keeps NPC dialogue logic strictly decoupled from wildlife combat loops.',
+            faq_q3: 'Does Timaert run entirely client-side without external dependencies?',
+            faq_a3: 'Yes. This web demonstration is 100% self-contained with zero CDN calls, pure HTML5 Canvas raycasting, and Web Audio API procedural sound synthesizers.',
+            faq_q4: 'How is the Bresenham Line-of-Sight Fog-of-War calculated?',
+            faq_a4: 'From the player\'s coordinate, discrete integer Bresenham rays are cast to all perimeter points of a 7.5-tile circle. Rays terminate upon intersecting solid cave walls, revealing the wall facet while occluding tiles behind it. Explored tiles remain rendered at a dimmed 18% ambient parchment brightness.'
+        },
+        ru: {
+            nav_crawler: 'Генератор Подземелий',
+            nav_paperdoll: 'Экипировка',
+            nav_telemetry: 'Телеметрия',
+            nav_arch: 'Архитектура',
+            nav_faq: 'Вопросы',
+            hero_title: 'ДВИЖОК TIMAERT RPG',
+            hero_desc: 'Высокопроизводительный 2D RPG движок на C++23 с процедурной генерацией пещер на клеточных автоматах, лучевым туманом войны Брезенхема и ECS куклой персонажа.',
+            stat_creatures: 'Фауна и Боссы',
+            stat_gc: 'Выделений GC / кадр',
+            stat_vulkan: 'Vulkan 60+ FPS',
+            stat_dungeons: 'Глубина пещер',
+            title_crawler: 'Песочница Клеточных Автоматов',
+            sub_crawler: 'Правило 4-5 со сглаживанием, алгоритмом Flood-Fill и лучевым туманом войны.',
+            btn_gen: 'Сгенерировать Подземелье',
+            btn_torch: 'Факел: Стандарт',
+            btn_reveal: 'Ясновидение (Открыть)',
+            btn_rest: 'Отдых / Лечение',
+            hud_title: 'Хроника Подземелья',
+            hud_knight: 'Здоровье Рыцаря',
+            hud_mana: 'Мана Заклинаний',
+            hud_floor: 'Этаж Подземелья:',
+            hud_monsters: 'Монстров Сражено:',
+            hud_gold: 'Золотой Кошель:',
+            hud_log: 'Лента Событий',
+            title_paperdoll: 'ECS Кукла Экипировки Рыцаря',
+            sub_paperdoll: 'Компонентная модель EnTT с живым радаром боевых характеристик и инвентарем.',
+            doll_hero: 'Сэр Ваэлен • Рыцарь 12 ур.',
+            doll_hint: 'Кликните на надетый предмет, чтобы снять; на предмет в сумке — чтобы надеть.',
+            bag_title: 'Рюкзак и Сокровища',
+            stat_radar_title: 'Боевой Лист Персонажа',
+            stat_atk: 'Сила Атаки (ATK):',
+            stat_def: 'Броня и Защита (DEF):',
+            stat_hp_max: 'Макс. Здоровье (HP):',
+            stat_mp_max: 'Макс. Мана (MP):',
+            stat_spd: 'Скорость Движения (SPD):',
+            stat_crit: 'Критический Удар (CRIT):',
+            title_telemetry: 'Телеметрия Угроз и Распределения Лута',
+            sub_telemetry: '5-осевой радар монстров и распределение Пуассона на основе monsters.md.',
+            radar_monster_title: '5-Осевая Матрица Угроз Фауны',
+            loot_curve_title: 'Кривая Дропа Пуассона',
+            luck_slider: 'Множитель Удачи на Этаже:',
+            title_arch: '4-Слойная Архитектура C++23',
+            sub_arch: 'Строгая изоляция слоев, пайплайн Vulkan 1.3 и компонентная модель EnTT.',
+            title_faq: 'Часто Задаваемые Вопросы',
+            sub_faq: 'Технические спецификации, механики боя и дизайн процедурного движка.',
+            faq_q1: 'Как правило клеточных автоматов 4-5 строит связные пещеры?',
+            faq_a1: 'Генерация стартует со случайного шума (45% стен). 4 итерации сглаживания превращают клетки с >=5 соседями-стенами в монолитные стены. Затем алгоритм заливки flood-fill находит изолированные полости и прокладывает коридоры, гарантируя 100% проходимость.',
+            faq_q2: 'Что за дискриминатор 0x100 в таблице монстров?',
+            faq_a2: 'В Timaert гуманоидные NPC имеют полный лист персонажа (тип < 8), а монстры являются простыми строками таблицы fauna.cpp с маской (0x100 | index). Это изолирует диалоги от быстрого боевого цикла дикой природы.',
+            faq_q3: 'Работает ли сайт автономно без внешних серверов?',
+            faq_a3: 'Да, код полностью самодостаточен, не имеет внешних CDN-зависимостей и использует чистый HTML5 Canvas и синтезатор звука Web Audio API.',
+            faq_q4: 'Как рассчитывается туман войны по Брезенхему?',
+            faq_a4: 'От позиции рыцаря трассируются дискретные целочисленные лучи Брезенхема по окружности радиуса 7.5 тайлов. Луч останавливается о стену пещеры, открывая ее фасад и скрывая неизведанные комнаты.'
+        },
+        zh: {
+            nav_crawler: '地牢生成器',
+            nav_paperdoll: '装备系统',
+            nav_telemetry: '遥测分析',
+            nav_arch: '系统架构',
+            nav_faq: '常见问题',
+            hero_title: 'TIMAERT RPG 引擎',
+            hero_desc: '基于 C++23 的高性能 2D 奇幻 RPG 引擎，具备元胞自动机地牢生成、Bresenham 视线战争迷雾与 EnTT ECS 纸娃娃装备系统。',
+            stat_creatures: '怪物图鉴',
+            stat_gc: '零 GC 内存分配',
+            stat_vulkan: 'Vulkan 60 帧',
+            stat_dungeons: '无限地牢深度',
+            title_crawler: '元胞自动机地牢沙盒',
+            sub_crawler: '4-5 规则洞穴平滑、泛洪连通性保证与 Bresenham 2D 光线投射。',
+            btn_gen: '生成全新地牢',
+            btn_torch: '火把：标准',
+            btn_reveal: '透视法术 (全开)',
+            btn_rest: '休息 / 疗伤',
+            hud_title: '地牢探险纪事',
+            hud_knight: '骑士生命值',
+            hud_mana: '奥术法力',
+            hud_floor: '地牢层数：',
+            hud_monsters: '击杀怪物：',
+            hud_gold: '金币袋：',
+            hud_log: '战斗日志',
+            title_paperdoll: 'ECS 纸娃娃装备模拟器',
+            sub_paperdoll: '基于 EnTT 组件驱动的装备系统，具备实时雷达属性与物品悬浮提示。',
+            doll_hero: '瓦伦爵士 • 12级骑士',
+            doll_hint: '点击已穿戴装备进行卸下；点击背包物品进行穿戴。',
+            bag_title: '战利品背包',
+            stat_radar_title: '权威战斗数据表',
+            stat_atk: '攻击力 (ATK):',
+            stat_def: '护甲防御 (DEF):',
+            stat_hp_max: '生命上限 (HP):',
+            stat_mp_max: '法力上限 (MP):',
+            stat_spd: '移动速度 (SPD):',
+            stat_crit: '暴击率 (CRIT):',
+            title_telemetry: '怪物威胁与掉落物概率遥测',
+            sub_telemetry: '基于 monsters.md 的 5 轴生物雷达与泊松掉落分布曲线。',
+            radar_monster_title: '5 轴生物威胁矩阵',
+            loot_curve_title: '泊松掉落物概率分布',
+            luck_slider: '调整地牢层幸运倍率：',
+            title_arch: '4层 C++23 架构设计',
+            sub_arch: '严格的层级解耦、Vulkan 1.3 渲染管线与 EnTT 组件模型。',
+            title_faq: '常见技术问题',
+            sub_faq: '技术规范、战斗计算公式与开源引擎设计。',
+            faq_q1: '元胞自动机 4-5 规则如何生成完全连通的地牢？',
+            faq_a1: '生成从 45% 随机墙体噪声开始。4次平滑迭代应用标准 4-5 规则：3x3 邻域内 >=5 面墙的单元格变为实心墙。最后通过泛洪算法检测断开的洞穴，自动雕刻正交走廊确保 100% 可达。',
+            faq_q2: '怪物目录中的 0x100 鉴别器是什么？',
+            faq_a2: '在 Timaert 中，人形 NPC 拥有完整的角色表（类型 < 8），而野兽和怪物则是 fauna.cpp 中的简单数据行，带有 (0x100 | index) 标志。',
+            faq_q3: 'Timaert 是否完全在客户端运行且无外部依赖？',
+            faq_a3: '是的。此网页展示完全自包含，无任何 CDN 调用，采用纯 HTML5 Canvas 与 Web Audio API 合成音效。',
+            faq_q4: 'Bresenham 视线战争迷雾是如何计算的？',
+            faq_a4: '从玩家坐标向 7.5 格半径的圆周发射离散整数光线。光线遇实心墙阻断，揭示墙面并遮蔽后方区域。'
+        },
+        de: {
+            nav_crawler: 'Dungeon-Generator',
+            nav_paperdoll: 'Ausrüstung',
+            nav_telemetry: 'Telemetrie',
+            nav_arch: 'Architektur',
+            nav_faq: 'FAQ',
+            hero_title: 'TIMAERT RPG-ENGINE',
+            hero_desc: 'Hochleistungs-C++23 2D-Fantasy-Engine mit zellulären Automaten-Dungeons, Bresenham-Sichtweiten-Nebel und EnTT ECS-Ausrüstungssimulation.',
+            stat_creatures: 'Kreaturen & Bosse',
+            stat_gc: '0 B GC-Allokation',
+            stat_vulkan: 'Vulkan 60 FPS',
+            stat_dungeons: 'Prozedurale Tiefe',
+            title_crawler: 'Zelluläre Automaten Dungeon-Sandbox',
+            sub_crawler: '4-5 Regel Höhlenglättung mit Flutungs-Konnektivität und Bresenham 2D-Sichtstrahlen.',
+            btn_gen: 'Dungeon Generieren',
+            btn_torch: 'Fackel: Standard',
+            btn_reveal: 'Hellsicht (Aufdecken)',
+            btn_rest: 'Rasten / Heilen',
+            hud_title: 'Dungeon-Chronik',
+            hud_knight: 'Ritter-Gesundheit',
+            hud_mana: 'Arkane Mana',
+            hud_floor: 'Dungeon-Ebene:',
+            hud_monsters: 'Monster besiegt:',
+            hud_gold: 'Goldbeutel:',
+            hud_log: 'Kampfprotokoll',
+            title_paperdoll: 'ECS Papierpuppen-Ausrüstung',
+            sub_paperdoll: 'EnTT-Komponentenmodell mit dynamischem Attribut-Radar und Tooltips.',
+            doll_hero: 'Sir Vaelen • Stufe 12 Ritter',
+            doll_hint: 'Klicken Sie auf angelegte Ausrüstung zum Ablegen; Rucksack zum Anlegen.',
+            bag_title: 'Beutel & Inventar',
+            stat_radar_title: 'Autoritatives Datenblatt',
+            stat_atk: 'Angriffskraft (ATK):',
+            stat_def: 'Rüstungsschutz (DEF):',
+            stat_hp_max: 'Max. Gesundheit (HP):',
+            stat_mp_max: 'Max. Mana (MP):',
+            stat_spd: 'Geschwindigkeit (SPD):',
+            stat_crit: 'Kritische Treffer (CRIT):',
+            title_telemetry: 'Monster-Bedrohung & Beute-Telemetrie',
+            sub_telemetry: '5-Achsen-Bedrohungsradar & Poisson-Beutewahrscheinlichkeiten.',
+            radar_monster_title: '5-Achsen Kreaturen-Matrix',
+            loot_curve_title: 'Poisson-Beutewurf-Kurve',
+            luck_slider: 'Glücks-Multiplikator anpassen:',
+            title_arch: '4-Schichten C++23 Architektur',
+            sub_arch: 'Strikte Schichttrennung, Vulkan 1.3 Pipeline und EnTT ECS.',
+            title_faq: 'Häufig gestellte Fragen',
+            sub_faq: 'Technische Spezifikationen, Kampfberechnungen und Engine-Design.',
+            faq_q1: 'Wie erzeugt die 4-5 Regel zellulärer Automaten zusammenhängende Dungeons?',
+            faq_a1: 'Das Dungeon startet mit 45% Zufallsrauschen. Vier Glättungsiterationen wenden die 4-5 Regel an: Zellen mit >=5 Nachbarwänden werden solide. Ein Flutungsalgorithmus verbindet isolierte Kammern mit Gängen.',
+            faq_q2: 'Was ist der 0x100 Diskriminator im Monster-Katalog?',
+            faq_a2: 'Humanoide NPCs besitzen vollständige Charakterblätter (Typ < 8), während Monster einfache Datenzeilen mit der Maske (0x100 | Index) sind.',
+            faq_q3: 'Läuft Timaert vollständig clientseitig ohne externe Abhängigkeiten?',
+            faq_a3: 'Ja. Diese Webanwendung ist zu 100% autark, ohne externe CDN-Aufrufe und verwendet HTML5 Canvas sowie Web Audio API.',
+            faq_q4: 'Wie wird der Bresenham-Sichtweitennebel berechnet?',
+            faq_a4: 'Vom Spieler werden diskrete Bresenham-Strahlen im 7.5-Felder-Radius ausgesendet. Strahlen stoppen an Höhlenwänden und halten ungesehene Bereiche im Nebel.'
+        }
+    };
+
+    function switchLang(lang) {
+        document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+        const btn = Array.from(document.querySelectorAll('.lang-btn')).find(b => b.innerText.toLowerCase() === lang);
+        if (btn) btn.classList.add('active');
+
+        const dict = translations[lang] || translations.en;
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (dict[key]) {
+                el.innerText = dict[key];
+            }
+        });
+
+        const toast = document.getElementById('i18n-toast');
+        if (toast) {
+            toast.innerText = `🌐 ${lang.toUpperCase()} language loaded`;
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 2500);
+        }
+    }
+
+    function toggleTheme() {
+        document.documentElement.classList.toggle('light-mode');
+        renderDungeon();
+        renderStatRadar();
+        renderMonsterRadar();
+        renderLootCurve();
+    }
+
+    // Engine Initialization on DOM Ready
+    window.addEventListener('DOMContentLoaded', () => {
+        generateNewDungeon();
+        renderPaperdoll();
+        calculateStats();
+        initMonsterSelector();
+        renderMonsterRadar();
+        renderLootCurve();
+    });
+    </script>
+</body>
+</html>

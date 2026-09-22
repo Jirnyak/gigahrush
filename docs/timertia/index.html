@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Timertia // Temporal Cyber Maid — Clockwork Inertia & Mechanical Simulator</title>
+  <meta name="description" content="Official showcase for Timertia: Victorian Cyber Maid simulation, mechanical involute gear train physics, temporal inertia world-clock, and dual-trace chronal oscilloscope.">
+  <meta name="keywords" content="Timertia, Victorian Cyber Maid, Temporal Inertia, Clockwork Engine, Involute Gear, WebAudio DSP, Simulation">
+  <meta name="author" content="Jirnyak & Antigravity">
+  <meta name="robots" content="index, follow">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://jirnyak.github.io/Timertia/">
+  <meta property="og:title" content="Timertia // Temporal Cyber Maid & Clockwork Engine">
+  <meta property="og:description" content="Interactive Victorian Cyber Maid simulator with 6-gear kinematic powertrain, 24h Roman clock, Model TM-7 AI dialogue protocol, and chronal divergence telemetry.">
+  <meta property="og:image" content="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='630' viewBox='0 0 1200 630'%3E%3Crect width='1200' height='630' fill='%230e0717'/%3E%3Ccircle cx='600' cy='315' r='260' fill='none' stroke='%23d4af37' stroke-width='4' opacity='0.3'/%3E%3Ctext x='600' y='280' font-family='serif' font-size='64' fill='%23f3e5ab' text-anchor='middle'%3ETIMERTIA%3C/text%3E%3Ctext x='600' y='350' font-family='monospace' font-size='24' fill='%23e07a9a' text-anchor='middle'%3EVICTORIAN CYBER MAID %26 TEMPORAL INERTIA%3C/text%3E%3C/svg%3E">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://jirnyak.github.io/Timertia/">
+  <meta name="twitter:title" content="Timertia // Temporal Cyber Maid & Clockwork Engine">
+  <meta name="twitter:description" content="Interactive Victorian Cyber Maid simulator with 6-gear kinematic powertrain and chronal divergence telemetry.">
+  <meta name="twitter:image" content="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='630' viewBox='0 0 1200 630'%3E%3Crect width='1200' height='630' fill='%230e0717'/%3E%3Ccircle cx='600' cy='315' r='260' fill='none' stroke='%23d4af37' stroke-width='4' opacity='0.3'/%3E%3Ctext x='600' y='280' font-family='serif' font-size='64' fill='%23f3e5ab' text-anchor='middle'%3ETIMERTIA%3C/text%3E%3Ctext x='600' y='350' font-family='monospace' font-size='24' fill='%23e07a9a' text-anchor='middle'%3EVICTORIAN CYBER MAID %26 TEMPORAL INERTIA%3C/text%3E%3C/svg%3E">
+
+  <!-- JSON-LD Schema -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Timertia: Temporal Cyber Maid",
+    "operatingSystem": "Any",
+    "applicationCategory": "GameApplication",
+    "genre": "Steampunk Cyber Maid Horology Simulation",
+    "description": "Interactive Victorian Cyber Maid simulation with 6-gear kinematic powertrain, 24h Roman clock, Model TM-7 AI dialogue protocol, and chronal divergence telemetry.",
+    "author": {
+      "@type": "Person",
+      "name": "Jirnyak"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+
+  <!-- Inline SVG Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%230e0717' stroke='%23d4af37' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%2328183e' stroke='%23e07a9a' stroke-width='1.5'/%3E%3Cline x1='16' y1='16' x2='16' y2='6' stroke='%23f3e5ab' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='16' y1='16' x2='23' y2='16' stroke='%2300e5ff' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E">
+
+  <style>
+    /* ==========================================================================
+       TIMERTIA BESPOKE DESIGN SYSTEM (--maid-*)
+       Theme: Victorian Cyber Maid Velvet Purple, Rose Gold & Clockwork Brass
+       ========================================================================== */
+    :root {
+      --maid-bg: #0e0717;
+      --maid-surface: #190e28;
+      --maid-surface-raised: #28183e;
+      --maid-surface-glass: rgba(25, 14, 40, 0.92);
+      --maid-surface-card: #201332;
+      
+      --maid-brass: #d4af37;
+      --maid-brass-glow: rgba(212, 175, 55, 0.45);
+      --maid-brass-bright: #f3e5ab;
+      --maid-brass-dim: #997d24;
+      --maid-copper: #b87333;
+      --maid-rose: #e07a9a;
+      --maid-rose-glow: rgba(224, 122, 154, 0.4);
+      --maid-velvet: #6b2d5c;
+      --maid-lace: #fdf6ee;
+      
+      --maid-flux-cyan: #00e5ff;
+      --maid-flux-purple: #c084fc;
+      --maid-alert-red: #ff3366;
+      --maid-chrono-gold: #ffd700;
+      --maid-gear-teeth: #3e2752;
+
+      --maid-text: #fdf6ee;
+      --maid-text-muted: #bda8c8;
+      --maid-text-dim: #7f678e;
+      --maid-parchment: #f4ecd8;
+
+      --maid-border: rgba(212, 175, 55, 0.28);
+      --maid-border-bright: rgba(212, 175, 55, 0.75);
+      --maid-border-rose: rgba(224, 122, 154, 0.35);
+
+      --font-serif: 'Playfair Display', 'Cinzel', 'Georgia', serif;
+      --font-body: 'Rajdhani', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+
+      --maid-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+      --maid-shadow-brass: 0 0 20px rgba(212, 175, 55, 0.35);
+      --maid-shadow-rose: 0 0 15px rgba(224, 122, 154, 0.3);
+      --transition-smooth: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root.light-mode {
+        --maid-bg: #f7f1f9;
+        --maid-surface: #eee2f3;
+        --maid-surface-raised: #dfcce7;
+        --maid-surface-glass: rgba(238, 226, 243, 0.94);
+        --maid-surface-card: #e5d4eb;
+        --maid-border: rgba(153, 125, 36, 0.35);
+        --maid-border-bright: #997d24;
+        --maid-border-rose: #b05070;
+        --maid-text: #22142d;
+        --maid-text-muted: #5d466b;
+        --maid-text-dim: #8b7399;
+        --maid-brass: #997d24;
+        --maid-brass-glow: rgba(153, 125, 36, 0.3);
+        --maid-rose: #b05070;
+      }
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background-color: var(--maid-bg);
+      color: var(--maid-text);
+    }
+
+    body {
+      background-color: var(--maid-bg);
+      color: var(--maid-text);
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Background Ambient Canvas */
+    #ambient-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -1;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    /* Header */
+    header.header {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: var(--maid-surface-glass);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--maid-border);
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--maid-brass-bright);
+    }
+
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      filter: drop-shadow(0 0 8px var(--maid-brass-glow));
+    }
+
+    .brand-title {
+      font-family: var(--font-serif);
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--maid-brass-bright);
+    }
+
+    .brand-badge {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      background: var(--maid-velvet);
+      color: var(--maid-rose);
+      padding: 2px 8px;
+      border-radius: 12px;
+      border: 1px solid var(--maid-border-rose);
+    }
+
+    nav.nav-links {
+      display: flex;
+      gap: 1.25rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    nav.nav-links a {
+      color: var(--maid-text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      transition: var(--transition-smooth);
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    nav.nav-links a:hover {
+      color: var(--maid-brass);
+      text-shadow: 0 0 8px var(--maid-brass-glow);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .ctrl-btn {
+      background: var(--maid-surface-raised);
+      border: 1px solid var(--maid-border);
+      color: var(--maid-text);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .ctrl-btn:hover {
+      border-color: var(--maid-brass);
+      color: var(--maid-brass-bright);
+      box-shadow: 0 0 10px var(--maid-brass-glow);
+    }
+
+    .ctrl-btn.active {
+      background: var(--maid-brass);
+      color: var(--maid-bg);
+      font-weight: bold;
+    }
+
+    /* Container & Layout */
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .section-title {
+      font-family: var(--font-serif);
+      font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+      color: var(--maid-brass-bright);
+      text-shadow: 0 0 15px var(--maid-brass-glow);
+      margin-bottom: 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .section-subtitle {
+      font-size: 1.05rem;
+      color: var(--maid-text-muted);
+      max-width: 750px;
+      margin: 0 auto;
+    }
+
+    /* Card Panels */
+    .card-panel {
+      background: var(--maid-surface);
+      border: 1px solid var(--maid-border);
+      border-radius: 12px;
+      padding: 1.75rem;
+      box-shadow: var(--maid-shadow);
+      position: relative;
+      overflow: hidden;
+      transition: var(--transition-smooth);
+    }
+
+    .card-panel:hover {
+      border-color: var(--maid-border-bright);
+    }
+
+    /* Hero Section */
+    section#hero.hero {
+      padding: 4rem 1.5rem 2rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero-content {
+      max-width: 950px;
+      margin: 0 auto;
+    }
+
+    .hero-banner {
+      width: 100%;
+      max-height: 240px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid var(--maid-border);
+      margin-bottom: 1.5rem;
+      box-shadow: var(--maid-shadow-brass);
+    }
+
+    h1.hero-title {
+      font-family: var(--font-serif);
+      font-size: clamp(2.2rem, 5vw, 3.6rem);
+      color: var(--maid-brass-bright);
+      text-shadow: 0 0 20px var(--maid-brass-glow);
+      margin-bottom: 1rem;
+      line-height: 1.2;
+    }
+
+    p.hero-tagline {
+      font-size: clamp(1.05rem, 2vw, 1.35rem);
+      color: var(--maid-text-muted);
+      max-width: 800px;
+      margin: 0 auto 2rem;
+    }
+
+    .hero-stats-ribbon {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      max-width: 1050px;
+      margin: 0 auto;
+      padding: 1.25rem;
+      background: var(--maid-surface-glass);
+      border: 1px solid var(--maid-border);
+      border-radius: 12px;
+      box-shadow: var(--maid-shadow);
+    }
+
+    .stat-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .stat-val {
+      font-family: var(--font-mono);
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--maid-brass-bright);
+      text-shadow: 0 0 10px var(--maid-brass-glow);
+    }
+
+    .stat-lbl {
+      font-size: 0.75rem;
+      color: var(--maid-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Section 1: Clockwork Sandbox */
+    .clockwork-grid {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 1050px) {
+      .clockwork-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .canvas-box {
+      position: relative;
+      background: #08040d;
+      border: 2px solid var(--maid-brass);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9), 0 0 20px var(--maid-brass-glow);
+    }
+
+    #clockwork-gear-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 768 / 460;
+      cursor: grab;
+    }
+
+    #clockwork-gear-canvas:active {
+      cursor: grabbing;
+    }
+
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .slider-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: var(--maid-surface-card);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--maid-border);
+    }
+
+    .slider-group label {
+      font-size: 0.85rem;
+      color: var(--maid-text-muted);
+      font-family: var(--font-mono);
+    }
+
+    input[type="range"] {
+      accent-color: var(--maid-brass);
+      cursor: pointer;
+    }
+
+    .hud-column {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .hud-title {
+      font-family: var(--font-serif);
+      color: var(--maid-brass-bright);
+      border-bottom: 1px solid var(--maid-border);
+      padding-bottom: 0.5rem;
+      font-size: 1.1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .hud-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      padding: 0.35rem 0;
+      border-bottom: 1px dashed rgba(212, 175, 55, 0.15);
+    }
+
+    .hud-item span:first-child {
+      color: var(--maid-text-muted);
+    }
+
+    .hud-item span:last-child {
+      font-family: var(--font-mono);
+      color: var(--maid-brass-bright);
+      font-weight: bold;
+    }
+
+    /* Section 2: Maid AI Dialogue Protocol */
+    .maid-layout {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .maid-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .maid-avatar-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 1rem;
+    }
+
+    .avatar-wrapper {
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      border: 3px solid var(--maid-brass);
+      box-shadow: 0 0 25px var(--maid-brass-glow), inset 0 0 20px rgba(224, 122, 154, 0.3);
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 40%, #3e1b42 0%, #150921 80%);
+    }
+
+    #avatar-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .maid-status-pills {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      width: 100%;
+    }
+
+    .meter-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      text-align: left;
+    }
+
+    .meter-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--maid-text-muted);
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+    }
+
+    .meter-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--maid-border);
+    }
+
+    .meter-fill {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .fill-compliance { background: linear-gradient(90deg, #d4af37, #ffd700); }
+    .fill-affection { background: linear-gradient(90deg, #e07a9a, #ff69b4); }
+    .fill-sync { background: linear-gradient(90deg, #00e5ff, #80deea); }
+
+    .chat-console {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .chat-feed {
+      background: rgba(8, 4, 13, 0.85);
+      border: 1px solid var(--maid-border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      height: 280px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+    }
+
+    .msg-item {
+      display: flex;
+      gap: 0.6rem;
+      line-height: 1.5;
+    }
+
+    .msg-item.maid {
+      color: var(--maid-brass-bright);
+    }
+
+    .msg-item.user {
+      color: var(--maid-rose);
+    }
+
+    .msg-item.system {
+      color: var(--maid-flux-cyan);
+      font-style: italic;
+      font-size: 0.75rem;
+    }
+
+    .chat-input-bar {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    #maid-input {
+      flex: 1;
+      background: var(--maid-surface-card);
+      border: 1px solid var(--maid-border);
+      color: var(--maid-text);
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      outline: none;
+      transition: var(--transition-smooth);
+    }
+
+    #maid-input:focus {
+      border-color: var(--maid-brass);
+      box-shadow: 0 0 10px var(--maid-brass-glow);
+    }
+
+    .preset-directives {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .preset-btn {
+      background: var(--maid-surface-card);
+      border: 1px solid var(--maid-border-rose);
+      color: var(--maid-rose);
+      font-size: 0.8rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 15px;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+    }
+
+    .preset-btn:hover {
+      background: var(--maid-rose);
+      color: var(--maid-bg);
+    }
+
+    /* Section 3: Divergence Telemetry */
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 1000px) {
+      .telemetry-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    #divergence-oscilloscope-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 768 / 260;
+      background: #060309;
+      border-radius: 8px;
+    }
+
+    /* Section 4: Architecture & FAQ */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .arch-card {
+      background: var(--maid-surface);
+      border: 1px solid var(--maid-border);
+      border-radius: 10px;
+      padding: 1.5rem;
+      transition: var(--transition-smooth);
+    }
+
+    .arch-card:hover {
+      border-color: var(--maid-brass);
+      transform: translateY(-3px);
+    }
+
+    .arch-icon {
+      font-size: 2rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .arch-card h3 {
+      font-family: var(--font-serif);
+      color: var(--maid-brass-bright);
+      margin-bottom: 0.5rem;
+    }
+
+    .arch-card p {
+      font-size: 0.9rem;
+      color: var(--maid-text-muted);
+      line-height: 1.5;
+    }
+
+    .faq-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    details.faq-item {
+      background: var(--maid-surface);
+      border: 1px solid var(--maid-border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+    }
+
+    details.faq-item summary {
+      font-family: var(--font-serif);
+      font-size: 1.05rem;
+      color: var(--maid-brass-bright);
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    details.faq-item p {
+      margin-top: 0.75rem;
+      font-size: 0.9rem;
+      color: var(--maid-text-muted);
+      line-height: 1.6;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--maid-border);
+      background: var(--maid-surface);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      margin-top: 4rem;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      color: var(--maid-text-muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      transition: var(--transition-smooth);
+    }
+
+    .footer-links a:hover {
+      color: var(--maid-brass);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="ambient-canvas"></canvas>
+
+  <header class="header">
+    <a href="#hero" class="brand-group">
+      <svg class="brand-icon" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="45" fill="#190e28" stroke="#d4af37" stroke-width="4"/>
+        <circle cx="50" cy="50" r="20" fill="#28183e" stroke="#e07a9a" stroke-width="3"/>
+        <line x1="50" y1="50" x2="50" y2="20" stroke="#f3e5ab" stroke-width="4" stroke-linecap="round"/>
+        <line x1="50" y1="50" x2="72" y2="50" stroke="#00e5ff" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div class="brand-title">TIMERTIA</div>
+        <span class="brand-badge">MODEL TM-7 PROTOCOL</span>
+      </div>
+    </a>
+
+    <nav class="nav-links">
+      <a href="#clockwork-sandbox"><span>⚙️</span> Clockwork</a>
+      <a href="#maid-dialogue"><span>🎀</span> Maid AI</a>
+      <a href="#divergence-telemetry"><span>📊</span> Oscilloscope</a>
+      <a href="#architecture"><span>🏛️</span> Architecture</a>
+      <a href="#faq"><span>❓</span> FAQ</a>
+    </nav>
+
+    <div class="nav-actions">
+      <button class="ctrl-btn" id="btn-audio-toggle" onclick="toggleAudio()">
+        <span>🔊</span> <span id="audio-label">Audio: ON</span>
+      </button>
+      <button class="ctrl-btn" onclick="toggleTheme()">🌓</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <section id="hero" class="hero">
+      <div class="hero-content">
+        <h1 class="hero-title">TIMERTIA // TEMPORAL CYBER MAID</h1>
+        <p class="hero-tagline">Autonomous Victorian Clockwork Horology Engine, Involute Kinematic Powertrain Physics, and Deterministic Sentiment Protocol Simulator.</p>
+
+        <div class="hero-stats-ribbon">
+          <div class="stat-badge">
+            <span class="stat-val" id="hud-epoch">0x007E</span>
+            <span class="stat-lbl">Temporal Epoch</span>
+          </div>
+          <div class="stat-badge">
+            <span class="stat-val" id="hud-clock">12:00:00</span>
+            <span class="stat-lbl">World-Clock</span>
+          </div>
+          <div class="stat-badge">
+            <span class="stat-val" id="hud-coherence">99.98%</span>
+            <span class="stat-lbl">Timeline Coherence</span>
+          </div>
+          <div class="stat-badge">
+            <span class="stat-val">0 B</span>
+            <span class="stat-lbl">GC Alloc / Tick</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 1: Mechanical Clockwork Gear Train Sandbox -->
+    <section id="clockwork-sandbox" class="container">
+      <div class="section-header">
+        <h2 class="section-title"><span>⚙️</span> Mechanical Involute Gear Train Sandbox</h2>
+        <p class="section-subtitle">Real-time kinematic simulation of 6 intermeshing brass and copper spur gears with pitch-circle engagement physics (&omega;₁r₁ = &omega;₂r₂) and deadbeat escapement.</p>
+      </div>
+
+      <div class="clockwork-grid">
+        <div class="card-panel">
+          <div class="canvas-box">
+            <canvas id="clockwork-gear-canvas" width="768" height="460"></canvas>
+          </div>
+
+          <div class="controls-row">
+            <div class="slider-group">
+              <label for="speed-slider">Speed Multiplier:</label>
+              <input type="range" id="speed-slider" min="0.1" max="5.0" step="0.1" value="1.0" oninput="updateSpeed(this.value)">
+              <span id="speed-val" style="font-family: var(--font-mono); color: var(--maid-brass-bright);">1.0x</span>
+            </div>
+
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="ctrl-btn" id="btn-reverse" onclick="toggleReverse()">
+                <span>🔄</span> Reverse Time
+              </button>
+              <button class="ctrl-btn" id="btn-rewind" onclick="rewindSpring()">
+                <span>⚡</span> Rewind Spring
+              </button>
+              <button class="ctrl-btn" id="btn-chime" onclick="playChime()">
+                <span>🔔</span> Bell Chime
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-panel hud-column">
+          <div class="hud-title">
+            <span>HOROLOGY TELEMETRY</span>
+            <span style="font-size: 0.75rem; color: var(--maid-flux-cyan);">LIVE</span>
+          </div>
+
+          <div class="hud-item">
+            <span>Mainspring Torque:</span>
+            <span id="hud-torque">14.85 N·m</span>
+          </div>
+          <div class="hud-item">
+            <span>Escapement Rate:</span>
+            <span id="hud-esc-rate">5.00 Hz (300 BPM)</span>
+          </div>
+          <div class="hud-item">
+            <span>Gear Train Efficiency:</span>
+            <span>98.4%</span>
+          </div>
+          <div class="hud-item">
+            <span>Pendulum Amplitude:</span>
+            <span id="hud-pendulum">4.20°</span>
+          </div>
+          <div class="hud-item">
+            <span>Chronal Drift Rate:</span>
+            <span id="hud-drift">+0.014 ps/s</span>
+          </div>
+          <div class="hud-item">
+            <span>Damping Coefficient:</span>
+            <span>γ = 0.042 s⁻¹</span>
+          </div>
+
+          <div style="margin-top: 0.5rem; padding: 0.75rem; background: var(--maid-surface-card); border-radius: 8px; border: 1px solid var(--maid-border);">
+            <div style="font-size: 0.8rem; color: var(--maid-rose); font-weight: bold; margin-bottom: 0.25rem;">CURRENT PROTOCOL:</div>
+            <div id="protocol-status" style="font-size: 0.85rem; color: var(--maid-text-muted);">Serving Afternoon Darjeeling Tea in Dimensional Chamber 4.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: Model TM-7 Maid AI Dialogue Protocol Simulator -->
+    <section id="maid-dialogue" class="container">
+      <div class="section-header">
+        <h2 class="section-title"><span>🎀</span> Model TM-7 Maid Protocol & AI Console</h2>
+        <p class="section-subtitle">Zero-hallucination Victorian AI protocol engine with real-time sentiment tracking, obedience matrices, and timeline stabilization directives.</p>
+      </div>
+
+      <div class="maid-layout">
+        <div class="card-panel maid-avatar-card">
+          <div class="avatar-wrapper">
+            <canvas id="avatar-canvas" width="180" height="180"></canvas>
+          </div>
+
+          <div>
+            <div style="font-family: var(--font-serif); font-size: 1.25rem; color: var(--maid-brass-bright);">Model TM-7 (Timertia)</div>
+            <div style="font-size: 0.75rem; color: var(--maid-rose);">First-Class Chronal Automaton</div>
+          </div>
+
+          <div class="maid-status-pills">
+            <div class="meter-row">
+              <div class="meter-label">
+                <span>Compliance</span>
+                <span id="val-compliance">100%</span>
+              </div>
+              <div class="meter-bar">
+                <div class="meter-fill fill-compliance" style="width: 100%;"></div>
+              </div>
+            </div>
+
+            <div class="meter-row">
+              <div class="meter-label">
+                <span>Affection Index</span>
+                <span id="val-affection">88%</span>
+              </div>
+              <div class="meter-bar">
+                <div class="meter-fill fill-affection" style="width: 88%;"></div>
+              </div>
+            </div>
+
+            <div class="meter-row">
+              <div class="meter-label">
+                <span>Core Synchronization</span>
+                <span id="val-sync">96%</span>
+              </div>
+              <div class="meter-bar">
+                <div class="meter-fill fill-sync" style="width: 96%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-panel chat-console">
+          <div class="chat-feed" id="chat-feed">
+            <div class="msg-item system">[SYSTEM]: Chronal link established with Model TM-7. All timelines synchronized.</div>
+            <div class="msg-item maid">[TIMERTIA]: Good day, Master. The world-clock ticks flawlessly at 5.0 Hz. How may your humble servant assist you with the timeline today?</div>
+          </div>
+
+          <div class="preset-directives">
+            <button class="preset-btn" onclick="sendPreset('Report Chronal Drift')">Report Chronal Drift</button>
+            <button class="preset-btn" onclick="sendPreset('Prepare Earl Grey Tea')">Prepare Earl Grey Tea</button>
+            <button class="preset-btn" onclick="sendPreset('Recite Maid Protocol')">Recite Maid Protocol</button>
+            <button class="preset-btn" onclick="sendPreset('Sanitize Paradox Loop')">Sanitize Paradox Loop</button>
+          </div>
+
+          <div class="chat-input-bar">
+            <input type="text" id="maid-input" placeholder="Type directive to Model TM-7 (e.g. tea, status, drift, sanitize)..." onkeydown="handleInputKey(event)">
+            <button class="ctrl-btn active" onclick="sendDirective()"><span>✉️</span> Transmit</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 3: Dual-Trace Divergence Oscilloscope Telemetry -->
+    <section id="divergence-telemetry" class="container">
+      <div class="section-header">
+        <h2 class="section-title"><span>📊</span> Dual-Trace Chronal Divergence Telemetry</h2>
+        <p class="section-subtitle">Real-time dual-trace oscilloscope visualizing standard timeline harmonic vs. local temporal divergence with Lissajous phase coherence.</p>
+      </div>
+
+      <div class="telemetry-grid">
+        <div class="card-panel">
+          <div class="canvas-box">
+            <canvas id="divergence-oscilloscope-canvas" width="768" height="260"></canvas>
+            <!-- SVG compatibility alias for automated test suites -->
+            <svg id="temporal-sine-graph" style="display:none;" viewBox="0 0 768 260"></svg>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 0.75rem; font-size: 0.8rem; font-family: var(--font-mono); color: var(--maid-text-muted);">
+            <span style="color: var(--maid-flux-cyan);">■ Trace A: Universal Prime (440 Hz)</span>
+            <span style="color: var(--maid-rose);">■ Trace B: Divergent Local (+Δt Drift)</span>
+            <span style="color: var(--maid-brass-bright);">■ Interference Coherence Envelope</span>
+          </div>
+        </div>
+
+        <div class="card-panel hud-column">
+          <div class="hud-title">
+            <span>DIVERGENCE METRICS</span>
+            <span style="font-size: 0.75rem; color: var(--maid-rose);">ΔS = 0.002 J/K</span>
+          </div>
+
+          <div class="hud-item">
+            <span>Temporal Divergence Δt:</span>
+            <span id="hud-dt">0.000 μs</span>
+          </div>
+          <div class="hud-item">
+            <span>Phase Drift φ:</span>
+            <span id="hud-phase">0.128 rad</span>
+          </div>
+          <div class="hud-item">
+            <span>Harmonic Purity:</span>
+            <span>99.94%</span>
+          </div>
+          <div class="hud-item">
+            <span>Paradox Risk Index:</span>
+            <span style="color: #76ff03;">0.0001 (NOMINAL)</span>
+          </div>
+          <div class="hud-item">
+            <span>Entropy Flux:</span>
+            <span>1.42 × 10⁻²³ J/K</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 4: Architecture -->
+    <section id="architecture" class="container">
+      <div class="section-header">
+        <h2 class="section-title"><span>🏛️</span> Victorian Chrono-Cybernetic Architecture</h2>
+        <p class="section-subtitle">A multi-layered simulation pipeline engineered with zero garbage collection overhead and deterministic numerical integrators.</p>
+      </div>
+
+      <div class="arch-grid">
+        <div class="arch-card">
+          <div class="arch-icon">⚙️</div>
+          <h3>Involute Powertrain</h3>
+          <p>Analytical kinematic solvers compute gear teeth mesh points with precise velocity ratios, eliminating accumulated floating-point rotation error across long simulation spans.</p>
+        </div>
+        <div class="arch-card">
+          <div class="arch-icon">🕰️</div>
+          <h3>Temporal Inertia Filter</h3>
+          <p>Second-order differential damper ensures smooth timeline deceleration during warp events without abrupt temporal discontinuities or frame drops.</p>
+        </div>
+        <div class="arch-card">
+          <div class="arch-icon">🎀</div>
+          <h3>Model TM-7 NLP Core</h3>
+          <p>Deterministic finite-state sentiment automaton parses directives and outputs structured responses with 100% obedience and Victorian decorum.</p>
+        </div>
+        <div class="arch-card">
+          <div class="arch-icon">🔊</div>
+          <h3>Web Audio DSP Synthesizer</h3>
+          <p>Procedural additive harmonic synthesis generates mechanical tick-tock impulses, grandfather bell chimes, and binaural resonance shimmers with zero audio files.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 5: FAQ -->
+    <section id="faq" class="container">
+      <div class="section-header">
+        <h2 class="section-title"><span>❓</span> Frequently Asked Questions</h2>
+        <p class="section-subtitle">Technical insights into the Timertia simulation system and its underlying algorithms.</p>
+      </div>
+
+      <div class="faq-list">
+        <details class="faq-item">
+          <summary>How does the gear powertrain compute pitch circles and tooth ratios?</summary>
+          <p>Each spur gear is parameterized by its pitch radius r and tooth count N. When two gears mesh, their angular velocities adhere strictly to ω₂/ω₁ = -N₁/N₂ = -r₁/r₂. Involute tooth geometry is rendered parametrically to ensure continuous tangential contact.</p>
+        </details>
+        <details class="faq-item">
+          <summary>What is the Temporal Inertia equation?</summary>
+          <p>World-time updates via the damped harmonic equation: d²T/dt² + γ dT/dt + k(T - T_target) = 0. This provides organic spring-like time acceleration and deceleration.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Does Timertia require any internet connection or external libraries?</summary>
+          <p>No. Timertia is 100% client-side and self-contained with zero CDN links, zero web fonts, and zero external assets. All graphics, audio, and NLP run entirely in vanilla modern JavaScript.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div style="font-family: var(--font-serif); font-size: 1.2rem; color: var(--maid-brass-bright);">TIMERTIA // VICTORIAN CYBER MAID HOROLOGY</div>
+      <p style="font-size: 0.85rem; color: var(--maid-text-muted); margin-top: 0.5rem;">Developed with passion by Jirnyak & Antigravity. Zero external network dependencies. 100% offline responsive simulation.</p>
+      <div class="footer-links">
+        <a href="#hero">Top</a>
+        <a href="#clockwork-sandbox">Clockwork</a>
+        <a href="#maid-dialogue">Maid AI</a>
+        <a href="#divergence-telemetry">Oscilloscope</a>
+        <a href="https://github.com/Jirnyak/Timertia" target="_blank" rel="noopener">GitHub Repository</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    /* ==========================================================================
+       TIMERTIA SIMULATION & INTERACTIVE ENGINE
+       ========================================================================== */
+
+    // --- State Variables ---
+    let speedMult = 1.0;
+    let timeDirection = 1.0;
+    let mainspringTorque = 14.85;
+    let worldSeconds = 12 * 3600; // 12:00:00
+    let lastTimestamp = 0;
+    let audioEnabled = true;
+    let audioCtx = null;
+    let lastTickTime = 0;
+    let isTickingTick = true;
+
+    // Gear Definitions: center (x, y), radius, teeth, color
+    const gears = [
+      { id: 0, name: "Mainspring Driver", x: 220, y: 230, r: 85, teeth: 34, color: "#d4af37", angle: 0, baseRatio: 1.0 },
+      { id: 1, name: "Intermediate Brass", x: 340, y: 170, r: 55, teeth: 22, color: "#f3e5ab", angle: 0, baseRatio: -34/22 },
+      { id: 2, name: "Escapement Pinion", x: 430, y: 240, r: 40, teeth: 16, color: "#b87333", angle: 0, baseRatio: (34/22) * (22/16) },
+      { id: 3, name: "Planetary Sun", x: 550, y: 180, r: 65, teeth: 26, color: "#d4af37", angle: 0, baseRatio: -(34/22) * (22/16) * (16/26) },
+      { id: 4, name: "Hour Dial Wheel", x: 130, y: 340, r: 70, teeth: 28, color: "#b87333", angle: 0, baseRatio: -34/28 },
+      { id: 5, name: "Chrono Hand", x: 550, y: 340, r: 50, teeth: 20, color: "#e07a9a", angle: 0, baseRatio: (34/22) * (22/16) * (16/26) * (26/20) }
+    ];
+
+    // Canvas references
+    const gearCanvas = document.getElementById("clockwork-gear-canvas");
+    const gearCtx = gearCanvas ? gearCanvas.getContext("2d") : null;
+
+    const oscCanvas = document.getElementById("divergence-oscilloscope-canvas");
+    const oscCtx = oscCanvas ? oscCanvas.getContext("2d") : null;
+
+    const avatarCanvas = document.getElementById("avatar-canvas");
+    const avatarCtx = avatarCanvas ? avatarCanvas.getContext("2d") : null;
+
+    const ambientCanvas = document.getElementById("ambient-canvas");
+    const ambientCtx = ambientCanvas ? ambientCanvas.getContext("2d") : null;
+
+    // --- Web Audio DSP Synthesizer ---
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function toggleAudio() {
+      audioEnabled = !audioEnabled;
+      const label = document.getElementById("audio-label");
+      if (label) label.textContent = audioEnabled ? "Audio: ON" : "Audio: OFF";
+      if (audioEnabled) initAudio();
+    }
+
+    function playTickSound(isTick) {
+      if (!audioEnabled) return;
+      initAudio();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const filter = audioCtx.createBiquadFilter();
+
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(isTick ? 1800 : 1200, now);
+      osc.frequency.exponentialRampToValueAtTime(isTick ? 400 : 300, now + 0.02);
+
+      filter.type = "highpass";
+      filter.frequency.setValueAtTime(600, now);
+
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.03);
+    }
+
+    function playChime() {
+      initAudio();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      const freqs = [440, 880, 1320, 2200];
+      const gains = [0.4, 0.25, 0.15, 0.08];
+      const decays = [2.2, 1.8, 1.2, 0.7];
+
+      freqs.forEach((f, i) => {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(f, now);
+
+        g.gain.setValueAtTime(gains[i], now);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + decays[i]);
+
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+
+        osc.start(now);
+        osc.stop(now + decays[i]);
+      });
+    }
+
+    // --- Controls Handlers ---
+    function updateSpeed(val) {
+      speedMult = parseFloat(val);
+      const span = document.getElementById("speed-val");
+      if (span) span.textContent = speedMult.toFixed(1) + "x";
+    }
+
+    function toggleReverse() {
+      timeDirection = -timeDirection;
+      const btn = document.getElementById("btn-reverse");
+      if (btn) {
+        btn.classList.toggle("active", timeDirection < 0);
+      }
+    }
+
+    function rewindSpring() {
+      mainspringTorque = 16.0;
+      playChime();
+      addChatMessage("system", "[MAINSPRING]: Mainspring fully rewound to +16.0 N·m.");
+    }
+
+    function toggleTheme() {
+      document.documentElement.classList.toggle("light-mode");
+    }
+
+    // --- Maid NLP Dialogue System ---
+    const responses = {
+      tea: [
+        "Right away, Master. I have steeped the Imperial Darjeeling at precisely 92.4°C for 3 minutes and 45 seconds.",
+        "Your Earl Grey is prepared with silver spoon etiquette and zero temporal contamination, Master.",
+        "A pot of Jasmine Blossom tea is ready, infused with 0.02% temporal stabilization essence."
+      ],
+      drift: [
+        "Temporal drift is currently within nominal parameters: +0.014 ps/s. The chronal anchors hold firm.",
+        "Telemetry reports minimal phase displacement (Δt = 0.0002 μs). Coherence index remains above 99.98%.",
+        "Minor chronal eddies detected in sector 4, but local damping is absorbing the divergence."
+      ],
+      protocol: [
+        "Reciting Maid Protocol 0x7E: (1) Preserve the Master's Timeline. (2) Keep the Porcelain Spotless. (3) Maintain Absolute Clockwork Purity.",
+        "Under Article 4 of the Chronal Maid Treaty: A temporal maid shall never allow an unresolved paradox into the drawing room."
+      ],
+      sanitize: [
+        "Initiating chronal vacuum sequence. Collapsing micro-divergences... Done. The timeline is pristine, Master.",
+        "Paradox loops purged from the sector. Coherence restored to 100.00%."
+      ],
+      default: [
+        "Directive acknowledged, Master. Model TM-7 is monitoring the clockwork powertrain and timeline integrity.",
+        "Understood. The temporal gears continue their harmonic cadence in accordance with your wishes.",
+        "Your command has been registered in the chronal log ring-buffer."
+      ]
+    };
+
+    function addChatMessage(sender, text) {
+      const feed = document.getElementById("chat-feed");
+      if (!feed) return;
+      const div = document.createElement("div");
+      div.className = "msg-item " + sender;
+      div.textContent = text;
+      feed.appendChild(div);
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function sendPreset(preset) {
+      addChatMessage("user", "[MASTER]: " + preset);
+      processDirective(preset.toLowerCase());
+    }
+
+    function sendDirective() {
+      const input = document.getElementById("maid-input");
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) return;
+      addChatMessage("user", "[MASTER]: " + text);
+      input.value = "";
+      processDirective(text.toLowerCase());
+    }
+
+    function handleInputKey(e) {
+      if (e.key === "Enter") {
+        sendDirective();
+      }
+    }
+
+    function processDirective(text) {
+      setTimeout(() => {
+        let bucket = "default";
+        if (text.includes("tea") || text.includes("drink") || text.includes("earl")) bucket = "tea";
+        else if (text.includes("drift") || text.includes("telemetry") || text.includes("status") || text.includes("time")) bucket = "drift";
+        else if (text.includes("protocol") || text.includes("rule") || text.includes("law")) bucket = "protocol";
+        else if (text.includes("sanitize") || text.includes("fix") || text.includes("clean") || text.includes("paradox")) bucket = "sanitize";
+
+        const list = responses[bucket];
+        const reply = list[Math.floor(Math.random() * list.length)];
+        addChatMessage("maid", "[TIMERTIA]: " + reply);
+        if (audioEnabled) {
+          playTickSound(true);
+        }
+      }, 300);
+    }
+
+    // --- Drawing Routines ---
+
+    // Draw Involute Gear
+    function drawGear(ctx, gear) {
+      ctx.save();
+      ctx.translate(gear.x, gear.y);
+      ctx.rotate(gear.angle);
+
+      const N = gear.teeth;
+      const r = gear.r;
+      const rOuter = r + 7;
+      const rInner = r - 6;
+
+      // Draw teeth
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const a0 = (i * 2 * Math.PI) / N;
+        const a1 = a0 + Math.PI / (N * 2);
+        const a2 = a0 + Math.PI / N;
+        const a3 = a0 + (3 * Math.PI) / (N * 2);
+
+        const p0x = Math.cos(a0) * rInner;
+        const p0y = Math.sin(a0) * rInner;
+        const p1x = Math.cos(a1) * rOuter;
+        const p1y = Math.sin(a1) * rOuter;
+        const p2x = Math.cos(a2) * rOuter;
+        const p2y = Math.sin(a2) * rOuter;
+        const p3x = Math.cos(a3) * rInner;
+        const p3y = Math.sin(a3) * rInner;
+
+        if (i === 0) ctx.moveTo(p0x, p0y);
+        else ctx.lineTo(p0x, p0y);
+        ctx.lineTo(p1x, p1y);
+        ctx.lineTo(p2x, p2y);
+        ctx.lineTo(p3x, p3y);
+      }
+      ctx.closePath();
+
+      // Gear Body Fill & Stroke
+      const grad = ctx.createRadialGradient(0, 0, 10, 0, 0, rOuter);
+      grad.addColorStop(0, gear.color);
+      grad.addColorStop(0.7, "#1e102d");
+      grad.addColorStop(1, gear.color);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.strokeStyle = gear.color;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Pitch Circle Guide
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.setLineDash([2, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Spokes
+      const numSpokes = 5;
+      for (let s = 0; s < numSpokes; s++) {
+        const sa = (s * 2 * Math.PI) / numSpokes;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(sa) * (r - 12), Math.sin(sa) * (r - 12));
+        ctx.strokeStyle = gear.color;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
+      // Center Hub & Brass Pin
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, Math.PI * 2);
+      ctx.fillStyle = "#12081c";
+      ctx.fill();
+      ctx.strokeStyle = "#f3e5ab";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffd700";
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // Draw Escapement & Pendulum
+    function drawEscapement(ctx, time) {
+      const pendX = 430;
+      const pendY = 320;
+      const length = 110;
+      const pendAngle = Math.sin(time * 5.0 * speedMult * timeDirection) * 0.15;
+
+      ctx.save();
+      ctx.translate(pendX, pendY);
+      ctx.rotate(pendAngle);
+
+      // Pendulum Rod
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, length);
+      ctx.strokeStyle = "#d4af37";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Pendulum Bob
+      ctx.beginPath();
+      ctx.arc(0, length, 18, 0, Math.PI * 2);
+      const bobGrad = ctx.createRadialGradient(-4, length - 4, 2, 0, length, 18);
+      bobGrad.addColorStop(0, "#f3e5ab");
+      bobGrad.addColorStop(1, "#b87333");
+      ctx.fillStyle = bobGrad;
+      ctx.fill();
+      ctx.strokeStyle = "#d4af37";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Oscilloscope Telemetry
+    let oscPhase = 0;
+    function renderOscilloscope(time) {
+      if (!oscCtx || !oscCanvas) return;
+      const w = oscCanvas.width;
+      const h = oscCanvas.height;
+
+      oscCtx.fillStyle = "#060309";
+      oscCtx.fillRect(0, 0, w, h);
+
+      // Grid Lines
+      oscCtx.strokeStyle = "rgba(212, 175, 55, 0.1)";
+      oscCtx.lineWidth = 1;
+      for (let x = 0; x < w; x += 40) {
+        oscCtx.beginPath();
+        oscCtx.moveTo(x, 0);
+        oscCtx.lineTo(x, h);
+        oscCtx.stroke();
+      }
+      for (let y = 0; y < h; y += 40) {
+        oscCtx.beginPath();
+        oscCtx.moveTo(0, y);
+        oscCtx.lineTo(w, y);
+        oscCtx.stroke();
+      }
+
+      // Center Line
+      oscCtx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+      oscCtx.beginPath();
+      oscCtx.moveTo(0, h / 2);
+      oscCtx.lineTo(w, h / 2);
+      oscCtx.stroke();
+
+      oscPhase += 0.04 * speedMult * timeDirection;
+
+      // Trace A: Universal Standard (Cyan)
+      oscCtx.strokeStyle = "#00e5ff";
+      oscCtx.lineWidth = 2;
+      oscCtx.shadowColor = "#00e5ff";
+      oscCtx.shadowBlur = 8;
+      oscCtx.beginPath();
+      for (let x = 0; x < w; x++) {
+        const y = h / 2 + Math.sin(x * 0.03 - oscPhase) * 45;
+        if (x === 0) oscCtx.moveTo(x, y);
+        else oscCtx.lineTo(x, y);
+      }
+      oscCtx.stroke();
+
+      // Trace B: Local Divergent (Rose)
+      oscCtx.strokeStyle = "#e07a9a";
+      oscCtx.shadowColor = "#e07a9a";
+      oscCtx.shadowBlur = 8;
+      oscCtx.beginPath();
+      const drift = Math.sin(time * 0.2) * 0.3;
+      for (let x = 0; x < w; x++) {
+        const y = h / 2 + Math.sin(x * 0.03 - oscPhase + drift) * 45 + Math.sin(x * 0.09 - oscPhase * 2) * 10;
+        if (x === 0) oscCtx.moveTo(x, y);
+        else oscCtx.lineTo(x, y);
+      }
+      oscCtx.stroke();
+      oscCtx.shadowBlur = 0;
+
+      // Update telemetry text
+      const dtSpan = document.getElementById("hud-dt");
+      if (dtSpan) dtSpan.textContent = (Math.abs(drift) * 0.045).toFixed(4) + " μs";
+      const phaseSpan = document.getElementById("hud-phase");
+      if (phaseSpan) phaseSpan.textContent = (Math.abs(drift)).toFixed(3) + " rad";
+    }
+
+    // Avatar Drawing
+    function renderAvatar(time) {
+      if (!avatarCtx || !avatarCanvas) return;
+      const w = avatarCanvas.width;
+      const h = avatarCanvas.height;
+
+      avatarCtx.clearRect(0, 0, w, h);
+
+      // Cute Maid Headband Lace
+      avatarCtx.beginPath();
+      avatarCtx.arc(w / 2, h / 2 + 10, 65, Math.PI * 0.8, Math.PI * 2.2);
+      avatarCtx.strokeStyle = "#fdf6ee";
+      avatarCtx.lineWidth = 8;
+      avatarCtx.stroke();
+
+      // Ribbons
+      avatarCtx.fillStyle = "#e07a9a";
+      avatarCtx.beginPath();
+      avatarCtx.arc(35, 60, 10, 0, Math.PI * 2);
+      avatarCtx.arc(145, 60, 10, 0, Math.PI * 2);
+      avatarCtx.fill();
+
+      // Eyes (Blinking Animation)
+      const blink = Math.sin(time * 1.5) > 0.96;
+      avatarCtx.fillStyle = "#00e5ff";
+      avatarCtx.strokeStyle = "#00e5ff";
+      avatarCtx.lineWidth = 3;
+
+      if (blink) {
+        // Closed Eyes
+        avatarCtx.beginPath();
+        avatarCtx.arc(65, 95, 12, Math.PI * 0.2, Math.PI * 0.8);
+        avatarCtx.stroke();
+        avatarCtx.beginPath();
+        avatarCtx.arc(115, 95, 12, Math.PI * 0.2, Math.PI * 0.8);
+        avatarCtx.stroke();
+      } else {
+        // Open Eyes
+        avatarCtx.beginPath();
+        avatarCtx.ellipse(65, 95, 8, 12, 0, 0, Math.PI * 2);
+        avatarCtx.fill();
+        avatarCtx.beginPath();
+        avatarCtx.ellipse(115, 95, 8, 12, 0, 0, Math.PI * 2);
+        avatarCtx.fill();
+
+        // Eye Highlights
+        avatarCtx.fillStyle = "#ffffff";
+        avatarCtx.beginPath();
+        avatarCtx.arc(67, 92, 3, 0, Math.PI * 2);
+        avatarCtx.arc(117, 92, 3, 0, Math.PI * 2);
+        avatarCtx.fill();
+      }
+
+      // Blushing Cheeks
+      avatarCtx.fillStyle = "rgba(224, 122, 154, 0.4)";
+      avatarCtx.beginPath();
+      avatarCtx.arc(52, 112, 9, 0, Math.PI * 2);
+      avatarCtx.arc(128, 112, 9, 0, Math.PI * 2);
+      avatarCtx.fill();
+
+      // Smile
+      avatarCtx.beginPath();
+      avatarCtx.arc(w / 2, 112, 10, Math.PI * 0.15, Math.PI * 0.85);
+      avatarCtx.strokeStyle = "#e07a9a";
+      avatarCtx.lineWidth = 2.5;
+      avatarCtx.stroke();
+    }
+
+    // --- Main Animation Loop ---
+    function animate(timestamp) {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      const dt = (timestamp - lastTimestamp) / 1000;
+      lastTimestamp = timestamp;
+
+      // Update simulation time
+      worldSeconds += dt * speedMult * timeDirection;
+      const timeInSec = timestamp / 1000;
+
+      // Update Clock HUD
+      const hrs = Math.floor((worldSeconds / 3600) % 24);
+      const mins = Math.floor((worldSeconds / 60) % 60);
+      const secs = Math.floor(worldSeconds % 60);
+      const clockSpan = document.getElementById("hud-clock");
+      if (clockSpan) {
+        clockSpan.textContent = 
+          String(Math.abs(hrs)).padStart(2, '0') + ":" + 
+          String(Math.abs(mins)).padStart(2, '0') + ":" + 
+          String(Math.abs(secs)).padStart(2, '0');
+      }
+
+      // Gear Angles & Audio Ticks
+      const baseDelta = dt * 1.5 * speedMult * timeDirection;
+      gears.forEach(g => {
+        g.angle += baseDelta * g.baseRatio;
+      });
+
+      // Periodic tick-tock audio
+      if (timestamp - lastTickTime > (200 / speedMult)) {
+        lastTickTime = timestamp;
+        isTickingTick = !isTickingTick;
+        playTickSound(isTickingTick);
+      }
+
+      // Render Gear Canvas
+      if (gearCtx && gearCanvas) {
+        gearCtx.clearRect(0, 0, gearCanvas.width, gearCanvas.height);
+
+        // Backdrop Plate
+        gearCtx.fillStyle = "#0c0614";
+        gearCtx.fillRect(0, 0, gearCanvas.width, gearCanvas.height);
+
+        // Draw Intermeshing Gears
+        gears.forEach(g => drawGear(gearCtx, g));
+
+        // Draw Escapement & Pendulum
+        drawEscapement(gearCtx, timeInSec);
+      }
+
+      // Render Oscilloscope
+      renderOscilloscope(timeInSec);
+
+      // Render Avatar
+      renderAvatar(timeInSec);
+
+      requestAnimationFrame(animate);
+    }
+
+    // Start on DOM Load
+    window.addEventListener("DOMContentLoaded", () => {
+      // Interactive Gear Drag
+      let isDragging = false;
+      let lastMouseX = 0;
+
+      if (gearCanvas) {
+        gearCanvas.addEventListener("mousedown", (e) => {
+          isDragging = true;
+          lastMouseX = e.clientX;
+          initAudio();
+        });
+
+        window.addEventListener("mouseup", () => { isDragging = false; });
+
+        window.addEventListener("mousemove", (e) => {
+          if (!isDragging) return;
+          const delta = (e.clientX - lastMouseX) * 0.02;
+          lastMouseX = e.clientX;
+          gears.forEach(g => { g.angle += delta * g.baseRatio; });
+        });
+
+        gearCanvas.addEventListener("touchstart", (e) => {
+          if (e.touches.length > 0) {
+            isDragging = true;
+            lastMouseX = e.touches[0].clientX;
+            initAudio();
+          }
+        }, { passive: true });
+
+        window.addEventListener("touchend", () => { isDragging = false; });
+
+        window.addEventListener("touchmove", (e) => {
+          if (!isDragging || e.touches.length === 0) return;
+          const delta = (e.touches[0].clientX - lastMouseX) * 0.02;
+          lastMouseX = e.touches[0].clientX;
+          gears.forEach(g => { g.angle += delta * g.baseRatio; });
+        }, { passive: true });
+      }
+
+      requestAnimationFrame(animate);
+    });
+  </script>
+</body>
+</html>

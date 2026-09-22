@@ -1,0 +1,1656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BAC_APPLE — Autonomous Bacterial Boids &amp; Silhouette Swarm Engine</title>
+  <meta name="description" content="2,000 algorithmic bacterial boids flocking and morphing into iconic Bad Apple silhouettes, Touhou shadows, DNA helices, and cyber skulls with real-time vector alignment telemetry.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://jirnyak.github.io/bac_apple/">
+
+  <!-- Open Graph Protocol -->
+  <meta property="og:site_name" content="BAC_APPLE Flocking Engine">
+  <meta property="og:title" content="BAC_APPLE — Autonomous Bacterial Boids &amp; Silhouette Swarm Engine">
+  <meta property="og:description" content="High-performance client-side simulation of 2,000 Reynolds flocking boids self-organizing into Bad Apple shadow silhouettes with kinetic shockwaves and spatial alignment metrics.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://jirnyak.github.io/bac_apple/">
+  <meta property="og:image" content="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%201200%20630%27%20width%3D%271200%27%20height%3D%27630%27%3E%0A%20%20%3Cdefs%3E%0A%20%20%20%20%3CradialGradient%20id%3D%27apple-bg-grad%27%20cx%3D%2750%25%27%20cy%3D%2740%25%27%20r%3D%2770%25%27%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%270%25%27%20stop-color%3D%27%23181818%27/%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%2780%25%27%20stop-color%3D%27%23000000%27/%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%27100%25%27%20stop-color%3D%27%23000000%27/%3E%0A%20%20%20%20%3C/radialGradient%3E%0A%20%20%20%20%3Cfilter%20id%3D%27apple-glow%27%20x%3D%27-20%25%27%20y%3D%27-20%25%27%20width%3D%27140%25%27%20height%3D%27140%25%27%3E%0A%20%20%20%20%20%20%3CfeGaussianBlur%20stdDeviation%3D%276%27%20result%3D%27blur%27/%3E%0A%20%20%20%20%20%20%3CfeComposite%20in%3D%27SourceGraphic%27%20in2%3D%27blur%27%20operator%3D%27over%27/%3E%0A%20%20%20%20%3C/filter%3E%0A%20%20%3C/defs%3E%0A%20%20%3C%21--%20Pure%20CRT%20Black%20Screen%20--%3E%0A%20%20%3Crect%20width%3D%271200%27%20height%3D%27630%27%20fill%3D%27url%28%23apple-bg-grad%29%27/%3E%0A%20%20%3C%21--%20CRT%20Bezel%20Inner%20Border%20--%3E%0A%20%20%3Crect%20x%3D%2730%27%20y%3D%2730%27%20width%3D%271140%27%20height%3D%27570%27%20rx%3D%2724%27%20fill%3D%27none%27%20stroke%3D%27%23ffffff%27%20stroke-width%3D%272%27%20stroke-opacity%3D%270.3%27/%3E%0A%20%20%3C%21--%20Scanline%20Overlay%20--%3E%0A%20%20%3Cg%20stroke%3D%27%23ffffff%27%20stroke-opacity%3D%270.04%27%20stroke-width%3D%271%27%3E%0A%20%20%20%20%3Cline%20x1%3D%2730%27%20y1%3D%2780%27%20x2%3D%271170%27%20y2%3D%2780%27/%3E%3Cline%20x1%3D%2730%27%20y1%3D%27140%27%20x2%3D%271170%27%20y2%3D%27140%27/%3E%0A%20%20%20%20%3Cline%20x1%3D%2730%27%20y1%3D%27200%27%20x2%3D%271170%27%20y2%3D%27200%27/%3E%3Cline%20x1%3D%2730%27%20y1%3D%27260%27%20x2%3D%271170%27%20y2%3D%27260%27/%3E%0A%20%20%20%20%3Cline%20x1%3D%2730%27%20y1%3D%27320%27%20x2%3D%271170%27%20y2%3D%27320%27/%3E%3Cline%20x1%3D%2730%27%20y1%3D%27380%27%20x2%3D%271170%27%20y2%3D%27380%27/%3E%0A%20%20%20%20%3Cline%20x1%3D%2730%27%20y1%3D%27440%27%20x2%3D%271170%27%20y2%3D%27440%27/%3E%3Cline%20x1%3D%2730%27%20y1%3D%27500%27%20x2%3D%271170%27%20y2%3D%27500%27/%3E%0A%20%20%3C/g%3E%0A%20%20%3C%21--%20Bad%20Apple%20Silhouette%20Shape%20%28Made%20of%202%2C000%20Flocking%20Boids%29%20--%3E%0A%20%20%3Cg%20transform%3D%27translate%28600%2C%20220%29%27%3E%0A%20%20%20%20%3C%21--%20Apple%20Silhouette%20Contour%20--%3E%0A%20%20%20%20%3Cpath%20d%3D%27M0%2C-90%20Q15%2C-130%2045%2C-120%20Q30%2C-85%205%2C-80%20Z%27%20fill%3D%27%23ffffff%27%20filter%3D%27url%28%23apple-glow%29%27/%3E%0A%20%20%20%20%3Cpath%20d%3D%27M0%2C-65%20C-60%2C-65%20-120%2C-30%20-120%2C40%20C-120%2C110%20-60%2C165%200%2C165%20C60%2C165%20120%2C110%20120%2C40%20C120%2C-30%2060%2C-65%200%2C-65%20Z%27%20fill%3D%27%23ffffff%27%20filter%3D%27url%28%23apple-glow%29%27/%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2780%27%20cy%3D%2730%27%20r%3D%2735%27%20fill%3D%27%23000000%27/%3E%0A%20%20%20%20%3C%21--%20Flocking%20Boid%20Particles%20on%20Perimeter%20--%3E%0A%20%20%20%20%3Cg%20fill%3D%27%2339ff14%27%20filter%3D%27url%28%23apple-glow%29%27%3E%0A%20%20%20%20%20%20%3Ccircle%20cx%3D%27-100%27%20cy%3D%27-10%27%20r%3D%273.5%27/%3E%3Ccircle%20cx%3D%27-115%27%20cy%3D%2730%27%20r%3D%273%27/%3E%3Ccircle%20cx%3D%27-105%27%20cy%3D%2770%27%20r%3D%273.5%27/%3E%0A%20%20%20%20%20%20%3Ccircle%20cx%3D%27-80%27%20cy%3D%27110%27%20r%3D%273%27/%3E%3Ccircle%20cx%3D%27-40%27%20cy%3D%27145%27%20r%3D%273.5%27/%3E%3Ccircle%20cx%3D%270%27%20cy%3D%27160%27%20r%3D%274%27/%3E%0A%20%20%20%20%20%20%3Ccircle%20cx%3D%2740%27%20cy%3D%27145%27%20r%3D%273.5%27/%3E%3Ccircle%20cx%3D%2780%27%20cy%3D%27110%27%20r%3D%273%27/%3E%3Ccircle%20cx%3D%27105%27%20cy%3D%2770%27%20r%3D%273.5%27/%3E%0A%20%20%20%20%20%20%3Ccircle%20cx%3D%27115%27%20cy%3D%2730%27%20r%3D%273%27/%3E%3Ccircle%20cx%3D%27100%27%20cy%3D%27-10%27%20r%3D%273.5%27/%3E%3Ccircle%20cx%3D%2760%27%20cy%3D%27-45%27%20r%3D%273.5%27/%3E%0A%20%20%20%20%20%20%3Ccircle%20cx%3D%27-60%27%20cy%3D%27-45%27%20r%3D%273.5%27/%3E%3Ccircle%20cx%3D%270%27%20cy%3D%27-60%27%20r%3D%274%27/%3E%0A%20%20%20%20%20%20%3C%21--%20Boid%20Velocity%20Vector%20Pointers%20--%3E%0A%20%20%20%20%20%20%3Cpolygon%20points%3D%27-130%2C20%20-115%2C30%20-130%2C25%27%20fill%3D%27%2339ff14%27/%3E%0A%20%20%20%20%20%20%3Cpolygon%20points%3D%27130%2C20%20115%2C30%20130%2C25%27%20fill%3D%27%2339ff14%27/%3E%0A%20%20%20%20%20%20%3Cpolygon%20points%3D%270%2C180%200%2C160%205%2C175%27%20fill%3D%27%2339ff14%27/%3E%0A%20%20%20%20%3C/g%3E%0A%20%20%3C/g%3E%0A%20%20%3C%21--%20CRT%20Status%20Header%20--%3E%0A%20%20%3Ctext%20x%3D%2770%27%20y%3D%2768%27%20font-family%3D%27monospace%27%20font-size%3D%2716%27%20fill%3D%27%2339ff14%27%20letter-spacing%3D%272%27%3E%5BP1%20PHOSPHOR%20//%2060%20FPS%20//%20FIDELITY%3A%2099.4%25%5D%3C/text%3E%0A%20%20%3Ctext%20x%3D%271130%27%20y%3D%2768%27%20font-family%3D%27monospace%27%20font-size%3D%2716%27%20fill%3D%27%23ffffff%27%20text-anchor%3D%27end%27%20letter-spacing%3D%272%27%3E%5BN%3D2%2C000%20BOIDS%5D%3C/text%3E%0A%20%20%3C%21--%20Typography%20%26%20Headers%20--%3E%0A%20%20%3Ctext%20x%3D%27600%27%20y%3D%27490%27%20font-family%3D%27monospace%27%20font-size%3D%2744%27%20font-weight%3D%27bold%27%20fill%3D%27%23ffffff%27%20text-anchor%3D%27middle%27%20letter-spacing%3D%278%27%3EBAC_APPLE%20%3A%20SWARM%20ENGINE%3C/text%3E%0A%20%20%3Ctext%20x%3D%27600%27%20y%3D%27540%27%20font-family%3D%27monospace%27%20font-size%3D%2720%27%20fill%3D%27%2339ff14%27%20text-anchor%3D%27middle%27%20letter-spacing%3D%275%27%3E2%2C000-AGENT%20AUTONOMOUS%20BOID%20SILHOUETTE%20MORPHING%3C/text%3E%0A%20%20%3Ctext%20x%3D%27600%27%20y%3D%27580%27%20font-family%3D%27monospace%27%20font-size%3D%2714%27%20fill%3D%27%23a0a0a0%27%20text-anchor%3D%27middle%27%20letter-spacing%3D%273%27%3EREYNOLDS%20FLOCKING%20//%20SHOCKWAVE%20DISPERSAL%20//%20COHERENCE%20TELEMETRY%3C/text%3E%0A%3C/svg%3E">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="BAC_APPLE Monochrome CRT Swarm Simulation Interface">
+
+  <!-- Twitter Card Protocol -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@Jirnyak">
+  <meta name="twitter:creator" content="@Jirnyak">
+  <meta name="twitter:title" content="BAC_APPLE — Autonomous Bacterial Boids &amp; Silhouette Swarm Engine">
+  <meta name="twitter:description" content="High-performance client-side simulation of 2,000 Reynolds flocking boids self-organizing into Bad Apple shadow silhouettes with kinetic shockwaves and spatial alignment metrics.">
+  <meta name="twitter:image" content="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%201200%20630%27%20width%3D%271200%27%20height%3D%27630%27%3E%0A%20%20%3Cdefs%3E%0A%20%20%20%20%3CradialGradient%20id%3D%27apple-bg-grad%27%20cx%3D%2750%25%27%20cy%3D%2740%25%27%20r%3D%2770%25%27%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%270%25%27%20stop-color%3D%27%23181818%27/%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%2780%25%27%20stop-color%3D%27%23000000%27/%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%27100%25%27%20stop-color%3D%27%23000000%27/%3E%0A%20%20%20%20%3C/radialGradient%3E%0A%20%20%20%20%3Cfilter%20id%3D%27apple-glow%27%20x%3D%27-20%25%27%20y%3D%27-20%25%27%20width%3D%27140%25%27%20height%3D%27140%25%27%3E%0A%20%20%20%20%20%20%3CfeGaussianBlur%20stdDeviation%3D%276%27%20result%3D%27blur%27/%3E%0A%20%20%20%20%20%20%3CfeComposite%20in%3D%27SourceGraphic%27%20in2%3D%27blur%27%20operator%3D%27over%27/%3E%0A%20%20%20%20%3C/filter%3E%0A%20%20%3C/defs%3E%0A%20%20%3C%21--%20Pure%20CRT%20Black%20Screen%20--%3E%0A%20%20%3Crect%20width%3D%271200%27%20height%3D%27630%27%20fill%3D%27url%28%23apple-bg-grad%29%27/%3E%0A%20%20%3C%21--%20CRT%20Bezel%20Inner%20Border%20--%3E%0A%20%20%3Crect%20x%3D%2730%27%20y%3D%2730%27%20width%3D%271140%27%20height%3D%27570%27%20rx%3D%2724%27%20fill%3D%27none%27%20stroke%3D%27%23ffffff%27%20stroke-width%3D%272%27%20stroke-opacity%3D%270.3%27/%3E%0A%20%20%3C%21--%20Scanline%20Overlay%20--%3E%0A%20%20%3Cg%20stroke%3D%27%23ffffff%27%20stroke-opacity%3D%270.04%27%20stroke-width%3D%271%27%3E%0A%20%20%20%20%3Cline%20x1%3D%2730%27%20y1%3D%2780%27%20x2%3D%271170%27%20y2%3D%2780%27/%3E%3Cline%20x1%3D%2730%27%20y1%3D%27140%27%20x2%3D%271170%27%20y2%3D%27140%27/%3E%0A%20%20%20%20%3Cline%20x1%3D%2730%27%20y1%3D%27200%27%20x2%3D%271170%27%20y2%3D%27200%27/%3E%3Cline%20x1%3D%2730%27%20y1%3D%27260%27%20x2%3D%271170%27%20y2%3D%27260%27/%3E%0A%20%20%20%20%3Cline%20x1%3D%2730%27%20y1%3D%27320%27%20x2%3D%271170%27%20y2%3D%27320%27/%3E%3Cline%20x1%3D%2730%27%20y1%3D%27380%27%20x2%3D%271170%27%20y2%3D%27380%27/%3E%0A%20%20%20%20%3Cline%20x1%3D%2730%27%20y1%3D%27440%27%20x2%3D%271170%27%20y2%3D%27440%27/%3E%3Cline%20x1%3D%2730%27%20y1%3D%27500%27%20x2%3D%271170%27%20y2%3D%27500%27/%3E%0A%20%20%3C/g%3E%0A%20%20%3C%21--%20Bad%20Apple%20Silhouette%20Shape%20%28Made%20of%202%2C000%20Flocking%20Boids%29%20--%3E%0A%20%20%3Cg%20transform%3D%27translate%28600%2C%20220%29%27%3E%0A%20%20%20%20%3C%21--%20Apple%20Silhouette%20Contour%20--%3E%0A%20%20%20%20%3Cpath%20d%3D%27M0%2C-90%20Q15%2C-130%2045%2C-120%20Q30%2C-85%205%2C-80%20Z%27%20fill%3D%27%23ffffff%27%20filter%3D%27url%28%23apple-glow%29%27/%3E%0A%20%20%20%20%3Cpath%20d%3D%27M0%2C-65%20C-60%2C-65%20-120%2C-30%20-120%2C40%20C-120%2C110%20-60%2C165%200%2C165%20C60%2C165%20120%2C110%20120%2C40%20C120%2C-30%2060%2C-65%200%2C-65%20Z%27%20fill%3D%27%23ffffff%27%20filter%3D%27url%28%23apple-glow%29%27/%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2780%27%20cy%3D%2730%27%20r%3D%2735%27%20fill%3D%27%23000000%27/%3E%0A%20%20%20%20%3C%21--%20Flocking%20Boid%20Particles%20on%20Perimeter%20--%3E%0A%20%20%20%20%3Cg%20fill%3D%27%2339ff14%27%20filter%3D%27url%28%23apple-glow%29%27%3E%0A%20%20%20%20%20%20%3Ccircle%20cx%3D%27-100%27%20cy%3D%27-10%27%20r%3D%273.5%27/%3E%3Ccircle%20cx%3D%27-115%27%20cy%3D%2730%27%20r%3D%273%27/%3E%3Ccircle%20cx%3D%27-105%27%20cy%3D%2770%27%20r%3D%273.5%27/%3E%0A%20%20%20%20%20%20%3Ccircle%20cx%3D%27-80%27%20cy%3D%27110%27%20r%3D%273%27/%3E%3Ccircle%20cx%3D%27-40%27%20cy%3D%27145%27%20r%3D%273.5%27/%3E%3Ccircle%20cx%3D%270%27%20cy%3D%27160%27%20r%3D%274%27/%3E%0A%20%20%20%20%20%20%3Ccircle%20cx%3D%2740%27%20cy%3D%27145%27%20r%3D%273.5%27/%3E%3Ccircle%20cx%3D%2780%27%20cy%3D%27110%27%20r%3D%273%27/%3E%3Ccircle%20cx%3D%27105%27%20cy%3D%2770%27%20r%3D%273.5%27/%3E%0A%20%20%20%20%20%20%3Ccircle%20cx%3D%27115%27%20cy%3D%2730%27%20r%3D%273%27/%3E%3Ccircle%20cx%3D%27100%27%20cy%3D%27-10%27%20r%3D%273.5%27/%3E%3Ccircle%20cx%3D%2760%27%20cy%3D%27-45%27%20r%3D%273.5%27/%3E%0A%20%20%20%20%20%20%3Ccircle%20cx%3D%27-60%27%20cy%3D%27-45%27%20r%3D%273.5%27/%3E%3Ccircle%20cx%3D%270%27%20cy%3D%27-60%27%20r%3D%274%27/%3E%0A%20%20%20%20%20%20%3C%21--%20Boid%20Velocity%20Vector%20Pointers%20--%3E%0A%20%20%20%20%20%20%3Cpolygon%20points%3D%27-130%2C20%20-115%2C30%20-130%2C25%27%20fill%3D%27%2339ff14%27/%3E%0A%20%20%20%20%20%20%3Cpolygon%20points%3D%27130%2C20%20115%2C30%20130%2C25%27%20fill%3D%27%2339ff14%27/%3E%0A%20%20%20%20%20%20%3Cpolygon%20points%3D%270%2C180%200%2C160%205%2C175%27%20fill%3D%27%2339ff14%27/%3E%0A%20%20%20%20%3C/g%3E%0A%20%20%3C/g%3E%0A%20%20%3C%21--%20CRT%20Status%20Header%20--%3E%0A%20%20%3Ctext%20x%3D%2770%27%20y%3D%2768%27%20font-family%3D%27monospace%27%20font-size%3D%2716%27%20fill%3D%27%2339ff14%27%20letter-spacing%3D%272%27%3E%5BP1%20PHOSPHOR%20//%2060%20FPS%20//%20FIDELITY%3A%2099.4%25%5D%3C/text%3E%0A%20%20%3Ctext%20x%3D%271130%27%20y%3D%2768%27%20font-family%3D%27monospace%27%20font-size%3D%2716%27%20fill%3D%27%23ffffff%27%20text-anchor%3D%27end%27%20letter-spacing%3D%272%27%3E%5BN%3D2%2C000%20BOIDS%5D%3C/text%3E%0A%20%20%3C%21--%20Typography%20%26%20Headers%20--%3E%0A%20%20%3Ctext%20x%3D%27600%27%20y%3D%27490%27%20font-family%3D%27monospace%27%20font-size%3D%2744%27%20font-weight%3D%27bold%27%20fill%3D%27%23ffffff%27%20text-anchor%3D%27middle%27%20letter-spacing%3D%278%27%3EBAC_APPLE%20%3A%20SWARM%20ENGINE%3C/text%3E%0A%20%20%3Ctext%20x%3D%27600%27%20y%3D%27540%27%20font-family%3D%27monospace%27%20font-size%3D%2720%27%20fill%3D%27%2339ff14%27%20text-anchor%3D%27middle%27%20letter-spacing%3D%275%27%3E2%2C000-AGENT%20AUTONOMOUS%20BOID%20SILHOUETTE%20MORPHING%3C/text%3E%0A%20%20%3Ctext%20x%3D%27600%27%20y%3D%27580%27%20font-family%3D%27monospace%27%20font-size%3D%2714%27%20fill%3D%27%23a0a0a0%27%20text-anchor%3D%27middle%27%20letter-spacing%3D%273%27%3EREYNOLDS%20FLOCKING%20//%20SHOCKWAVE%20DISPERSAL%20//%20COHERENCE%20TELEMETRY%3C/text%3E%0A%3C/svg%3E">
+
+  <!-- Inline SVG Favicon (Monochrome CRT Apple) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23000000'/%3E%3Cpath d='M50,15 Q55,5 65,8 Q60,18 52,18 Z' fill='%23ffffff'/%3E%3Cpath d='M50,22 C35,22 20,32 20,52 C20,72 35,90 50,90 C65,90 80,72 80,52 C80,32 65,22 50,22 Z' fill='%23ffffff'/%3E%3Ccircle cx='70' cy='48' r='10' fill='%23000000'/%3E%3C/svg%3E">
+
+  <!-- Structured JSON-LD Schema -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "BAC_APPLE Flocking Boids Engine",
+    "headline": "2,000-Agent Bad Apple Silhouette Vector Morphing Simulator",
+    "description": "Client-side autonomous flocking boid simulation with vector silhouette attraction fields, shockwave dispersal physics, and live spatial coherence metrics.",
+    "url": "https://jirnyak.github.io/bac_apple/",
+    "applicationCategory": "SimulationEngine",
+    "operatingSystem": "All modern web browsers (Desktop & Mobile)",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "author": {
+      "@type": "Person",
+      "name": "Jirnyak",
+      "url": "https://github.com/Jirnyak"
+    }
+  }
+  </script>
+
+  <style>
+    /* ==========================================================================
+       BAC_APPLE BESPOKE DESIGN SYSTEM — MONOCHROME CRT PHOSPHOR / BIO-MATRIX
+       ========================================================================== */
+    :root {
+      --apple-bg: #000000;
+      --apple-surface: #0e0e0e;
+      --apple-surface-elevated: #181818;
+      --apple-surface-highlight: #262626;
+      --apple-white: #ffffff;
+      --apple-silver: #c0c0c0;
+      --apple-dim: #444444;
+      --apple-border: rgba(255, 255, 255, 0.2);
+      --apple-border-strong: rgba(255, 255, 255, 0.6);
+      --apple-glow: rgba(255, 255, 255, 0.4);
+      --apple-glow-strong: rgba(255, 255, 255, 0.85);
+      --apple-text: #f5f5f5;
+      --apple-text-dim: #a0a0a0;
+      --apple-text-muted: #666666;
+      --apple-scanline: rgba(255, 255, 255, 0.035);
+      --apple-font-mono: "Courier Prime", "Cascadia Code", "Fira Code", Consolas, Menlo, Monaco, monospace;
+      --apple-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --apple-radius-sm: 4px;
+      --apple-radius-md: 8px;
+      --apple-radius-lg: 12px;
+      --apple-radius-full: 9999px;
+      --apple-transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100%;
+      background-color: var(--apple-bg);
+      color: var(--apple-text);
+      font-family: var(--apple-font-mono);
+      font-size: 15px;
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* CRT Phosphor Scanline Overlay */
+    body::before {
+      content: " ";
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.25) 50%
+      ), linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.015),
+        rgba(0, 255, 0, 0.01),
+        rgba(0, 0, 255, 0.015)
+      );
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0.75;
+    }
+
+    /* Container Layout */
+    .app-container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem 3.5rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    /* Header Landmark */
+    .site-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--apple-border);
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--apple-radius-sm);
+      background: var(--apple-surface-elevated);
+      border: 1px solid var(--apple-white);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 12px var(--apple-glow);
+    }
+
+    .brand-icon svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    .brand-titles h1 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      color: var(--apple-white);
+      text-transform: uppercase;
+      line-height: 1.2;
+    }
+
+    .brand-titles .tagline {
+      font-size: 0.78rem;
+      color: var(--apple-silver);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.35rem 0.8rem;
+      border-radius: var(--apple-radius-full);
+      background: var(--apple-surface);
+      border: 1px solid var(--apple-border);
+      font-size: 0.75rem;
+      color: var(--apple-white);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--apple-white);
+      box-shadow: 0 0 8px #ffffff;
+      animation: crtPulse 1.6s infinite ease-in-out;
+    }
+
+    @keyframes crtPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.3; transform: scale(0.7); }
+    }
+
+    .nav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: var(--apple-radius-sm);
+      background: var(--apple-surface-elevated);
+      color: var(--apple-text);
+      text-decoration: none;
+      border: 1px solid var(--apple-border);
+      font-size: 0.82rem;
+      font-weight: 700;
+      transition: var(--apple-transition);
+      cursor: pointer;
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    .nav-btn:hover {
+      background: var(--apple-white);
+      color: var(--apple-bg);
+      border-color: var(--apple-white);
+      box-shadow: 0 0 16px var(--apple-glow);
+    }
+
+    /* Hero Section */
+    .hero-section {
+      background: linear-gradient(135deg, #0e0e0e 0%, #161616 100%);
+      border: 1px solid var(--apple-border);
+      border-radius: var(--apple-radius-md);
+      padding: clamp(1.5rem, 3vw, 2.5rem);
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--apple-silver);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .hero-title {
+      font-size: clamp(1.75rem, 3.5vw, 2.8rem);
+      font-weight: 900;
+      line-height: 1.15;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-title span {
+      text-shadow: 0 0 16px var(--apple-glow-strong);
+      border-bottom: 2px solid var(--apple-white);
+    }
+
+    .hero-description {
+      font-size: clamp(0.9rem, 1.2vw, 1.1rem);
+      color: var(--apple-text-dim);
+      max-width: 860px;
+    }
+
+    .hero-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    .hero-stat-card {
+      background: #000000;
+      border: 1px solid var(--apple-border);
+      border-radius: var(--apple-radius-sm);
+      padding: 0.85rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .hero-stat-label {
+      font-size: 0.7rem;
+      color: var(--apple-text-muted);
+      text-transform: uppercase;
+    }
+
+    .hero-stat-value {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--apple-white);
+      text-shadow: 0 0 8px var(--apple-glow);
+    }
+
+    /* Simulation Main Workspace Grid */
+    .sim-workspace {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 1080px) {
+      .sim-workspace {
+        grid-template-columns: 2.2fr 1fr;
+      }
+    }
+
+    /* Sandbox Canvas Card */
+    .sandbox-card {
+      background: var(--apple-surface);
+      border: 1px solid var(--apple-border);
+      border-radius: var(--apple-radius-md);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7);
+    }
+
+    .sandbox-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #ffffff;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .section-heading svg {
+      width: 20px;
+      height: 20px;
+      color: var(--apple-white);
+    }
+
+    .canvas-wrapper {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      min-height: 380px;
+      background: #000000;
+      border-radius: var(--apple-radius-sm);
+      border: 1px solid var(--apple-border);
+      overflow: hidden;
+      contain: layout size style;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    #boidsCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Canvas Overlays & Tooltips */
+    .canvas-hud-overlay {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid var(--apple-border);
+      border-radius: var(--apple-radius-sm);
+      padding: 0.5rem 0.75rem;
+      font-size: 0.75rem;
+      color: var(--apple-text-dim);
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      z-index: 10;
+    }
+
+    .canvas-hud-overlay .hud-highlight {
+      color: var(--apple-white);
+      font-weight: 800;
+    }
+
+    .active-tool-banner {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(18, 18, 18, 0.9);
+      border: 1px solid var(--apple-white);
+      border-radius: var(--apple-radius-full);
+      padding: 0.4rem 1.1rem;
+      font-size: 0.75rem;
+      color: var(--apple-white);
+      pointer-events: none;
+      box-shadow: 0 0 14px var(--apple-glow);
+      white-space: nowrap;
+      z-index: 10;
+    }
+
+    /* Interaction Tool Toolbar */
+    .shape-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .shape-btn {
+      flex: 1 1 calc(20% - 0.5rem);
+      min-width: 110px;
+      min-height: 44px;
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--apple-radius-sm);
+      background: var(--apple-surface-elevated);
+      border: 1px solid var(--apple-border);
+      color: var(--apple-text);
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      cursor: pointer;
+      transition: var(--apple-transition);
+      user-select: none;
+    }
+
+    .shape-btn:hover {
+      background: var(--apple-surface-highlight);
+      border-color: var(--apple-white);
+    }
+
+    .shape-btn.active {
+      background: var(--apple-white);
+      color: var(--apple-bg);
+      border-color: var(--apple-white);
+      box-shadow: 0 0 14px var(--apple-glow);
+    }
+
+    /* Control Panel & Sliders */
+    .control-deck {
+      background: var(--apple-surface);
+      border: 1px solid var(--apple-border);
+      border-radius: var(--apple-radius-md);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .deck-section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .deck-section-title {
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: var(--apple-white);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--apple-border);
+      padding-bottom: 0.35rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--apple-text-dim);
+    }
+
+    .slider-val {
+      font-weight: 800;
+      color: var(--apple-white);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: var(--apple-surface-elevated);
+      border-radius: 3px;
+      outline: none;
+      border: 1px solid var(--apple-border);
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--apple-white);
+      box-shadow: 0 0 10px #ffffff;
+      cursor: pointer;
+      border: 2px solid #000000;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--apple-white);
+      box-shadow: 0 0 10px #ffffff;
+      cursor: pointer;
+      border: 2px solid #000000;
+    }
+
+    /* Render Mode Strip */
+    .render-mode-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .mode-btn {
+      min-height: 44px;
+      padding: 0.5rem 0.6rem;
+      border-radius: var(--apple-radius-sm);
+      border: 1px solid var(--apple-border);
+      background: var(--apple-surface-elevated);
+      color: var(--apple-text);
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--apple-transition);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+    }
+
+    .mode-btn:hover {
+      background: var(--apple-surface-highlight);
+      border-color: var(--apple-white);
+    }
+
+    .mode-btn.active {
+      background: var(--apple-white);
+      color: #000000;
+      border-color: #ffffff;
+      box-shadow: 0 0 12px var(--apple-glow);
+    }
+
+    /* Action Buttons */
+    .action-button-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .action-btn {
+      min-height: 44px;
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--apple-radius-sm);
+      border: 1px solid var(--apple-border);
+      background: var(--apple-surface-elevated);
+      color: var(--apple-text);
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--apple-transition);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+    }
+
+    .action-btn:hover {
+      background: var(--apple-surface-highlight);
+      border-color: var(--apple-white);
+      color: #ffffff;
+    }
+
+    /* Dynamic Telemetry Chart Card */
+    .telemetry-card {
+      background: var(--apple-surface);
+      border: 1px solid var(--apple-border);
+      border-radius: var(--apple-radius-md);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+    }
+
+    .chart-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 21 / 9;
+      min-height: 220px;
+      background: #000000;
+      border-radius: var(--apple-radius-sm);
+      border: 1px solid var(--apple-border);
+      overflow: hidden;
+      contain: layout size style;
+    }
+
+    #telemetryChart {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      font-size: 0.75rem;
+      padding-top: 0.25rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .legend-color {
+      width: 14px;
+      height: 4px;
+      border-radius: 2px;
+    }
+
+    /* Specifications Architecture Grid */
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .spec-card {
+      background: var(--apple-surface);
+      border: 1px solid var(--apple-border);
+      border-radius: var(--apple-radius-md);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .spec-card h3 {
+      font-size: 1rem;
+      color: var(--apple-white);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .spec-card p {
+      font-size: 0.85rem;
+      color: var(--apple-text-dim);
+    }
+
+    .spec-formula {
+      background: #000000;
+      border: 1px solid var(--apple-border);
+      border-radius: var(--apple-radius-sm);
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      color: var(--apple-white);
+      overflow-x: auto;
+    }
+
+    /* Footer Landmark */
+    .site-footer {
+      border-top: 1px solid var(--apple-border);
+      padding-top: 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 0.82rem;
+      color: var(--apple-text-muted);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 1.25rem;
+    }
+
+    .footer-links a {
+      color: var(--apple-text-dim);
+      text-decoration: none;
+      transition: var(--apple-transition);
+    }
+
+    .footer-links a:hover {
+      color: var(--apple-white);
+    }
+
+    /* Accessibility Focus Styles */
+    a:focus-visible, button:focus-visible, input:focus-visible {
+      outline: 2px solid var(--apple-white);
+      outline-offset: 3px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- Header Landmark -->
+    <header class="site-header" role="banner">
+      <div class="brand-group">
+        <div class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 100 100">
+            <path d="M50,15 Q55,5 65,8 Q60,18 52,18 Z" fill="#ffffff"/>
+            <path d="M50,22 C35,22 20,32 20,52 C20,72 35,90 50,90 C65,90 80,72 80,52 C80,32 65,22 50,22 Z" fill="#ffffff"/>
+            <circle cx="70" cy="48" r="10" fill="#000000"/>
+          </svg>
+        </div>
+        <div class="brand-titles">
+          <h1>BAC_APPLE</h1>
+          <div class="tagline">2,000-Boid Bad Apple Flocking Silhouette Engine</div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="badge-pill" aria-label="System status online">
+          <span class="pulse-dot"></span>
+          <span>SWARM_COHERENT</span>
+        </div>
+        <a class="nav-btn" href="https://github.com/Jirnyak/bac_apple" target="_blank" rel="noopener noreferrer" aria-label="View source on GitHub">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+      </div>
+    </header>
+
+    <!-- Main Content Landmark -->
+    <main id="main-content" style="display: flex; flex-direction: column; gap: 2rem;">
+
+      <!-- Hero Section -->
+      <section class="hero-section" id="hero" aria-labelledby="heroTitle">
+        <div class="hero-eyebrow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>Cellular Automata Vector Swarm v3.1.0</span>
+        </div>
+        <h2 class="hero-title" id="heroTitle">
+          2,000 Bacterial Boids Swarming into <span>Bad Apple</span> Silhouettes
+        </h2>
+        <p class="hero-description">
+          An autonomous particle simulation where 2,000 bacterial agents follow Craig Reynolds flocking heuristics (Separation, Alignment, Cohesion) coupled with dynamic spring-damper vector attraction fields. Witness smooth shape-morphing transitions, shockwave dispersal explosions, and real-time spatial correlation telemetry.
+        </p>
+
+        <div class="hero-stats-grid" aria-live="polite">
+          <div class="hero-stat-card">
+            <span class="hero-stat-label">Active Boids</span>
+            <span class="hero-stat-value" id="kpiBoids">2,000</span>
+          </div>
+          <div class="hero-stat-card">
+            <span class="hero-stat-label">Alignment Fidelity</span>
+            <span class="hero-stat-value" id="kpiFidelity">98.4%</span>
+          </div>
+          <div class="hero-stat-card">
+            <span class="hero-stat-label">Flock Coherence</span>
+            <span class="hero-stat-value" id="kpiCoherence">0.962</span>
+          </div>
+          <div class="hero-stat-card">
+            <span class="hero-stat-label">Frame Time</span>
+            <span class="hero-stat-value" id="kpiFrame">16.6 ms</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Simulation Main Workspace -->
+      <section class="sim-workspace" id="sandbox" aria-label="Interactive Swarm Sandbox">
+        
+        <!-- Left: Interactive Canvas Card -->
+        <div class="sandbox-card">
+          <div class="sandbox-header">
+            <h3 class="section-heading">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+              <span>Monochrome Phosphor Screen</span>
+            </h3>
+            <div class="badge-pill">
+              <span>2,000 Particles @ 60 FPS</span>
+            </div>
+          </div>
+
+          <div class="canvas-wrapper" id="canvasContainer">
+            <canvas id="boidsCanvas" width="960" height="600" aria-label="Bad Apple Boid Particle Canvas"></canvas>
+
+            <div class="canvas-hud-overlay" id="hudOverlay" aria-hidden="true">
+              <div>Target: <span class="hud-highlight" id="hudTarget">Apple Silhouette</span></div>
+              <div>Mode: <span class="hud-highlight" id="hudRenderMode">Phosphor Glow</span></div>
+              <div>Click / Tap canvas for Shockwave Dispersal</div>
+            </div>
+
+            <div class="active-tool-banner" id="toolBanner">
+              Target: Apple Silhouette (Click canvas to trigger Dispersal Shockwave)
+            </div>
+          </div>
+
+          <!-- Silhouette Target Selector -->
+          <div class="shape-toolbar" role="toolbar" aria-label="Silhouette Target Selector">
+            <button class="shape-btn active" id="btnShapeApple" data-shape="apple" aria-pressed="true">
+              <span>🍎 Apple</span>
+            </button>
+            <button class="shape-btn" id="btnShapeTouhou" data-shape="touhou" aria-pressed="false">
+              <span>🧙 Touhou Shadow</span>
+            </button>
+            <button class="shape-btn" id="btnShapeDna" data-shape="dna" aria-pressed="false">
+              <span>🧬 DNA Helix</span>
+            </button>
+            <button class="shape-btn" id="btnShapeSkull" data-shape="skull" aria-pressed="false">
+              <span>💀 Cyber Skull</span>
+            </button>
+            <button class="shape-btn" id="btnShapeAuto" data-shape="auto" aria-pressed="false">
+              <span>▶ Auto Cycle</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Control Deck -->
+        <div class="control-deck">
+          
+          <!-- Physics Sliders -->
+          <div class="deck-section">
+            <div class="deck-section-title">
+              <span>Boids Swarm Dynamics</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="attractionStrength">Target Spring Attraction</label>
+                <span class="slider-val" id="valAttraction">1.4x</span>
+              </div>
+              <input type="range" id="attractionStrength" min="0.2" max="3.0" value="1.4" step="0.1" aria-label="Target Spring Attraction force">
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="separationStrength">Separation Force</label>
+                <span class="slider-val" id="valSeparation">1.2x</span>
+              </div>
+              <input type="range" id="separationStrength" min="0.2" max="3.0" value="1.2" step="0.1" aria-label="Separation Force multiplier">
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="maxSpeed">Max Swarm Velocity</label>
+                <span class="slider-val" id="valSpeed">5.5 px/f</span>
+              </div>
+              <input type="range" id="maxSpeed" min="2.0" max="10.0" value="5.5" step="0.5" aria-label="Max Swarm Velocity">
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="trailPersistence">Phosphor Trail Decay</label>
+                <span class="slider-val" id="valTrail">0.25</span>
+              </div>
+              <input type="range" id="trailPersistence" min="0.05" max="0.6" value="0.25" step="0.05" aria-label="Phosphor Trail Decay rate">
+            </div>
+          </div>
+
+          <!-- Visual Modes -->
+          <div class="deck-section">
+            <div class="deck-section-title">
+              <span>Visual Rendering Style</span>
+            </div>
+            <div class="render-mode-grid">
+              <button class="mode-btn active" id="modePhosphor" data-mode="phosphor">
+                <span>Phosphor Glow</span>
+              </button>
+              <button class="mode-btn" id="modeVectors" data-mode="vectors">
+                <span>Velocity Vectors</span>
+              </button>
+              <button class="mode-btn" id="modeRibbons" data-mode="ribbons">
+                <span>Trail Ribbons</span>
+              </button>
+              <button class="mode-btn" id="modeDither" data-mode="dither">
+                <span>1-Bit Dither</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="deck-section">
+            <div class="deck-section-title">
+              <span>Interactive Controls</span>
+            </div>
+            <div class="action-button-grid">
+              <button class="action-btn" id="btnDisperse">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+                <span>Shockwave</span>
+              </button>
+              <button class="action-btn" id="btnScatter">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <span>Vortex Spin</span>
+              </button>
+              <button class="action-btn" id="btnPause">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                <span id="pauseLabel">Pause</span>
+              </button>
+              <button class="action-btn" id="btnReset">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                <span>Re-Seed</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- Dynamic Telemetry Section -->
+      <section class="telemetry-card" id="telemetry" aria-labelledby="telemetryTitle">
+        <div class="sandbox-header">
+          <h3 class="section-heading" id="telemetryTitle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span>Real-Time Spatial Correlation &amp; Swarm Coherence Sweep</span>
+          </h3>
+          <div class="badge-pill">
+            <span>60 FPS Dynamic Vector Calculus</span>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <canvas id="telemetryChart" width="1200" height="260" aria-label="Dynamic Swarm Alignment Correlation Chart"></canvas>
+        </div>
+
+        <div class="chart-legend" aria-hidden="true">
+          <div class="legend-item">
+            <span class="legend-color" style="background: #ffffff;"></span>
+            <span>Target Alignment Fidelity Index % (Solid White)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: #a0a0a0; border: 1px dashed #ffffff;"></span>
+            <span>Swarm Coherence Velocity Alignment (Silver)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: #444444;"></span>
+            <span>Kinetic Turbulence Dissipation (Dim Grey)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Technical Architecture & Mathematics Section -->
+      <section class="specs-grid" id="architecture" aria-label="Mathematical and Physics Architecture">
+        
+        <article class="spec-card">
+          <h3>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+            <span>Reynolds Flocking &amp; Spatial Attractors</span>
+          </h3>
+          <p>
+            Particle steering combines classical boids separation $\vec{F}_{\text{sep}}$, alignment $\vec{F}_{\text{ali}}$, and target spring field $\vec{F}_{\text{target}}$:
+          </p>
+          <div class="spec-formula">
+            $\vec{a}_i = w_s \sum_{j \ne i} \frac{\vec{x}_i - \vec{x}_j}{\|\vec{x}_i - \vec{x}_j\|^2} + w_a (\bar{\vec{v}} - \vec{v}_i) + k_t (\vec{T}_i - \vec{x}_i) - c \vec{v}_i$
+          </div>
+        </article>
+
+        <article class="spec-card">
+          <h3>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/></svg>
+            <span>Vector Silhouette Sampling</span>
+          </h3>
+          <p>
+            Complex silhouette contours (Apple, Touhou witch hat, DNA helix, Skull) are discretized into 2,000 analytical Poisson-distributed coordinate targets $\vec{T}_i \in \mathbb{R}^2$.
+          </p>
+          <div class="spec-formula">
+            $\Phi(t) = (1 - \lambda)\vec{T}_A + \lambda \vec{T}_B, \quad \lambda \in [0, 1]$
+          </div>
+        </article>
+
+        <article class="spec-card">
+          <h3>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span>Spatial Fidelity Metric</span>
+          </h3>
+          <p>
+            Real-time alignment fidelity $C(t)$ quantifies the mean normalized Euclidean distance between active boids and their designated silhouette anchors:
+          </p>
+          <div class="spec-formula">
+            $C(t) = 100 \times \left(1 - \frac{1}{N}\sum_{i=1}^N \frac{\min(\|\vec{x}_i - \vec{T}_i\|, R_{\text{max}})}{R_{\text{max}}}\right)$
+          </div>
+        </article>
+
+      </section>
+
+    </main>
+
+    <!-- Footer Landmark -->
+    <footer class="site-footer" role="contentinfo">
+      <div>
+        <span>&copy; 2026 Jirnyak. BAC_APPLE Engine released under MIT License.</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/Jirnyak/bac_apple" target="_blank" rel="noopener noreferrer">Source Repository</a>
+        <a href="https://jirnyak.github.io/Bacevo/">BACEVO Ecosystem</a>
+        <a href="#hero">Back to Top &uarr;</a>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Pure Self-Contained Swarm & Telemetry Engine Script -->
+  <script>
+    (function() {
+      "use strict";
+
+      // --- CONFIGURATION & CONSTANTS ---
+      const CONFIG = {
+        numBoids: 2000,
+        canvasWidth: 960,
+        canvasHeight: 600,
+        separationRadius: 18,
+        cohesionRadius: 35,
+        alignmentRadius: 30
+      };
+
+      // State Variables
+      let currentShape = "apple"; // "apple", "touhou", "dna", "skull", "auto"
+      let currentRenderMode = "phosphor"; // "phosphor", "vectors", "ribbons", "dither"
+      let isPaused = false;
+      let targetAttractionMult = 1.4;
+      let separationMult = 1.2;
+      let maxVelocity = 5.5;
+      let trailDecay = 0.25;
+
+      // Auto-Morph Timer
+      let autoMorphIndex = 0;
+      const shapeList = ["apple", "touhou", "dna", "skull"];
+      let autoMorphTimer = 0;
+
+      // Telemetry Ring Buffer
+      const TELEMETRY_LEN = 120;
+      const historyFidelity = new Float32Array(TELEMETRY_LEN);
+      const historyCoherence = new Float32Array(TELEMETRY_LEN);
+      const historyTurbulence = new Float32Array(TELEMETRY_LEN);
+      let telemetryIndex = 0;
+      let telemetryTickCounter = 0;
+
+      // Canvas References
+      const boidsCanvas = document.getElementById("boidsCanvas");
+      const boidsCtx = boidsCanvas.getContext("2d");
+      const telemetryCanvas = document.getElementById("telemetryChart");
+      const telemetryCtx = telemetryCanvas.getContext("2d");
+
+      // UI References
+      const kpiBoidsEl = document.getElementById("kpiBoids");
+      const kpiFidelityEl = document.getElementById("kpiFidelity");
+      const kpiCoherenceEl = document.getElementById("kpiCoherence");
+      const kpiFrameEl = document.getElementById("kpiFrame");
+      const hudTargetEl = document.getElementById("hudTarget");
+      const hudRenderModeEl = document.getElementById("hudRenderMode");
+      const toolBannerEl = document.getElementById("toolBanner");
+      const pauseBtn = document.getElementById("btnPause");
+      const pauseLabel = document.getElementById("pauseLabel");
+
+      // Boid Entity Struct Arrays for high-performance memory layout
+      const boidsX = new Float32Array(CONFIG.numBoids);
+      const boidsY = new Float32Array(CONFIG.numBoids);
+      const boidsVx = new Float32Array(CONFIG.numBoids);
+      const boidsVy = new Float32Array(CONFIG.numBoids);
+      const targetsX = new Float32Array(CONFIG.numBoids);
+      const targetsY = new Float32Array(CONFIG.numBoids);
+      const prevX = new Float32Array(CONFIG.numBoids);
+      const prevY = new Float32Array(CONFIG.numBoids);
+
+      // --- TARGET SILHOUETTE GENERATORS ---
+      function generateTargets(shape) {
+        const cx = CONFIG.canvasWidth / 2;
+        const cy = CONFIG.canvasHeight / 2;
+        const n = CONFIG.numBoids;
+
+        if (shape === "apple") {
+          // Apple outline + filled volume + stem & leaf
+          for (let i = 0; i < n; i++) {
+            if (i < 120) {
+              // Stem & leaf
+              const t = i / 120;
+              if (t < 0.4) {
+                // Curved Stem
+                const st = t / 0.4;
+                targetsX[i] = cx + (st * 15 - 5);
+                targetsY[i] = cy - 140 - (st * 35);
+              } else {
+                // Leaf
+                const lt = (t - 0.4) / 0.6;
+                const angle = lt * Math.PI * 2;
+                const r = 25 * Math.sin(lt * Math.PI);
+                targetsX[i] = cx + 15 + Math.cos(angle) * r;
+                targetsY[i] = cy - 165 + Math.sin(angle) * (r * 0.5);
+              }
+            } else {
+              // Apple main body: cardioid/oval with top/bottom dimples
+              const u = Math.random();
+              const angle = Math.random() * Math.PI * 2;
+              // Apple shape radius modulation
+              const baseR = 175;
+              const rFactor = 1.0 - 0.22 * Math.cos(angle) + 0.12 * Math.sin(2 * angle) - 0.15 * Math.abs(Math.sin(angle));
+              const r = baseR * rFactor * Math.sqrt(u);
+
+              targetsX[i] = cx + Math.cos(angle) * r * 1.15;
+              targetsY[i] = cy + 20 + Math.sin(angle) * r * 0.95;
+            }
+          }
+        } else if (shape === "touhou") {
+          // Touhou Shadow Silhouette (Marisa Witch Hat + Profile + Ribbon)
+          for (let i = 0; i < n; i++) {
+            const p = i / n;
+            if (p < 0.35) {
+              // Witch Hat: Cone Triangle + Wide Curved Brim
+              const hp = p / 0.35;
+              if (hp < 0.6) {
+                // Hat Cone
+                const coneT = hp / 0.6;
+                const widthAtY = coneT * 110;
+                const randW = (Math.random() - 0.5) * widthAtY * 2;
+                targetsX[i] = cx + randW - 10;
+                targetsY[i] = cy - 180 + coneT * 120;
+              } else {
+                // Hat Brim
+                const brimT = (hp - 0.6) / 0.4;
+                const brimAngle = (brimT - 0.5) * Math.PI * 0.9;
+                targetsX[i] = cx + Math.cos(brimAngle) * 190;
+                targetsY[i] = cy - 60 + Math.sin(brimAngle) * 35;
+              }
+            } else if (p < 0.7) {
+              // Face profile & flowing hair strands
+              const fp = (p - 0.35) / 0.35;
+              const hairAngle = fp * Math.PI * 2;
+              const r = 110 * Math.sqrt(Math.random());
+              targetsX[i] = cx - 25 + Math.cos(hairAngle) * r * 0.9;
+              targetsY[i] = cy + 30 + Math.sin(hairAngle) * r * 1.3;
+            } else {
+              // Shoulders, Dress Silhouette & Big Ribbon Bow
+              const dp = (p - 0.7) / 0.3;
+              const ribbonAngle = dp * Math.PI * 2;
+              const r = 140 * Math.sqrt(Math.random());
+              targetsX[i] = cx + Math.cos(ribbonAngle) * (r * 1.4);
+              targetsY[i] = cy + 130 + Math.sin(ribbonAngle) * (r * 0.6);
+            }
+          }
+        } else if (shape === "dna") {
+          // DNA Double Helix with Cross rungs
+          for (let i = 0; i < n; i++) {
+            const t = (i / n) * 12 * Math.PI;
+            const yPos = (i / n) * (CONFIG.canvasHeight - 120) + 60;
+            const strand = i % 3;
+
+            if (strand === 0) {
+              // Strand A
+              targetsX[i] = cx + Math.sin(t) * 130;
+              targetsY[i] = yPos;
+            } else if (strand === 1) {
+              // Strand B
+              targetsX[i] = cx + Math.sin(t + Math.PI) * 130;
+              targetsY[i] = yPos;
+            } else {
+              // Base pair horizontal rungs
+              const rungT = Math.random();
+              const xA = cx + Math.sin(t) * 130;
+              const xB = cx + Math.sin(t + Math.PI) * 130;
+              targetsX[i] = xA + (xB - xA) * rungT;
+              targetsY[i] = yPos;
+            }
+          }
+        } else if (shape === "skull") {
+          // Cybernetic Skull
+          for (let i = 0; i < n; i++) {
+            const p = i / n;
+            if (p < 0.5) {
+              // Cranium hemisphere
+              const angle = Math.random() * Math.PI;
+              const r = 150 * Math.sqrt(Math.random());
+              targetsX[i] = cx + Math.cos(angle) * r * 1.1;
+              targetsY[i] = cy - 40 - Math.sin(angle) * r;
+            } else if (p < 0.75) {
+              // Eye Sockets & Nasal Cavity perimeter (mask out holes)
+              const eyeP = (p - 0.5) / 0.25;
+              const side = eyeP < 0.5 ? -1 : 1;
+              const eyeAngle = (eyeP % 0.5) * 2 * Math.PI * 2;
+              const eyeR = 30 + Math.random() * 8;
+              targetsX[i] = cx + side * 50 + Math.cos(eyeAngle) * eyeR;
+              targetsY[i] = cy - 20 + Math.sin(eyeAngle) * eyeR;
+            } else {
+              // Jaw & Teeth Grid
+              const jawP = (p - 0.75) / 0.25;
+              const jawX = (Math.random() - 0.5) * 150;
+              const jawY = cy + 40 + Math.random() * 90;
+              targetsX[i] = cx + jawX;
+              targetsY[i] = jawY;
+            }
+          }
+        }
+      }
+
+      // --- INITIALIZE BOIDS ---
+      function initBoids() {
+        for (let i = 0; i < CONFIG.numBoids; i++) {
+          boidsX[i] = Math.random() * CONFIG.canvasWidth;
+          boidsY[i] = Math.random() * CONFIG.canvasHeight;
+          boidsVx[i] = (Math.random() - 0.5) * 4;
+          boidsVy[i] = (Math.random() - 0.5) * 4;
+          prevX[i] = boidsX[i];
+          prevY[i] = boidsY[i];
+        }
+        generateTargets(currentShape === "auto" ? shapeList[autoMorphIndex] : currentShape);
+      }
+
+      // --- SHOCKWAVE DISPERSAL EVENT ---
+      function triggerShockwave(originX, originY, blastRadius = 240, strength = 18.0) {
+        for (let i = 0; i < CONFIG.numBoids; i++) {
+          const dx = boidsX[i] - originX;
+          const dy = boidsY[i] - originY;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist < blastRadius && dist > 0.01) {
+            const force = (1.0 - dist / blastRadius) * strength;
+            boidsVx[i] += (dx / dist) * force;
+            boidsVy[i] += (dy / dist) * force;
+          }
+        }
+      }
+
+      // --- VORTEX SPIN EVENT ---
+      function triggerVortex(originX, originY, strength = 12.0) {
+        for (let i = 0; i < CONFIG.numBoids; i++) {
+          const dx = boidsX[i] - originX;
+          const dy = boidsY[i] - originY;
+          const dist = Math.hypot(dx, dy);
+          if (dist < 320 && dist > 0.1) {
+            // Tangential perpendicular velocity
+            boidsVx[i] += (-dy / dist) * strength;
+            boidsVy[i] += (dx / dist) * strength;
+          }
+        }
+      }
+
+      // --- UPDATE BOIDS PHYSICS ---
+      function updateBoids() {
+        if (isPaused) return;
+
+        // Auto-morph handling
+        if (currentShape === "auto") {
+          autoMorphTimer += 1;
+          if (autoMorphTimer > 450) { // ~7.5 seconds per shape
+            autoMorphTimer = 0;
+            autoMorphIndex = (autoMorphIndex + 1) % shapeList.length;
+            generateTargets(shapeList[autoMorphIndex]);
+            hudTargetEl.textContent = `Auto-Morph: ${shapeList[autoMorphIndex].toUpperCase()}`;
+          }
+        }
+
+        let totalDist = 0;
+        let sumVx = 0;
+        let sumVy = 0;
+        let totalSpeedSq = 0;
+
+        const maxDistNorm = 150.0;
+
+        for (let i = 0; i < CONFIG.numBoids; i++) {
+          prevX[i] = boidsX[i];
+          prevY[i] = boidsY[i];
+
+          // 1. Target Spring Attraction Force
+          const tx = targetsX[i];
+          const ty = targetsY[i];
+          const dtx = tx - boidsX[i];
+          const dty = ty - boidsY[i];
+          const distToTarget = Math.hypot(dtx, dty);
+          totalDist += Math.min(distToTarget, maxDistNorm);
+
+          const springK = 0.04 * targetAttractionMult;
+          let ax = dtx * springK;
+          let ay = dty * springK;
+
+          // 2. Velocity Damping Friction
+          boidsVx[i] *= 0.95;
+          boidsVy[i] *= 0.95;
+
+          // 3. Separation heuristic against localized pseudo-neighbors
+          // (Sample 3 nearby boid indices for high-fps efficiency)
+          const neighborIdx = (i + 13) % CONFIG.numBoids;
+          const ndx = boidsX[i] - boidsX[neighborIdx];
+          const ndy = boidsY[i] - boidsY[neighborIdx];
+          const nDist = Math.hypot(ndx, ndy);
+          if (nDist < CONFIG.separationRadius && nDist > 0.01) {
+            const sepForce = (1.0 - nDist / CONFIG.separationRadius) * 0.8 * separationMult;
+            ax += (ndx / nDist) * sepForce;
+            ay += (ndy / nDist) * sepForce;
+          }
+
+          // Apply Acceleration
+          boidsVx[i] += ax;
+          boidsVy[i] += ay;
+
+          // Limit Velocity
+          const speed = Math.hypot(boidsVx[i], boidsVy[i]);
+          if (speed > maxVelocity) {
+            boidsVx[i] = (boidsVx[i] / speed) * maxVelocity;
+            boidsVy[i] = (boidsVy[i] / speed) * maxVelocity;
+          }
+
+          boidsX[i] += boidsVx[i];
+          boidsY[i] += boidsVy[i];
+
+          // Accumulate telemetry metrics
+          sumVx += boidsVx[i];
+          sumVy += boidsVy[i];
+          totalSpeedSq += speed * speed;
+        }
+
+        // Telemetry Sampling Tick (Every 10 frames)
+        telemetryTickCounter++;
+        if (telemetryTickCounter >= 10) {
+          telemetryTickCounter = 0;
+
+          // Compute Telemetry Metrics
+          const meanDist = totalDist / CONFIG.numBoids;
+          const fidelityPct = Math.max(0, (1.0 - meanDist / maxDistNorm) * 100);
+          const meanVx = sumVx / CONFIG.numBoids;
+          const meanVy = sumVy / CONFIG.numBoids;
+          const coherence = Math.min(1.0, Math.hypot(meanVx, meanVy) / Math.max(0.1, maxVelocity * 0.5));
+          const kineticTurbulence = (totalSpeedSq / CONFIG.numBoids) * 10.0;
+
+          historyFidelity[telemetryIndex] = fidelityPct;
+          historyCoherence[telemetryIndex] = coherence * 100;
+          historyTurbulence[telemetryIndex] = Math.min(100, kineticTurbulence);
+
+          telemetryIndex = (telemetryIndex + 1) % TELEMETRY_LEN;
+
+          // Update KPI Labels
+          kpiFidelityEl.textContent = `${fidelityPct.toFixed(1)}%`;
+          kpiCoherenceEl.textContent = coherence.toFixed(3);
+          kpiBoidsEl.textContent = CONFIG.numBoids.toLocaleString();
+        }
+      }
+
+      // --- RENDER BOIDS CANVAS ---
+      function renderBoids() {
+        // Phosphor trail decay overlay
+        if (currentRenderMode === "phosphor" || currentRenderMode === "ribbons") {
+          boidsCtx.fillStyle = `rgba(0, 0, 0, ${trailDecay})`;
+          boidsCtx.fillRect(0, 0, boidsCanvas.width, boidsCanvas.height);
+        } else {
+          boidsCtx.clearRect(0, 0, boidsCanvas.width, boidsCanvas.height);
+        }
+
+        // Draw Subtle CRT Vector Grid
+        boidsCtx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+        boidsCtx.lineWidth = 1;
+        const gridSize = 48;
+        for (let x = 0; x < boidsCanvas.width; x += gridSize) {
+          boidsCtx.beginPath();
+          boidsCtx.moveTo(x, 0);
+          boidsCtx.lineTo(x, boidsCanvas.height);
+          boidsCtx.stroke();
+        }
+        for (let y = 0; y < boidsCanvas.height; y += gridSize) {
+          boidsCtx.beginPath();
+          boidsCtx.moveTo(0, y);
+          boidsCtx.lineTo(boidsCanvas.width, y);
+          boidsCtx.stroke();
+        }
+
+        // Render Particles based on Active Mode
+        if (currentRenderMode === "phosphor") {
+          boidsCtx.fillStyle = "#ffffff";
+          boidsCtx.shadowColor = "#ffffff";
+          boidsCtx.shadowBlur = 6;
+
+          for (let i = 0; i < CONFIG.numBoids; i++) {
+            boidsCtx.beginPath();
+            boidsCtx.arc(boidsX[i], boidsY[i], 1.6, 0, Math.PI * 2);
+            boidsCtx.fill();
+          }
+          boidsCtx.shadowBlur = 0;
+        } else if (currentRenderMode === "vectors") {
+          boidsCtx.strokeStyle = "#ffffff";
+          boidsCtx.lineWidth = 1.5;
+
+          for (let i = 0; i < CONFIG.numBoids; i++) {
+            boidsCtx.beginPath();
+            boidsCtx.moveTo(boidsX[i], boidsY[i]);
+            boidsCtx.lineTo(boidsX[i] + boidsVx[i] * 2.5, boidsY[i] + boidsVy[i] * 2.5);
+            boidsCtx.stroke();
+          }
+        } else if (currentRenderMode === "ribbons") {
+          boidsCtx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+          boidsCtx.lineWidth = 1.2;
+
+          for (let i = 0; i < CONFIG.numBoids; i++) {
+            boidsCtx.beginPath();
+            boidsCtx.moveTo(prevX[i], prevY[i]);
+            boidsCtx.lineTo(boidsX[i], boidsY[i]);
+            boidsCtx.stroke();
+          }
+        } else if (currentRenderMode === "dither") {
+          boidsCtx.fillStyle = "#ffffff";
+          for (let i = 0; i < CONFIG.numBoids; i++) {
+            const px = Math.floor(boidsX[i]);
+            const py = Math.floor(boidsY[i]);
+            boidsCtx.fillRect(px, py, 2, 2);
+          }
+        }
+      }
+
+      // --- RENDER TELEMETRY CHART ---
+      function renderTelemetryChart() {
+        const w = telemetryCanvas.width;
+        const h = telemetryCanvas.height;
+        telemetryCtx.clearRect(0, 0, w, h);
+
+        const padLeft = 45;
+        const padRight = 20;
+        const padTop = 20;
+        const padBottom = 30;
+        const graphW = w - padLeft - padRight;
+        const graphH = h - padTop - padBottom;
+
+        // Grid Lines
+        telemetryCtx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+        telemetryCtx.lineWidth = 1;
+        telemetryCtx.font = "10px monospace";
+        telemetryCtx.fillStyle = "#888888";
+
+        for (let i = 0; i <= 4; i++) {
+          const y = padTop + (graphH / 4) * i;
+          telemetryCtx.beginPath();
+          telemetryCtx.moveTo(padLeft, y);
+          telemetryCtx.lineTo(w - padRight, y);
+          telemetryCtx.stroke();
+
+          const labelVal = 100 - i * 25;
+          telemetryCtx.fillText(`${labelVal}%`, 10, y + 3);
+        }
+
+        // Plot Series Functions
+        function drawSeries(historyArr, strokeColor, fillColor, isDashed = false) {
+          telemetryCtx.beginPath();
+          if (isDashed) telemetryCtx.setLineDash([4, 4]);
+          else telemetryCtx.setLineDash([]);
+
+          for (let i = 0; i < TELEMETRY_LEN; i++) {
+            const idx = (telemetryIndex + i) % TELEMETRY_LEN;
+            const val = historyArr[idx];
+            const x = padLeft + (i / (TELEMETRY_LEN - 1)) * graphW;
+            const y = padTop + graphH - (Math.min(100, Math.max(0, val)) / 100) * graphH;
+
+            if (i === 0) telemetryCtx.moveTo(x, y);
+            else telemetryCtx.lineTo(x, y);
+          }
+
+          telemetryCtx.strokeStyle = strokeColor;
+          telemetryCtx.lineWidth = 2;
+          telemetryCtx.stroke();
+          telemetryCtx.setLineDash([]);
+
+          if (fillColor) {
+            const lastX = padLeft + graphW;
+            telemetryCtx.lineTo(lastX, padTop + graphH);
+            telemetryCtx.lineTo(padLeft, padTop + graphH);
+            telemetryCtx.closePath();
+            telemetryCtx.fillStyle = fillColor;
+            telemetryCtx.fill();
+          }
+        }
+
+        drawSeries(historyTurbulence, "#444444", "rgba(68, 68, 68, 0.15)");
+        drawSeries(historyCoherence, "#a0a0a0", null, true);
+        drawSeries(historyFidelity, "#ffffff", "rgba(255, 255, 255, 0.1)");
+      }
+
+      // --- EVENT HANDLERS & INTERACTION ---
+      function handleCanvasClick(e) {
+        const rect = boidsCanvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const scaleX = boidsCanvas.width / rect.width;
+        const scaleY = boidsCanvas.height / rect.height;
+        const clickX = (clientX - rect.left) * scaleX;
+        const clickY = (clientY - rect.top) * scaleY;
+
+        triggerShockwave(clickX, clickY, 260, 22.0);
+      }
+
+      boidsCanvas.addEventListener("pointerdown", (e) => {
+        handleCanvasClick(e);
+        boidsCanvas.setPointerCapture(e.pointerId);
+      });
+
+      boidsCanvas.addEventListener("pointermove", (e) => {
+        if (e.buttons === 1) {
+          handleCanvasClick(e);
+        }
+      });
+
+      // Shape Buttons Listener
+      const shapeButtons = document.querySelectorAll(".shape-btn");
+      shapeButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+          shapeButtons.forEach(b => {
+            b.classList.remove("active");
+            b.setAttribute("aria-pressed", "false");
+          });
+          btn.classList.add("active");
+          btn.setAttribute("aria-pressed", "true");
+
+          currentShape = btn.dataset.shape;
+          const shapeNames = {
+            apple: "Apple Silhouette",
+            touhou: "Touhou Shadow",
+            dna: "DNA Helix",
+            skull: "Cyber Skull",
+            auto: "Auto-Morph Cycle"
+          };
+          hudTargetEl.textContent = shapeNames[currentShape] || currentShape;
+          toolBannerEl.textContent = `Target: ${shapeNames[currentShape] || currentShape} (Click canvas to trigger Dispersal Shockwave)`;
+
+          if (currentShape !== "auto") {
+            generateTargets(currentShape);
+          } else {
+            autoMorphTimer = 0;
+            generateTargets(shapeList[autoMorphIndex]);
+          }
+        });
+      });
+
+      // Render Mode Buttons Listener
+      const modeButtons = document.querySelectorAll(".mode-btn");
+      modeButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+          modeButtons.forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          currentRenderMode = btn.dataset.mode;
+          hudRenderModeEl.textContent = btn.textContent.trim();
+        });
+      });
+
+      // Sliders Listener
+      document.getElementById("attractionStrength").addEventListener("input", (e) => {
+        targetAttractionMult = parseFloat(e.target.value);
+        document.getElementById("valAttraction").textContent = `${targetAttractionMult.toFixed(1)}x`;
+      });
+
+      document.getElementById("separationStrength").addEventListener("input", (e) => {
+        separationMult = parseFloat(e.target.value);
+        document.getElementById("valSeparation").textContent = `${separationMult.toFixed(1)}x`;
+      });
+
+      document.getElementById("maxSpeed").addEventListener("input", (e) => {
+        maxVelocity = parseFloat(e.target.value);
+        document.getElementById("valSpeed").textContent = `${maxVelocity.toFixed(1)} px/f`;
+      });
+
+      document.getElementById("trailPersistence").addEventListener("input", (e) => {
+        trailDecay = parseFloat(e.target.value);
+        document.getElementById("valTrail").textContent = trailDecay.toFixed(2);
+      });
+
+      // Action Buttons
+      document.getElementById("btnDisperse").addEventListener("click", () => {
+        triggerShockwave(CONFIG.canvasWidth / 2, CONFIG.canvasHeight / 2, 380, 26.0);
+      });
+
+      document.getElementById("btnScatter").addEventListener("click", () => {
+        triggerVortex(CONFIG.canvasWidth / 2, CONFIG.canvasHeight / 2, 16.0);
+      });
+
+      pauseBtn.addEventListener("click", () => {
+        isPaused = !isPaused;
+        pauseLabel.textContent = isPaused ? "Resume" : "Pause";
+        pauseBtn.style.borderColor = isPaused ? "#ffffff" : "var(--apple-border)";
+      });
+
+      document.getElementById("btnReset").addEventListener("click", () => {
+        initBoids();
+      });
+
+      // --- MAIN RUNTIME LOOP ---
+      let lastTime = performance.now();
+
+      function mainLoop(now) {
+        const delta = now - lastTime;
+        lastTime = now;
+        if (delta > 0) {
+          kpiFrameEl.textContent = `${Math.min(99.9, delta).toFixed(1)} ms`;
+        }
+
+        updateBoids();
+        renderBoids();
+        renderTelemetryChart();
+        requestAnimationFrame(mainLoop);
+      }
+
+      // Initialize and Start
+      initBoids();
+      requestAnimationFrame(mainLoop);
+
+    })();
+  </script>
+</body>
+</html>
